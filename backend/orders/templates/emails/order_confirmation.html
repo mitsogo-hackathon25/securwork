@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Order {{ order.order_number }}</title></head>
+<body style="font-family: Arial, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #1a2b4a; color: #fff; padding: 20px; border-radius: 8px 8px 0 0;">
+    <h1 style="margin: 0; font-size: 22px;">SecurWork</h1>
+  </div>
+  <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+    {% if lang == 'it' %}
+    <h2 style="color: #1a2b4a;">Grazie per il tuo ordine!</h2>
+    <p>Il tuo ordine <strong>{{ order.order_number }}</strong> è stato ricevuto.</p>
+    {% else %}
+    <h2 style="color: #1a2b4a;">Thank you for your order!</h2>
+    <p>Your order <strong>{{ order.order_number }}</strong> has been received.</p>
+    {% endif %}
+
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <thead>
+        <tr style="background: #f8fafc;">
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb;">{% if lang == 'it' %}Prodotto{% else %}Product{% endif %}</th>
+          <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">{% if lang == 'it' %}Qtà{% else %}Qty{% endif %}</th>
+          <th style="text-align: right; padding: 8px; border-bottom: 1px solid #e5e7eb;">{% if lang == 'it' %}Totale{% else %}Total{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">{{ item.product_name }}<br><small style="color: #6b7280;">{{ item.sku }}{% if item.size %} · {{ item.size }}{% endif %}{% if item.color %} · {{ item.color }}{% endif %}</small></td>
+          <td style="text-align: center; padding: 8px; border-bottom: 1px solid #f1f5f9;">{{ item.quantity }}</td>
+          <td style="text-align: right; padding: 8px; border-bottom: 1px solid #f1f5f9;">€ {{ item.line_total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p style="text-align: right;">
+      <strong>{% if lang == 'it' %}Totale{% else %}Total{% endif %}: € {{ order.total }}</strong>
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+    <p style="font-size: 13px; color: #6b7280;">
+      {% if lang == 'it' %}
+      Per assistenza contattaci a {{ order.email }}.
+      {% else %}
+      For assistance contact us at info@securwork.it.
+      {% endif %}
+    </p>
+  </div>
+</body>
+</html>

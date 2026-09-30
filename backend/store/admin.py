@@ -1,0 +1,50 @@
+from django.contrib import admin
+from parler.admin import TranslatableAdmin
+
+from .models import Category, Product, ProductImage, ProductVariant
+
+
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 1
+
+
+class ProductVariantInline(admin.TabularInline):
+    model = ProductVariant
+    extra = 1
+    fields = ("sku", "size", "color", "price", "sale_price", "stock_quantity", "is_active")
+
+
+@admin.register(Category)
+class CategoryAdmin(TranslatableAdmin):
+    list_display = ("name", "slug", "section", "parent", "sort_order", "is_active")
+    list_filter = ("section", "is_active")
+    search_fields = ("translations__name", "slug")
+    prepopulated_fields = {"slug": ()}
+
+
+@admin.register(Product)
+class ProductAdmin(TranslatableAdmin):
+    list_display = ("name", "sku", "slug", "is_active", "is_featured", "in_stock_display", "created_at")
+    list_filter = ("is_active", "is_featured", "is_new_arrival", "is_bestseller")
+    search_fields = ("translations__name", "sku", "slug")
+    filter_horizontal = ("categories",)
+    inlines = [ProductVariantInline, ProductImageInline]
+    fieldsets = (
+        (None, {"fields": ("name", "slug", "sku", "categories")}),
+        ("Content", {"fields": ("short_description", "description")}),
+        ("SEO", {"fields": ("meta_title", "meta_description"), "classes": ("collapse",)}),
+        ("Flags", {"fields": ("is_active", "is_featured", "is_new_arrival", "is_bestseller")}),
+    )
+
+    @admin.display(boolean=True, description="In stock")
+    def in_stock_display(self, obj):
+        return obj.in_stock
+
+
+@admin.register(ProductVariant)
+class ProductVariantAdmin(admin.ModelAdmin):
+    list_display = ("sku", "product", "size", "color", "price", "sale_price", "stock_quantity", "is_active")
+    list_filter = ("is_active", "size", "color")
+    search_fields = ("sku", "product__translations__name")
+    list_editable = ("stock_quantity", "price", "sale_price", "is_active")

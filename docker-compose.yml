@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-securwork}
+      POSTGRES_USER: ${DB_USER:-securwork}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securwork}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-securwork}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: ${DEBUG:-true}
+      SECRET_KEY: ${SECRET_KEY:-django-dev-secret-change-in-production}
+      DB_NAME: ${DB_NAME:-securwork}
+      DB_USER: ${DB_USER:-securwork}
+      DB_PASSWORD: ${DB_PASSWORD:-securwork}
+      DB_HOST: db
+      DB_PORT: 5432
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-SecurWork_Admin_2026!}
+      SEED_DATA: ${SEED_DATA:-true}
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+volumes:
+  postgres_data:
+  media_data:
+  frontend_node_modules:

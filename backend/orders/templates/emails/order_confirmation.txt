@@ -1,0 +1,10 @@
+{% if lang == 'it' %}Grazie per il tuo ordine!{% else %}Thank you for your order!{% endif %}
+
+Order: {{ order.order_number }}
+{% if lang == 'it' %}Totale{% else %}Total{% endif %}: € {{ order.total }}
+
+{% for item in items %}
+- {{ item.product_name }} ({{ item.sku }}) x{{ item.quantity }} = € {{ item.line_total }}
+{% endfor %}
+
+SecurWork — www.securwork.it

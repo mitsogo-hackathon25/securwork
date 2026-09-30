@@ -1,0 +1,38 @@
+{
+  "description": "Product category seed — loaded via python manage.py seed_data",
+  "categories": [
+    {
+      "name_it": "Abbigliamento da lavoro",
+      "name_en": "Workwear",
+      "slug": "abbigliamento-da-lavoro",
+      "children": [
+        { "name_it": "T-shirt", "name_en": "T-shirts", "slug": "t-shirt" },
+        { "name_it": "Polo", "name_en": "Polo shirts", "slug": "polo" },
+        { "name_it": "Pantaloni da lavoro", "name_en": "Work trousers", "slug": "pantaloni-da-lavoro" },
+        { "name_it": "Scarpe da lavoro", "name_en": "Safety shoes", "slug": "scarpe-da-lavoro" },
+        { "name_it": "Giacche", "name_en": "Jackets", "slug": "giacche" },
+        { "name_it": "Gilet", "name_en": "Body warmers", "slug": "gilet" },
+        { "name_it": "Felpe", "name_en": "Hoodies", "slug": "felpe" },
+        { "name_it": "Maglioni", "name_en": "Sweaters", "slug": "maglioni" },
+        { "name_it": "Guanti", "name_en": "Gloves", "slug": "guanti" },
+        { "name_it": "Camicie", "name_en": "Shirts", "slug": "camicie" },
+        { "name_it": "Salopette", "name_en": "Bib overalls", "slug": "salopette" },
+        { "name_it": "Camici", "name_en": "Coats", "slug": "camici" },
+        { "name_it": "Estate", "name_en": "Summer", "slug": "estate" },
+        { "name_it": "Inverno", "name_en": "Winter", "slug": "inverno" }
+      ]
+    },
+    {
+      "name_it": "Abbigliamento professionale",
+      "name_en": "Professional clothing",
+      "slug": "abbigliamento-professionale",
+      "children": [
+        { "name_it": "Grembiuli", "name_en": "Aprons", "slug": "grembiuli" },
+        { "name_it": "Pantaloni professionali", "name_en": "Professional trousers", "slug": "pantaloni-professionali" },
+        { "name_it": "Abbigliamento sanitario", "name_en": "Healthcare clothing", "slug": "abbigliamento-sanitario" },
+        { "name_it": "Abbigliamento alimentare", "name_en": "Food industry clothing", "slug": "abbigliamento-alimentare" },
+        { "name_it": "Divise professionali", "name_en": "Professional uniforms", "slug": "divise-professionali" }
+      ]
+    }
+  ]
+}

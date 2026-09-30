@@ -1,0 +1,17 @@
+[Unit]
+Description=SecurWork Django API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/securwork/backend
+EnvironmentFile=/var/www/securwork/.env
+ExecStart=/var/www/securwork/backend/venv/bin/gunicorn config.wsgi:application \
+  --bind 127.0.0.1:8000 --workers 2 --timeout 120 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

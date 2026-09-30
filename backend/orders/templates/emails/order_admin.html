@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; padding: 20px;">
+  <h2>Nuovo ordine: {{ order.order_number }}</h2>
+  <p><strong>Cliente:</strong> {{ order.billing_first_name }} {{ order.billing_last_name }}</p>
+  <p><strong>Email:</strong> {{ order.email }}</p>
+  <p><strong>Telefono:</strong> {{ order.phone|default:"—" }}</p>
+  <p><strong>Totale:</strong> € {{ order.total }}</p>
+  <p><strong>Pagamento:</strong> {{ order.get_payment_method_display }} — {{ order.get_payment_status_display }}</p>
+
+  <h3>Articoli</h3>
+  <ul>
+    {% for item in items %}
+    <li>{{ item.product_name }} ({{ item.sku }}) x{{ item.quantity }} = € {{ item.line_total }}</li>
+    {% endfor %}
+  </ul>
+
+  <p><strong>Spedizione:</strong><br>
+    {{ order.shipping_first_name }} {{ order.shipping_last_name }}<br>
+    {{ order.shipping_address }}, {{ order.shipping_postcode }} {{ order.shipping_city }}
+  </p>
+</body>
+</html>

@@ -1,0 +1,10 @@
+Nuovo ordine: {{ order.order_number }}
+
+Cliente: {{ order.billing_first_name }} {{ order.billing_last_name }}
+Email: {{ order.email }}
+Totale: € {{ order.total }}
+Pagamento: {{ order.get_payment_method_display }}
+
+{% for item in items %}
+- {{ item.product_name }} x{{ item.quantity }} = € {{ item.line_total }}
+{% endfor %}

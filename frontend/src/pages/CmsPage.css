@@ -1,0 +1,74 @@
+.cms-page {
+  padding-bottom: 4rem;
+  max-width: 800px;
+}
+
+.cms-page h1 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  color: var(--color-primary);
+  margin: 0 0 1.5rem;
+  line-height: 1.2;
+}
+
+.cms-content {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--color-text);
+}
+
+.cms-content h2 {
+  font-size: 1.25rem;
+  color: var(--color-primary);
+  margin: 2rem 0 0.75rem;
+}
+
+.cms-content h3 {
+  font-size: 1.0625rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.cms-content p {
+  margin: 0 0 1rem;
+}
+
+.cms-content ul,
+.cms-content ol {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+
+.cms-content li {
+  margin-bottom: 0.35rem;
+}
+
+.cms-content a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cms-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.9375rem;
+}
+
+.cms-content th,
+.cms-content td {
+  border: 1px solid var(--color-border);
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+}
+
+.cms-content th {
+  background: var(--color-bg-alt, #f5f5f5);
+  font-weight: 600;
+}
+
+.cms-content .cms-notice {
+  background: #fff8e6;
+  border-left: 4px solid #f0ad4e;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9375rem;
+}
