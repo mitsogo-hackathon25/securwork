@@ -18,9 +18,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         if obj.image:
-            request = self.context.get("request")
-            url = obj.image.url
-            return request.build_absolute_uri(url) if request else url
+            return obj.image.url
         return None
 
     def _lang(self):
@@ -46,9 +44,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         if obj.image:
-            request = self.context.get("request")
-            url = obj.image.url
-            return request.build_absolute_uri(url) if request else url
+            return obj.image.url
         return None
 
 
@@ -92,9 +88,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     def get_primary_image(self, obj):
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
         if img:
-            request = self.context.get("request")
-            url = img.image.url
-            return request.build_absolute_uri(url) if request else url
+            return img.image.url
         return None
 
 

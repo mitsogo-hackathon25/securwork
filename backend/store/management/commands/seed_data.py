@@ -7,7 +7,8 @@ from django.core.management.base import BaseCommand
 
 from cms.content_seed import PAGE_CONTENT
 from cms.models import FAQItem, Page
-from store.models import Category, Product, ProductVariant
+from store.image_utils import get_category_image, get_product_image
+from store.models import Category, Product, ProductImage, ProductVariant
 
 User = get_user_model()
 
@@ -45,6 +46,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Seeding categories...")
         self._seed_categories()
+        self.stdout.write("Seeding category images...")
+        self._seed_category_images()
         self.stdout.write("Seeding CMS pages...")
         self._seed_pages()
         self.stdout.write("Seeding FAQ...")
@@ -90,6 +93,13 @@ class Command(BaseCommand):
                 sub.set_current_language("en")
                 sub.name = child["name_en"]
                 sub.save()
+
+    def _seed_category_images(self):
+        for cat in Category.objects.filter(is_active=True):
+            if cat.image:
+                continue
+            img_file = get_category_image(cat.slug, cat.section)
+            cat.image.save(f"cat-{cat.slug}.jpg", img_file, save=True)
 
     def _seed_pages(self):
         for page_type, slug in PAGE_TYPES:
@@ -162,6 +172,13 @@ class Command(BaseCommand):
                             "stock_quantity": 10 + i,
                         },
                     )
+
+            if not product.images.exists():
+                label = f"Prodotto campione {i}"
+                cat = product.categories.filter(parent__isnull=False).first()
+                img_file = get_product_image(sku, cat.slug if cat else None)
+                pi = ProductImage(product=product, is_primary=True, alt_text=label)
+                pi.image.save(f"{sku.lower()}.jpg", img_file, save=True)
 
     def _create_admin(self, password):
         if not User.objects.filter(username="admin").exists():

@@ -21,6 +21,10 @@ class CategoryAdmin(TranslatableAdmin):
     list_filter = ("section", "is_active")
     search_fields = ("translations__name", "slug")
     prepopulated_fields = {"slug": ()}
+    fieldsets = (
+        (None, {"fields": ("name", "description", "slug", "section", "parent", "image")}),
+        ("Settings", {"fields": ("sort_order", "is_active")}),
+    )
 
 
 @admin.register(Product)

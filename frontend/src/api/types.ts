@@ -123,3 +123,78 @@ export interface SiteConfig {
   map_lat: string
   map_lng: string
 }
+
+export interface AdminCategoryOption {
+  id: number
+  slug: string
+  name: string
+  section: string
+  parent: number | null
+}
+
+export interface AdminProductVariant {
+  id?: number | null
+  sku: string
+  size: string
+  color: string
+  price: string
+  sale_price: string | null
+  stock_quantity: number
+  is_active: boolean
+  effective_price?: string
+  in_stock?: boolean
+}
+
+export interface AdminProductImage {
+  id: number
+  image: string
+  alt_text: string
+  sort_order: number
+  is_primary: boolean
+}
+
+export interface AdminProductListItem {
+  id: number
+  slug: string
+  sku: string
+  name: string
+  primary_image: string | null
+  min_price: string | null
+  total_stock: number
+  in_stock: boolean
+  variant_count: number
+  is_active: boolean
+  is_featured: boolean
+  is_new_arrival: boolean
+  is_bestseller: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminProduct {
+  id?: number
+  slug: string
+  sku: string
+  name_it: string
+  name_en: string
+  short_description_it: string
+  short_description_en: string
+  description_it: string
+  description_en: string
+  meta_title_it: string
+  meta_title_en: string
+  meta_description_it: string
+  meta_description_en: string
+  category_ids: number[]
+  variants: AdminProductVariant[]
+  images?: AdminProductImage[]
+  is_active: boolean
+  is_featured: boolean
+  is_new_arrival: boolean
+  is_bestseller: boolean
+  min_price?: string | null
+  total_stock?: number
+  in_stock?: boolean
+  created_at?: string
+  updated_at?: string
+}

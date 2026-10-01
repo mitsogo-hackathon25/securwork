@@ -15,11 +15,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    is_staff = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "profile"]
-        read_only_fields = ["id", "username"]
+        fields = ["id", "username", "email", "first_name", "last_name", "is_staff", "profile"]
+        read_only_fields = ["id", "username", "is_staff"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):

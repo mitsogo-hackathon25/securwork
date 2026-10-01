@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import AdminRoute from './components/admin/AdminRoute'
 import HomePage from './pages/HomePage'
 import ShopPage from './pages/ShopPage'
 import ProductPage from './pages/ProductPage'
@@ -11,11 +12,25 @@ import ContactPage from './pages/ContactPage'
 import FAQPage from './pages/FAQPage'
 import AccountPage from './pages/AccountPage'
 import NotFoundPage from './pages/NotFoundPage'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
+import AdminProductsPage from './pages/admin/AdminProductsPage'
+import AdminProductFormPage from './pages/admin/AdminProductFormPage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/products" replace />} />
+            <Route path="products" element={<AdminProductsPage />} />
+            <Route path="products/new" element={<AdminProductFormPage />} />
+            <Route path="products/:id" element={<AdminProductFormPage />} />
+          </Route>
+        </Route>
+
         <Route element={<Layout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/shop" element={<ShopPage />} />

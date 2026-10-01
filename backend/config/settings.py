@@ -134,6 +134,13 @@ CORS_ALLOWED_ORIGINS = config(
 )
 CORS_ALLOW_CREDENTIALS = True
 
+# CSRF — required when the React dev server (5180) proxies API calls to Django (8000)
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="http://127.0.0.1:5180,http://localhost:5180",
+    cast=Csv(),
+)
+
 # REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

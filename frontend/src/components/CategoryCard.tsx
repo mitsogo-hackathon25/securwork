@@ -10,12 +10,21 @@ interface Props {
 export default function CategoryCard({ category, variant = 'default' }: Props) {
   const link = `/shop?category=${category.slug}`
 
+  const hasImage = Boolean(category.image)
+
   return (
-    <Link to={link} className={`category-card category-card--${variant}`}>
+    <Link
+      to={link}
+      className={`category-card category-card--${variant}${hasImage ? ' category-card--has-image' : ''}`}
+    >
       <div className="category-card-bg" aria-hidden="true" />
-      {category.image ? (
-        <img src={category.image} alt="" className="category-card-img" loading="lazy" />
-      ) : null}
+      {hasImage ? (
+        <img src={category.image!} alt="" className="category-card-img" loading="lazy" />
+      ) : (
+        <div className="category-card-placeholder" aria-hidden="true">
+          <span>{category.name.charAt(0)}</span>
+        </div>
+      )}
       <div className="category-card-content">
         <h3>{category.name}</h3>
         {category.description && variant === 'default' && (

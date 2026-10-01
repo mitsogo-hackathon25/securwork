@@ -35,8 +35,27 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.35;
   z-index: 1;
+}
+
+.category-card--has-image .category-card-bg {
+  background: linear-gradient(180deg, rgba(15, 26, 46, 0.15) 0%, rgba(15, 26, 46, 0.82) 100%);
+}
+
+.category-card--has-image .category-card-img {
+  opacity: 1;
+}
+
+.category-card-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  font-size: 3rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .category-card-content {

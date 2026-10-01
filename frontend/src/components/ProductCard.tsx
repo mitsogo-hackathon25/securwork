@@ -18,7 +18,9 @@ export default function ProductCard({ product }: Props) {
           {product.primary_image ? (
             <img src={product.primary_image} alt={product.name} loading="lazy" />
           ) : (
-            <div className="product-card-placeholder" aria-hidden="true" />
+            <div className="product-card-placeholder" aria-hidden="true">
+              <span>{product.name.replace('[DEMO] ', '').charAt(0)}</span>
+            </div>
           )}
           <div className="product-card-badges">
             {product.is_new_arrival && <span className="product-badge new">{t('home.newArrivals')}</span>}

@@ -1,22 +1,14 @@
 """
 Seed ~50 demo products with placeholder images across all categories.
-Usage: python manage.py seed_catalog [--clear]
+Usage: python manage.py seed_catalog [--clear] [--images-only]
 """
-import io
 from decimal import Decimal
-from pathlib import Path
 
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
-from PIL import Image, ImageDraw, ImageFont
 
 from orders.models import Coupon
+from store.image_utils import generate_category_image, generate_product_image, get_category_image, get_product_image
 from store.models import Category, Product, ProductImage, ProductVariant
-
-COLORS = [
-    (26, 43, 74), (45, 74, 122), (55, 65, 81), (30, 58, 95),
-    (232, 93, 4), (75, 85, 99), (31, 41, 55), (15, 26, 46),
-]
 
 PRODUCTS = [
     # Workwear — T-shirt (4)
@@ -89,26 +81,33 @@ PRODUCTS = [
 ]
 
 
-def generate_placeholder_image(sku: str, color: tuple) -> ContentFile:
-    img = Image.new("RGB", (800, 1000), color)
-    draw = ImageDraw.Draw(img)
-    # Subtle diagonal lines
-    for i in range(0, 1000, 40):
-        draw.line([(0, i), (800, i + 200)], fill=(255, 255, 255, 30), width=1)
-    # Product label
-    text = f"[DEMO]\n{sku}"
-    try:
-        font = ImageFont.truetype("arial.ttf", 36)
-    except OSError:
-        font = ImageFont.load_default()
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(((800 - tw) / 2, (1000 - th) / 2), text, fill=(255, 255, 255), font=font)
-    draw.rectangle([40, 40, 760, 960], outline=(255, 255, 255), width=2)
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=85)
-    buffer.seek(0)
-    return ContentFile(buffer.read(), name=f"{sku.lower()}.jpg")
+def seed_category_images(stdout, style, force=False):
+    count = 0
+    for cat in Category.objects.filter(is_active=True):
+        if cat.image and not force:
+            continue
+        img_file = get_category_image(cat.slug, cat.section)
+        cat.image.save(f"cat-{cat.slug}.jpg", img_file, save=True)
+        count += 1
+    stdout.write(style.SUCCESS(f"Category images: {count} updated."))
+
+
+def seed_product_images(stdout, style, force=False):
+    count = 0
+    for product in Product.objects.filter(is_active=True):
+        if product.images.exists() and not force:
+            continue
+        if force:
+            product.images.all().delete()
+        name = product.safe_translation_getter("name", language_code="it", any_language=True) or product.sku
+        label = name.replace("[DEMO] ", "")
+        cat = product.categories.filter(parent__isnull=False).first() or product.categories.first()
+        cat_slug = cat.slug if cat else None
+        img_file = get_product_image(product.sku, cat_slug)
+        pi = ProductImage(product=product, is_primary=True, alt_text=label)
+        pi.image.save(f"{product.sku.lower()}.jpg", img_file, save=True)
+        count += 1
+    stdout.write(style.SUCCESS(f"Product images: {count} updated."))
 
 
 class Command(BaseCommand):
@@ -116,8 +115,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--clear", action="store_true", help="Remove existing DEMO/SW- products first")
+        parser.add_argument("--images-only", action="store_true", help="Only (re)generate category and product images")
+        parser.add_argument("--force-images", action="store_true", help="Replace existing product images")
 
     def handle(self, *args, **options):
+        if options["images_only"]:
+            seed_category_images(self.stdout, self.style, force=options["force_images"])
+            seed_product_images(self.stdout, self.style, force=options["force_images"])
+            return
+
         if options["clear"]:
             self.stdout.write("Clearing existing catalog products...")
             Product.objects.filter(sku__startswith="SW-").delete()
@@ -198,11 +204,14 @@ class Command(BaseCommand):
                     )
 
             if not product.images.exists():
-                img_file = generate_placeholder_image(pdata["sku"], COLORS[i % len(COLORS)])
+                img_file = get_product_image(pdata["sku"], pdata["cat"])
                 pi = ProductImage(product=product, is_primary=True, alt_text=pdata["it"])
                 pi.image.save(f"{pdata['sku'].lower()}.jpg", img_file, save=True)
 
             created_count += 1
+
+        seed_category_images(self.stdout, self.style, force=options.get("force_images", False))
+        seed_product_images(self.stdout, self.style, force=options.get("force_images", False))
 
         Coupon.objects.get_or_create(
             code="BIENVENUTO10",
