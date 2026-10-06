@@ -49,6 +49,28 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         return AdminProductSerializer
 
     @action(detail=True, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def upload_mockup(self, request, pk=None):
+        product = self.get_object()
+        image_file = request.FILES.get("mockup_front")
+        if not image_file:
+            return Response({"detail": "No mockup image provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if product.mockup_front:
+            product.mockup_front.delete(save=False)
+        product.mockup_front = image_file
+        product.save(update_fields=["mockup_front"])
+        return Response(AdminProductSerializer(product, context={"request": request}).data)
+
+    @action(detail=True, methods=["delete"])
+    def remove_mockup(self, request, pk=None):
+        product = self.get_object()
+        if product.mockup_front:
+            product.mockup_front.delete(save=False)
+            product.mockup_front = None
+            product.save(update_fields=["mockup_front"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def upload_image(self, request, pk=None):
         product = self.get_object()
         image_file = request.FILES.get("image")

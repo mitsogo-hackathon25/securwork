@@ -10,6 +10,13 @@ from orders.models import Coupon
 from store.image_utils import generate_category_image, generate_product_image, get_category_image, get_product_image
 from store.models import Category, Product, ProductImage, ProductVariant
 
+CUSTOMIZABLE_CATEGORIES = {
+    "t-shirt", "polo", "felpe", "camicie", "giacche", "gilet", "maglioni",
+    "salopette", "camici", "cappelli",
+    "grembiuli", "linea-chef", "abbigliamento-sanitario", "hotel-ristorante-caffe",
+    "parrucchiere", "abbigliamento-alimentare", "divise-professionali", "taglia-unica",
+}
+
 PRODUCTS = [
     # Workwear — T-shirt (4)
     {"cat": "t-shirt", "sku": "SW-TS-001", "slug": "demo-tshirt-operativa-blu", "it": "T-shirt operativa blu", "en": "Blue work t-shirt", "price": "14.90", "featured": True, "new": True},
@@ -176,6 +183,9 @@ class Command(BaseCommand):
             product.is_new_arrival = pdata.get("new", False)
             product.is_bestseller = pdata.get("bestseller", False)
             product.is_active = True
+            product.allows_customization = pdata["cat"] in CUSTOMIZABLE_CATEGORIES
+            if product.allows_customization and product.customization_fee == Decimal("0.00"):
+                product.customization_fee = Decimal("5.00")
             product.save()
             cats = [cat]
             also = pdata.get("also_cat")

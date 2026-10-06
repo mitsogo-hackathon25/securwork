@@ -6,9 +6,11 @@ import {
   deleteProductImage,
   fetchAdminCategories,
   fetchAdminProduct,
+  removeProductMockup,
   setPrimaryImage,
   updateAdminProduct,
   uploadProductImage,
+  uploadProductMockup,
 } from '../../api/admin'
 import type { AdminProduct, AdminProductVariant } from '../../api/types'
 import './Admin.css'
@@ -43,6 +45,8 @@ const emptyProduct = (): AdminProduct => ({
   is_featured: false,
   is_new_arrival: false,
   is_bestseller: false,
+  allows_customization: false,
+  customization_fee: '0.00',
 })
 
 export default function AdminProductFormPage() {
@@ -152,6 +156,22 @@ export default function AdminProductFormPage() {
   const handleSetPrimary = async (imageId: number) => {
     if (!productId) return
     await setPrimaryImage(productId, imageId)
+    queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
+  }
+
+  const handleMockupUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !productId) return
+    const updated = await uploadProductMockup(productId, file)
+    setForm((prev) => ({ ...prev, mockup_front: updated.mockup_front }))
+    queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
+    e.target.value = ''
+  }
+
+  const handleRemoveMockup = async () => {
+    if (!productId || !window.confirm('Remove mockup image?')) return
+    await removeProductMockup(productId)
+    setForm((prev) => ({ ...prev, mockup_front: null }))
     queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
   }
 
@@ -310,6 +330,57 @@ export default function AdminProductFormPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="admin-card">
+          <h2>Logo customization</h2>
+          <p className="admin-hint">
+            Enable this to let customers upload a logo and position it on the product page.
+            If no mockup image is set, the primary product photo is used.
+          </p>
+          <div className="admin-checkbox-grid">
+            <label>
+              <input
+                type="checkbox"
+                checked={form.allows_customization ?? false}
+                onChange={(e) => updateField('allows_customization', e.target.checked)}
+              />
+              Allow logo customization
+            </label>
+          </div>
+          <label>
+            Customization fee (EUR)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.customization_fee ?? '0.00'}
+              onChange={(e) => updateField('customization_fee', e.target.value)}
+              disabled={!form.allows_customization}
+            />
+          </label>
+          {!isNew && form.allows_customization && (
+            <div className="admin-mockup">
+              {form.mockup_front ? (
+                <div className="admin-image-card">
+                  <img src={form.mockup_front} alt="Mockup front" />
+                  <div className="admin-image-actions">
+                    <button type="button" className="admin-link-danger" onClick={handleRemoveMockup}>
+                      Remove mockup
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="admin-hint">No mockup uploaded — primary product image will be used.</p>
+              )}
+              <label className="admin-upload">
+                <span className="btn btn-secondary">
+                  {form.mockup_front ? 'Replace mockup' : 'Upload mockup image'}
+                </span>
+                <input type="file" accept="image/*" onChange={handleMockupUpload} />
+              </label>
+            </div>
+          )}
         </section>
 
         {!isNew && (

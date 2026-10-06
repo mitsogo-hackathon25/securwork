@@ -1,6 +1,7 @@
 import api from './client'
 import type {
   AdminCategoryOption,
+  AdminCoupon,
   AdminOrder,
   AdminOrderListItem,
   AdminProduct,
@@ -47,6 +48,17 @@ export const deleteProductImage = (productId: number, imageId: number) =>
 export const setPrimaryImage = (productId: number, imageId: number) =>
   api.patch(`/admin/products/${productId}/images/${imageId}/`, { is_primary: true })
 
+export const uploadProductMockup = (productId: number, file: File) => {
+  const form = new FormData()
+  form.append('mockup_front', file)
+  return api.post<AdminProduct>(`/admin/products/${productId}/upload_mockup/`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then((r) => r.data)
+}
+
+export const removeProductMockup = (productId: number) =>
+  api.delete(`/admin/products/${productId}/remove_mockup/`)
+
 export const fetchAdminOrders = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<AdminOrderListItem>>('/admin/orders/', { params }).then((r) => r.data)
 
@@ -55,3 +67,18 @@ export const fetchAdminOrder = (id: number) =>
 
 export const updateAdminOrder = (id: number, data: Partial<Pick<AdminOrder, 'status' | 'payment_status' | 'notes'>>) =>
   api.patch<AdminOrder>(`/admin/orders/${id}/`, data).then((r) => r.data)
+
+export const fetchAdminCoupons = (params?: Record<string, string | number | boolean>) =>
+  api.get<PaginatedResponse<AdminCoupon>>('/admin/coupons/', { params }).then((r) => r.data)
+
+export const fetchAdminCoupon = (id: number) =>
+  api.get<AdminCoupon>(`/admin/coupons/${id}/`).then((r) => r.data)
+
+export const createAdminCoupon = (data: Partial<AdminCoupon>) =>
+  api.post<AdminCoupon>('/admin/coupons/', data).then((r) => r.data)
+
+export const updateAdminCoupon = (id: number, data: Partial<AdminCoupon>) =>
+  api.patch<AdminCoupon>(`/admin/coupons/${id}/`, data).then((r) => r.data)
+
+export const deleteAdminCoupon = (id: number) =>
+  api.delete(`/admin/coupons/${id}/`)

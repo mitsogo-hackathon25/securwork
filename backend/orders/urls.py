@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .admin_views import AdminOrderViewSet
+from .admin_views import AdminCouponViewSet, AdminOrderViewSet
 from .customization_views import CustomizationCreateView
 from .views import (
     CartItemView,
@@ -18,6 +18,7 @@ router.register("orders", OrderViewSet, basename="order")
 
 admin_router = DefaultRouter()
 admin_router.register("orders", AdminOrderViewSet, basename="admin-order")
+admin_router.register("coupons", AdminCouponViewSet, basename="admin-coupon")
 
 urlpatterns = [
     path("customizations/", CustomizationCreateView.as_view(), name="customization-create"),

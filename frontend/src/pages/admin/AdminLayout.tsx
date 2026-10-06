@@ -20,6 +20,7 @@ export default function AdminLayout() {
         <nav className="admin-nav">
           <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Products</NavLink>
           <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Orders</NavLink>
+          <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Coupons</NavLink>
           <a href="/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
             View storefront
           </a>

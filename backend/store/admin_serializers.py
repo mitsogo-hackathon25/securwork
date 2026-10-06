@@ -95,6 +95,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
     )
     variants = AdminProductVariantSerializer(many=True)
     images = AdminProductImageSerializer(many=True, read_only=True)
+    mockup_front = serializers.SerializerMethodField()
     min_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     total_stock = serializers.SerializerMethodField()
     in_stock = serializers.BooleanField(read_only=True)
@@ -118,6 +119,15 @@ class AdminProductSerializer(serializers.ModelSerializer):
 
     def get_total_stock(self, obj):
         return sum(v.stock_quantity for v in obj.variants.all() if v.is_active)
+
+    def get_mockup_front(self, obj):
+        if obj.mockup_front:
+            request = self.context.get("request")
+            url = obj.mockup_front.url
+            if request and not url.startswith("http"):
+                return request.build_absolute_uri(url)
+            return url
+        return None
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

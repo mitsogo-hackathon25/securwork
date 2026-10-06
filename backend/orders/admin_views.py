@@ -7,11 +7,12 @@ from rest_framework.response import Response
 from store.permissions import IsStaffUser
 
 from .admin_serializers import (
+    AdminCouponSerializer,
     AdminOrderListSerializer,
     AdminOrderSerializer,
     AdminOrderUpdateSerializer,
 )
-from .models import Order
+from .models import Coupon, Order
 
 
 class AdminOrderViewSet(
@@ -48,3 +49,14 @@ class AdminOrderViewSet(
         self.perform_update(serializer)
         updated = self.get_queryset().get(pk=instance.pk)
         return Response(AdminOrderSerializer(updated).data)
+
+
+class AdminCouponViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsStaffUser]
+    serializer_class = AdminCouponSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ["code"]
+    filterset_fields = ["is_active"]
+    ordering_fields = ["code", "valid_until", "used_count"]
+    ordering = ["-id"]
+    queryset = Coupon.objects.all()

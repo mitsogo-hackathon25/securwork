@@ -141,6 +141,20 @@ export interface AdminOrderListItem {
   created_at: string
 }
 
+export interface AdminCoupon {
+  id?: number
+  code: string
+  discount_percent: string | null
+  discount_amount: string | null
+  min_order_amount: string
+  max_uses: number | null
+  used_count?: number
+  uses_remaining?: number | null
+  is_active: boolean
+  valid_from: string | null
+  valid_until: string | null
+}
+
 export interface AdminOrder extends Order {
   id: number
   email: string
@@ -263,6 +277,9 @@ export interface AdminProduct {
   is_featured: boolean
   is_new_arrival: boolean
   is_bestseller: boolean
+  allows_customization?: boolean
+  mockup_front?: string | null
+  customization_fee?: string
   min_price?: string | null
   total_stock?: number
   in_stock?: boolean
