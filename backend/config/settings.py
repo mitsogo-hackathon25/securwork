@@ -15,7 +15,16 @@ SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me-in-producti
 DEBUG = config("DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
-FRONTEND_URL = config("FRONTEND_URL", default="http://127.0.0.1:5180")
+# Public storefront URL — required in production (emails, redirects). Set in .env per environment.
+FRONTEND_URL = config("FRONTEND_URL", default="")
+
+# Django admin path — React owns /admin/ for the product panel.
+DJANGO_ADMIN_PATH = config("DJANGO_ADMIN_PATH", default="django-admin")
+
+
+def _csv_env(key: str) -> list[str]:
+    """Parse a comma-separated env var, ignoring empty values."""
+    return [v.strip() for v in config(key, default="", cast=Csv()) if v.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -126,20 +135,10 @@ PARLER_LANGUAGES = {
     },
 }
 
-# CORS
-CORS_ALLOWED_ORIGINS = config(
-    "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:5180,http://127.0.0.1:5180",
-    cast=Csv(),
-)
+# CORS / CSRF — set per environment in .env (local dev needs origins; production same-origin usually does not).
+CORS_ALLOWED_ORIGINS = _csv_env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
-
-# CSRF — required when the React dev server (5180) proxies API calls to Django (8000)
-CSRF_TRUSTED_ORIGINS = config(
-    "CSRF_TRUSTED_ORIGINS",
-    default="http://127.0.0.1:5180,http://localhost:5180",
-    cast=Csv(),
-)
+CSRF_TRUSTED_ORIGINS = _csv_env("CSRF_TRUSTED_ORIGINS")
 
 # REST Framework
 REST_FRAMEWORK = {

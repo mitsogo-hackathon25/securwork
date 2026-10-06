@@ -26,6 +26,7 @@ const emptyVariant = (): AdminProductVariant => ({
 const emptyProduct = (): AdminProduct => ({
   slug: '',
   sku: '',
+  brand: '',
   name_it: '',
   name_en: '',
   short_description_it: '',
@@ -187,6 +188,14 @@ export default function AdminProductFormPage() {
                 value={form.slug}
                 onChange={(e) => updateField('slug', e.target.value)}
                 placeholder="auto-generated if empty"
+              />
+            </label>
+            <label>
+              Brand
+              <input
+                value={form.brand || ''}
+                onChange={(e) => updateField('brand', e.target.value)}
+                placeholder="e.g. ISACCO, U-Power"
               />
             </label>
           </div>

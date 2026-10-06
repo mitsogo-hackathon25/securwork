@@ -1,3 +1,30 @@
+.cart-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cart-custom-preview {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+.cart-custom-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 .cart-empty { text-align: center; padding: 3rem 0; }
 .cart-empty p { margin-bottom: 1.5rem; color: var(--color-muted); }
 

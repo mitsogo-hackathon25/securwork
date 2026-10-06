@@ -16,6 +16,8 @@ import AdminLayout from './pages/admin/AdminLayout'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminProductsPage from './pages/admin/AdminProductsPage'
 import AdminProductFormPage from './pages/admin/AdminProductFormPage'
+import AdminOrdersPage from './pages/admin/AdminOrdersPage'
+import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage'
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
             <Route path="products" element={<AdminProductsPage />} />
             <Route path="products/new" element={<AdminProductFormPage />} />
             <Route path="products/:id" element={<AdminProductFormPage />} />
+            <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="orders/:id" element={<AdminOrderDetailPage />} />
           </Route>
         </Route>
 

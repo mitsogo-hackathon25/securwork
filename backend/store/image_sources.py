@@ -124,6 +124,36 @@ CATEGORY_PHOTOS: dict[str, list[str]] = {
         _unsplash("photo-1573496359142-b8d87734a5a2", 960),
         _pexels(3182813, 960),
     ],
+    "cappelli": [
+        _unsplash("photo-1581092160562-40aa08e78837", 960),
+        _pexels(7678390, 960),
+        _unsplash("photo-1521572163474-6864f9cf17ab", 960),
+    ],
+    "linea-chef": [
+        _unsplash("photo-1556910103-1c02745aae4d", 960),
+        _pexels(262978, 960),
+        _pexels(6957552, 960),
+    ],
+    "taglia-unica": [
+        _pexels(3182813, 960),
+        _unsplash("photo-1556910103-1c02745aae4d", 960),
+        _pexels(3184191, 960),
+    ],
+    "hotel-ristorante-caffe": [
+        _pexels(262978, 960),
+        _pexels(3182813, 960),
+        _unsplash("photo-1556910103-1c02745aae4d", 960),
+    ],
+    "parrucchiere": [
+        _unsplash("photo-1582719478250-c89cae4dc85b", 960),
+        _pexels(3993449, 960),
+        _unsplash("photo-1573496359142-b8d87734a5a2", 960),
+    ],
+    "scarpe-professionali": [
+        _unsplash("photo-1549298916-b41d501d3772", 960),
+        _pexels(112406, 960),
+        _pexels(631986, 960),
+    ],
 }
 
 DEFAULT_WORKWEAR = [
@@ -142,6 +172,11 @@ _PROFESSIONAL_SLUGS = {
     "abbigliamento-sanitario",
     "abbigliamento-alimentare",
     "divise-professionali",
+    "linea-chef",
+    "taglia-unica",
+    "hotel-ristorante-caffe",
+    "parrucchiere",
+    "scarpe-professionali",
 }
 
 

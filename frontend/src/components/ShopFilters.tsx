@@ -6,6 +6,7 @@ interface FilterState {
   section: string
   category: string
   inStock: string
+  onSale: string
   size: string
   color: string
   minPrice: string
@@ -31,6 +32,12 @@ export default function ShopFilters({
 }: Props) {
   const { t } = useTranslation()
 
+  const filteredParents = filters.section
+    ? categories.filter((parent) => parent.section === filters.section)
+    : categories
+
+  const categoryOptions = filteredParents.flatMap((parent) => parent.children ?? [])
+
   const content = (
     <>
       <div className="filters-header">
@@ -40,7 +47,11 @@ export default function ShopFilters({
 
       <div className="filter-group">
         <label htmlFor="filter-section">{t('shop.section')}</label>
-        <select id="filter-section" value={filters.section} onChange={(e) => onChange('section', e.target.value)}>
+        <select
+          id="filter-section"
+          value={filters.section}
+          onChange={(e) => onChange('section', e.target.value)}
+        >
           <option value="">—</option>
           <option value="workwear">{t('nav.workwear')}</option>
           <option value="professional">{t('nav.professional')}</option>
@@ -51,11 +62,9 @@ export default function ShopFilters({
         <label htmlFor="filter-category">{t('shop.category')}</label>
         <select id="filter-category" value={filters.category} onChange={(e) => onChange('category', e.target.value)}>
           <option value="">—</option>
-          {categories.flatMap((parent) =>
-            parent.children?.map((child) => (
-              <option key={child.id} value={child.slug}>{child.name}</option>
-            )) ?? []
-          )}
+          {categoryOptions.map((child) => (
+            <option key={child.id} value={child.slug}>{child.name}</option>
+          ))}
         </select>
       </div>
 

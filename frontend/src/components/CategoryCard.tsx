@@ -8,7 +8,9 @@ interface Props {
 }
 
 export default function CategoryCard({ category, variant = 'default' }: Props) {
-  const link = `/shop?category=${category.slug}`
+  const link = category.section
+    ? `/shop?section=${category.section}&category=${category.slug}`
+    : `/shop?category=${category.slug}`
 
   const hasImage = Boolean(category.image)
 

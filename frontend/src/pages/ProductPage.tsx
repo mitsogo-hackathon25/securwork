@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,6 +6,7 @@ import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
 import ProductCard from '../components/ProductCard'
 import { BreadcrumbSchema, ProductSchema } from '../components/SeoSchema'
+import ProductCustomizer, { type ProductCustomizerHandle } from '../components/ProductCustomizer'
 import { addToCart, fetchProduct, fetchRelated } from '../api/store'
 import type { ProductVariant } from '../api/types'
 import { formatPrice } from '../utils/format'
@@ -20,6 +21,9 @@ export default function ProductPage() {
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
+  const [customize, setCustomize] = useState(false)
+  const [hasLogo, setHasLogo] = useState(false)
+  const customizerRef = useRef<ProductCustomizerHandle>(null)
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', slug],
@@ -42,11 +46,18 @@ export default function ProductPage() {
   const images = product.images?.length ? product.images : []
   const mainImage = images[activeImage]?.image || product.primary_image
 
+  const mockupUrl = product.mockup_front || product.primary_image
+
   const handleAddToCart = async () => {
     if (!variant) return
+    if (customize && !hasLogo) return
     setAdding(true)
     try {
-      await addToCart(variant.id, quantity)
+      let customizationId: number | undefined
+      if (customize && customizerRef.current?.hasLogo()) {
+        customizationId = await customizerRef.current.upload()
+      }
+      await addToCart(variant.id, quantity, customizationId)
       queryClient.invalidateQueries({ queryKey: ['cart'] })
       setAdded(true)
       setTimeout(() => setAdded(false), 2500)
@@ -143,6 +154,9 @@ export default function ProductPage() {
                 </p>
               )}
 
+              {product.brand && (
+                <p className="product-brand">{t('product.brand')}: {product.brand}</p>
+              )}
               <p className="product-sku">{t('product.sku')}: {variant?.sku || product.sku}</p>
 
               {sizes.length > 0 && (
@@ -181,6 +195,29 @@ export default function ProductPage() {
                 </div>
               )}
 
+              {product.allows_customization && mockupUrl && (
+                <div className="customization-toggle">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={customize}
+                      onChange={(e) => setCustomize(e.target.checked)}
+                    />
+                    {t('customizer.enable')}
+                  </label>
+                </div>
+              )}
+
+              {product.allows_customization && customize && mockupUrl && variant && (
+                <ProductCustomizer
+                  ref={customizerRef}
+                  mockupUrl={mockupUrl}
+                  variantId={variant.id}
+                  customizationFee={product.customization_fee}
+                  onReadyChange={setHasLogo}
+                />
+              )}
+
               <div className="quantity-select">
                 <label htmlFor="qty">{t('product.quantity')}</label>
                 <input
@@ -203,7 +240,7 @@ export default function ProductPage() {
               <button
                 className="btn btn-primary add-to-cart-btn"
                 onClick={handleAddToCart}
-                disabled={!variant?.in_stock || adding}
+                disabled={!variant?.in_stock || adding || (customize && !hasLogo)}
               >
                 {adding ? t('common.loading') : added ? t('product.addedToCart') : t('cta.addToCart')}
               </button>

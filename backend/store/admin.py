@@ -29,14 +29,15 @@ class CategoryAdmin(TranslatableAdmin):
 
 @admin.register(Product)
 class ProductAdmin(TranslatableAdmin):
-    list_display = ("name", "sku", "slug", "is_active", "is_featured", "in_stock_display", "created_at")
+    list_display = ("name", "sku", "brand", "slug", "is_active", "is_featured", "in_stock_display", "created_at")
     list_filter = ("is_active", "is_featured", "is_new_arrival", "is_bestseller")
     search_fields = ("translations__name", "sku", "slug")
     filter_horizontal = ("categories",)
     inlines = [ProductVariantInline, ProductImageInline]
     fieldsets = (
-        (None, {"fields": ("name", "slug", "sku", "categories")}),
+        (None, {"fields": ("name", "slug", "sku", "brand", "categories")}),
         ("Content", {"fields": ("short_description", "description")}),
+        ("Customization", {"fields": ("allows_customization", "mockup_front", "customization_fee")}),
         ("SEO", {"fields": ("meta_title", "meta_description"), "classes": ("collapse",)}),
         ("Flags", {"fields": ("is_active", "is_featured", "is_new_arrival", "is_bestseller")}),
     )

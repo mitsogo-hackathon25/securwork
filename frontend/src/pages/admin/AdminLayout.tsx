@@ -19,10 +19,11 @@ export default function AdminLayout() {
         </Link>
         <nav className="admin-nav">
           <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Products</NavLink>
+          <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Orders</NavLink>
           <a href="/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
             View storefront
           </a>
-          <a href="http://127.0.0.1:8000/admin/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
+          <a href="/django-admin/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
             Django admin
           </a>
         </nav>

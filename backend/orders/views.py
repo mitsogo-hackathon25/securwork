@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .emails import send_order_admin_notification, send_order_confirmation
-from .models import CartItem, Order
+from .models import Cart, CartItem, Order
 from .payments import (
     cancel_order,
     confirm_order_payment,
@@ -27,9 +27,16 @@ from .serializers import (
 from .services import create_order_from_cart, get_or_create_cart
 
 
+def _cart_with_items(cart):
+    return Cart.objects.prefetch_related(
+        "items__customization",
+        "items__variant__product",
+    ).get(pk=cart.pk)
+
+
 class CartView(APIView):
     def get(self, request):
-        cart = get_or_create_cart(request)
+        cart = _cart_with_items(get_or_create_cart(request))
         serializer = CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")})
         return Response(serializer.data)
 
@@ -40,17 +47,37 @@ class CartView(APIView):
         variant = serializer.validated_data["variant"]
         quantity = serializer.validated_data["quantity"]
 
-        item, created = CartItem.objects.get_or_create(cart=cart, variant=variant, defaults={"quantity": quantity})
-        if not created:
-            new_qty = item.quantity + quantity
-            if new_qty > variant.stock_quantity:
+        customization = serializer.validated_data.get("customization")
+        if customization:
+            if quantity > variant.stock_quantity:
                 return Response(
                     {"quantity": f"Only {variant.stock_quantity} units available."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            item.quantity = new_qty
-            item.save()
+            CartItem.objects.create(
+                cart=cart,
+                variant=variant,
+                quantity=quantity,
+                customization=customization,
+            )
+        else:
+            item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                variant=variant,
+                customization=None,
+                defaults={"quantity": quantity},
+            )
+            if not created:
+                new_qty = item.quantity + quantity
+                if new_qty > variant.stock_quantity:
+                    return Response(
+                        {"quantity": f"Only {variant.stock_quantity} units available."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                item.quantity = new_qty
+                item.save()
 
+        cart = _cart_with_items(cart)
         return Response(
             CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")}).data,
             status=status.HTTP_201_CREATED,
@@ -80,6 +107,7 @@ class CartItemView(APIView):
             item.quantity = quantity
             item.save()
 
+        cart = _cart_with_items(cart)
         return Response(
             CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")}).data
         )
@@ -87,6 +115,7 @@ class CartItemView(APIView):
     def delete(self, request, item_id):
         cart = get_or_create_cart(request)
         cart.items.filter(pk=item_id).delete()
+        cart = _cart_with_items(cart)
         return Response(
             CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")}).data
         )
@@ -153,7 +182,7 @@ class OrderVerifyView(APIView):
     def get(self, request, order_number):
         session_id = request.query_params.get("session_id")
         try:
-            order = Order.objects.prefetch_related("items").get(order_number=order_number)
+            order = Order.objects.prefetch_related("items__customization").get(order_number=order_number)
         except Order.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -189,4 +218,6 @@ class OrderViewSet(ReadOnlyModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).prefetch_related("items")
+        return Order.objects.filter(user=self.request.user).prefetch_related(
+            "items", "items__customization"
+        )

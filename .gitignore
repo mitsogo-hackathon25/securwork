@@ -42,6 +42,7 @@ desktop.ini
 
 # Docker
 docker-data/
+docker-compose.override.yml
 
 # Backups
 backups/

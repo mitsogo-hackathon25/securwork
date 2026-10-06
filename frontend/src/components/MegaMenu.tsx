@@ -28,7 +28,7 @@ export default function MegaMenu({ categories, open = false, onNavigate }: Props
             <ul>
               {workwear.children?.map((child) => (
                 <li key={child.id}>
-                  <Link to={`/shop?category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
+                  <Link to={`/shop?section=workwear&category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
                 </li>
               ))}
             </ul>
@@ -43,7 +43,7 @@ export default function MegaMenu({ categories, open = false, onNavigate }: Props
             <ul>
               {professional.children?.map((child) => (
                 <li key={child.id}>
-                  <Link to={`/shop?category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
+                  <Link to={`/shop?section=professional&category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
                 </li>
               ))}
             </ul>

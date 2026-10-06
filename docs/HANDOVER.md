@@ -1,8 +1,15 @@
 # SecurWork — Client Handover Guide (Django Admin)
 
-Daily store operations are managed via the **Django Admin panel** at:
+Store management uses two panels:
 
-**https://www.securwork.it/admin/**
+| Panel | URL | Purpose |
+|-------|-----|---------|
+| **Product admin** (React) | https://www.securwork.it/admin/login | Products, variants, images |
+| **Django admin** | https://www.securwork.it/django-admin/ | Orders, CMS, FAQ, coupons, users |
+
+This guide covers the **Django Admin** panel at:
+
+**https://www.securwork.it/django-admin/**
 
 ---
 

@@ -1,3 +1,16 @@
+.customization-toggle {
+  margin: 1rem 0 0;
+}
+
+.customization-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
 .product-page {
   padding: 0 0 4rem;
 }
@@ -83,6 +96,12 @@
   text-decoration: line-through;
   margin-left: 0.5rem;
   font-weight: 400;
+}
+
+.product-brand {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  margin: 0 0 0.25rem;
 }
 
 .product-sku {

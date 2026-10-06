@@ -1,0 +1,90 @@
+.product-customizer {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.product-customizer h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  color: var(--color-primary);
+}
+
+.product-customizer-desc,
+.product-customizer-fee,
+.product-customizer-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.product-customizer-fee {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.product-customizer-upload input {
+  display: none;
+}
+
+.product-customizer-stage {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 1rem auto 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #e5e7eb;
+  touch-action: none;
+  user-select: none;
+}
+
+.product-customizer-mockup {
+  width: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.product-customizer-zone {
+  position: absolute;
+  left: 20%;
+  top: 22%;
+  width: 60%;
+  height: 45%;
+  border: 2px dashed rgba(232, 93, 4, 0.55);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.product-customizer-logo {
+  position: absolute;
+  object-fit: contain;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.product-customizer-logo:active {
+  cursor: grabbing;
+}
+
+.product-customizer-controls {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.product-customizer-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.product-customizer-controls input[type='range'] {
+  width: 100%;
+}

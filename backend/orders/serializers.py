@@ -6,7 +6,22 @@ from rest_framework import serializers
 from store.models import ProductVariant
 from store.serializers import ProductVariantSerializer
 
-from .models import Cart, CartItem, Coupon, Order, OrderItem
+from .models import Cart, CartItem, Coupon, LineItemCustomization, Order, OrderItem
+
+
+class LineItemCustomizationSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField()
+    preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LineItemCustomization
+        fields = ["id", "logo", "preview", "design_data", "created_at"]
+
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
+
+    def get_preview(self, obj):
+        return obj.preview.url if obj.preview else None
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -17,11 +32,16 @@ class CartItemSerializer(serializers.ModelSerializer):
         write_only=True,
     )
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     product_name = serializers.SerializerMethodField()
+    customization = LineItemCustomizationSerializer(read_only=True)
 
     class Meta:
         model = CartItem
-        fields = ["id", "variant", "variant_id", "quantity", "line_total", "product_name"]
+        fields = [
+            "id", "variant", "variant_id", "quantity", "unit_price",
+            "line_total", "product_name", "customization",
+        ]
 
     def get_product_name(self, obj):
         lang = self.context.get("lang", "it")
@@ -44,24 +64,41 @@ class CartSerializer(serializers.ModelSerializer):
 class AddToCartSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1, default=1)
+    customization_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, data):
         try:
-            variant = ProductVariant.objects.get(pk=data["variant_id"], is_active=True)
+            variant = ProductVariant.objects.select_related("product").get(
+                pk=data["variant_id"], is_active=True
+            )
         except ProductVariant.DoesNotExist:
             raise serializers.ValidationError({"variant_id": "Variant not found."})
         if variant.stock_quantity < data["quantity"]:
             raise serializers.ValidationError(
                 {"quantity": f"Only {variant.stock_quantity} units available."}
             )
+        customization_id = data.get("customization_id")
+        if customization_id:
+            try:
+                customization = LineItemCustomization.objects.get(pk=customization_id)
+            except LineItemCustomization.DoesNotExist:
+                raise serializers.ValidationError({"customization_id": "Customization not found."})
+            if not variant.product.allows_customization:
+                raise serializers.ValidationError({"customization_id": "Product is not customizable."})
+            data["customization"] = customization
         data["variant"] = variant
         return data
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    customization = LineItemCustomizationSerializer(read_only=True)
+
     class Meta:
         model = OrderItem
-        fields = ["product_name", "sku", "size", "color", "unit_price", "quantity", "line_total"]
+        fields = [
+            "product_name", "sku", "size", "color", "unit_price", "quantity",
+            "line_total", "customization",
+        ]
 
 
 class OrderSerializer(serializers.ModelSerializer):

@@ -44,11 +44,12 @@ export default function Footer() {
             <Link to="/faq">{t('nav.faq')}</Link>
             <Link to="/contact">{t('nav.contact')}</Link>
             <Link to="/pages/shipping">{t('footer.shipping')}</Link>
-            <Link to="/pages/returns">{t('footer.returns')}</Link>
+            <Link to="/shop?on_sale=true">{t('nav.promotions')}</Link>
           </nav>
 
           <nav className="footer-nav" aria-label="Legal">
             <h3>{t('footer.legal')}</h3>
+            <Link to="/pages/returns">{t('footer.returns')}</Link>
             <Link to="/pages/privacy">{t('footer.privacy')}</Link>
             <Link to="/pages/cookies">{t('footer.cookies')}</Link>
             <Link to="/pages/terms">{t('footer.terms')}</Link>

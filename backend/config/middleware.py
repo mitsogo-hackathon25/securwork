@@ -7,15 +7,15 @@ from django.http import HttpResponseRedirect
 class DevFrontendRedirectMiddleware:
     """Send browser traffic to the Vite dev server when DEBUG is enabled."""
 
-    SKIP_PREFIXES = ("/api/", "/admin/", "/static/", "/media/", "/sitemap.xml")
-
     def __init__(self, get_response):
         self.get_response = get_response
+        admin_prefix = f"/{settings.DJANGO_ADMIN_PATH.strip('/')}/"
+        self.skip_prefixes = ("/api/", admin_prefix, "/static/", "/media/", "/sitemap.xml")
 
     def __call__(self, request):
-        if settings.DEBUG:
+        if settings.DEBUG and settings.FRONTEND_URL:
             path = request.path
-            if path != "/favicon.ico" and not any(path.startswith(p) for p in self.SKIP_PREFIXES):
+            if path != "/favicon.ico" and not any(path.startswith(p) for p in self.skip_prefixes):
                 # Match the request host so 127.0.0.1 and localhost both work
                 parsed = urlparse(settings.FRONTEND_URL)
                 host = request.get_host().split(":")[0]

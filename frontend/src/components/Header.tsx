@@ -74,20 +74,27 @@ export default function Header() {
               </Link>
             </div>
 
+            <Link to="/shop?on_sale=true" onClick={closeAll}>{t('nav.promotions')}</Link>
             <Link to="/about" onClick={closeAll}>{t('nav.about')}</Link>
             <Link to="/contact" onClick={closeAll}>{t('nav.contact')}</Link>
             <Link to="/faq" onClick={closeAll}>{t('nav.faq')}</Link>
 
             {mobileOpen && categories.length > 0 && (
               <div className="mobile-categories">
-                <p className="mobile-categories-label">{t('nav.shop')}</p>
-                {categories.flatMap((parent) =>
-                  parent.children?.map((child) => (
-                    <Link key={child.id} to={`/shop?category=${child.slug}`} onClick={closeAll}>
-                      {child.name}
-                    </Link>
-                  )) ?? []
-                )}
+                {categories.map((parent) => (
+                  <div key={parent.id}>
+                    <p className="mobile-categories-label">{parent.name}</p>
+                    {parent.children?.map((child) => (
+                      <Link
+                        key={child.id}
+                        to={`/shop?section=${parent.section}&category=${child.slug}`}
+                        onClick={closeAll}
+                      >
+                        {child.name}
+                      </Link>
+                    ))}
+                  </div>
+                ))}
               </div>
             )}
           </nav>

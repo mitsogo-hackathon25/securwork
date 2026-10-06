@@ -1,3 +1,4 @@
+from django.db.models import F
 from django_filters import rest_framework as filters
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -38,10 +39,20 @@ class ProductFilter(filters.FilterSet):
     featured = filters.BooleanFilter(field_name="is_featured")
     new_arrival = filters.BooleanFilter(field_name="is_new_arrival")
     bestseller = filters.BooleanFilter(field_name="is_bestseller")
+    on_sale = filters.BooleanFilter(method="filter_on_sale")
 
     class Meta:
         model = Product
-        fields = ["category", "section", "size", "color", "in_stock"]
+        fields = ["category", "section", "size", "color", "in_stock", "on_sale"]
+
+    def filter_on_sale(self, queryset, name, value):
+        if value:
+            return queryset.filter(
+                variants__is_active=True,
+                variants__sale_price__isnull=False,
+                variants__sale_price__lt=F("variants__price"),
+            ).distinct()
+        return queryset
 
     def filter_in_stock(self, queryset, name, value):
         if value:

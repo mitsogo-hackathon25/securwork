@@ -71,7 +71,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id", "slug", "name", "short_description", "sku",
+            "id", "slug", "name", "short_description", "sku", "brand",
             "primary_image", "min_price", "in_stock",
             "is_featured", "is_new_arrival", "is_bestseller",
         ]
@@ -100,12 +100,22 @@ class ProductDetailSerializer(ProductListSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
     categories = CategorySerializer(many=True, read_only=True)
     is_variable = serializers.BooleanField(read_only=True)
+    mockup_front = serializers.SerializerMethodField()
+    customization_fee = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
             "description", "meta_title", "meta_description",
-            "images", "variants", "categories", "is_variable", "created_at",
+            "images", "variants", "categories", "is_variable",
+            "allows_customization", "mockup_front", "customization_fee",
+            "created_at",
         ]
+
+    def get_mockup_front(self, obj):
+        if obj.mockup_front:
+            return obj.mockup_front.url
+        img = obj.images.filter(is_primary=True).first() or obj.images.first()
+        return img.image.url if img and img.image else None
 
     def get_description(self, obj):
         return obj.safe_translation_getter("description", language_code=self._lang(), any_language=True)

@@ -175,7 +175,9 @@ chmod +x /var/www/securwork/deploy/scripts/deploy.sh
 - [ ] https://www.securwork.it loads React storefront
 - [ ] https://www.securwork.it/api/products/ returns JSON
 - [ ] https://www.securwork.it/sitemap.xml returns XML
-- [ ] https://www.securwork.it/admin/ accessible
+- [ ] https://www.securwork.it/admin/login — React product admin
+- [ ] https://www.securwork.it/django-admin/ — Django admin (orders, CMS, etc.)
+- [ ] Nginx config updated: `/admin/` → React SPA, `/django-admin/` → Django
 - [ ] Admin password changed from default
 - [ ] `DEBUG=false` in production `.env`
 - [ ] Contact form sends email (test submission)

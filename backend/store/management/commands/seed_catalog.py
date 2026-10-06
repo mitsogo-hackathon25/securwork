@@ -26,10 +26,13 @@ PRODUCTS = [
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-002", "slug": "demo-pantalone-elastico", "it": "Pantalone elastico", "en": "Elastic waist work trousers", "price": "35.00"},
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-003", "slug": "demo-pantalone-canvas", "it": "Pantalone canvas rinforzato", "en": "Reinforced canvas trousers", "price": "45.00"},
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-004", "slug": "demo-pantalone-estivo", "it": "Pantalone estivo leggero", "en": "Light summer work trousers", "price": "32.00", "new": True},
-    # Scarpe (3)
-    {"cat": "scarpe-da-lavoro", "sku": "SW-SC-001", "slug": "demo-scarpa-antinfortunistica-s3", "it": "Scarpa antinfortunistica S3", "en": "S3 safety shoes", "price": "59.90", "featured": True},
-    {"cat": "scarpe-da-lavoro", "sku": "SW-SC-002", "slug": "demo-scarpa-antiscivolo", "it": "Scarpa antiscivolo", "en": "Non-slip safety shoes", "price": "49.90", "bestseller": True},
-    {"cat": "scarpe-da-lavoro", "sku": "SW-SC-003", "slug": "demo-stivale-impermeabile", "it": "Stivale impermeabile", "en": "Waterproof safety boots", "price": "74.90"},
+    # Scarpe (3) — also in Abbigliamento professionale via also_cat
+    {"cat": "scarpe-da-lavoro", "also_cat": "scarpe-professionali", "brand": "U-Power", "sku": "SW-SC-001", "slug": "demo-scarpa-antinfortunistica-s3", "it": "Scarpa antinfortunistica S3", "en": "S3 safety shoes", "price": "59.90", "featured": True},
+    {"cat": "scarpe-da-lavoro", "also_cat": "scarpe-professionali", "brand": "Valento", "sku": "SW-SC-002", "slug": "demo-scarpa-antiscivolo", "it": "Scarpa antiscivolo", "en": "Non-slip safety shoes", "price": "49.90", "bestseller": True},
+    {"cat": "scarpe-da-lavoro", "also_cat": "scarpe-professionali", "brand": "U-Power", "sku": "SW-SC-003", "slug": "demo-stivale-impermeabile", "it": "Stivale impermeabile", "en": "Waterproof safety boots", "price": "74.90"},
+    # Cappelli (2)
+    {"cat": "cappelli", "brand": "Promit", "sku": "SW-CP-001", "slug": "demo-cappello-estate", "it": "Cappello operativo estivo", "en": "Summer work cap", "price": "8.90", "new": True},
+    {"cat": "cappelli", "brand": "Valento", "sku": "SW-CP-002", "slug": "demo-berretto-invernale", "it": "Berretto invernale", "en": "Winter work beanie", "price": "7.50"},
     # Giacche (3)
     {"cat": "giacche", "sku": "SW-GC-001", "slug": "demo-giacca-softshell", "it": "Giacca softshell", "en": "Softshell jacket", "price": "54.90", "featured": True},
     {"cat": "giacche", "sku": "SW-GC-002", "slug": "demo-giacca-impermeabile", "it": "Giacca impermeabile", "en": "Waterproof jacket", "price": "64.00", "new": True},
@@ -70,10 +73,24 @@ PRODUCTS = [
     {"cat": "abbigliamento-sanitario", "sku": "SW-SA-001", "slug": "demo-casacca-sanitaria", "it": "Casacca sanitaria", "en": "Healthcare tunic", "price": "28.00", "featured": True},
     {"cat": "abbigliamento-sanitario", "sku": "SW-SA-002", "slug": "demo-pantalone-sanitario", "it": "Pantalone sanitario", "en": "Healthcare trousers", "price": "24.90"},
     {"cat": "abbigliamento-sanitario", "sku": "SW-SA-003", "slug": "demo-camice-sanitario", "it": "Camice sanitario", "en": "Healthcare coat", "price": "32.00", "bestseller": True},
+    # Linea Chef (3)
+    {"cat": "linea-chef", "brand": "ISACCO", "sku": "SW-CH-001", "slug": "demo-giacca-chef-classica", "it": "Giacca chef classica", "en": "Classic chef jacket", "price": "44.00", "featured": True},
+    {"cat": "linea-chef", "brand": "ISACCO", "sku": "SW-CH-002", "slug": "demo-pantalone-chef-linea", "it": "Pantalone chef", "en": "Chef trousers", "price": "36.00", "new": True},
+    {"cat": "linea-chef", "brand": "Payper", "sku": "SW-CH-003", "slug": "demo-cappello-chef", "it": "Cappello chef", "en": "Chef hat", "price": "9.90"},
+    # Taglia Unica (2)
+    {"cat": "taglia-unica", "brand": "James Ross Collection", "sku": "SW-TU-001", "slug": "demo-casacca-taglia-unica", "it": "Casacca taglia unica", "en": "One-size tunic", "price": "26.00"},
+    {"cat": "taglia-unica", "brand": "James Ross Collection", "sku": "SW-TU-002", "slug": "demo-grembiule-taglia-unica", "it": "Grembiule taglia unica", "en": "One-size apron", "price": "18.00", "featured": True},
+    # Hotel, Ristorante e Caffè (3)
+    {"cat": "hotel-ristorante-caffe", "brand": "ISACCO", "sku": "SW-HR-001", "slug": "demo-camicia-servizio", "it": "Camicia servizio", "en": "Service shirt", "price": "32.00", "featured": True},
+    {"cat": "hotel-ristorante-caffe", "brand": "Payper", "sku": "SW-HR-002", "slug": "demo-gilet-cameriere", "it": "Gilet cameriere", "en": "Waiter waistcoat", "price": "38.00"},
+    {"cat": "hotel-ristorante-caffe", "brand": "Promit", "sku": "SW-HR-003", "slug": "demo-polo-bar", "it": "Polo bar", "en": "Bar staff polo", "price": "24.00", "bestseller": True},
+    # Parrucchiere (2)
+    {"cat": "parrucchiere", "brand": "Valento", "sku": "SW-PR-001", "slug": "demo-grembiule-parrucchiere", "it": "Grembiule parrucchiere", "en": "Hairdresser apron", "price": "22.00", "featured": True},
+    {"cat": "parrucchiere", "brand": "Sottozero", "sku": "SW-PR-002", "slug": "demo-casacca-parrucchiere", "it": "Casacca parrucchiere", "en": "Hairdresser tunic", "price": "28.00"},
     # Alimentare (3)
-    {"cat": "abbigliamento-alimentare", "sku": "SW-AL-001", "slug": "demo-cappello-cuoco", "it": "Cappello cuoco", "en": "Chef hat", "price": "9.90"},
-    {"cat": "abbigliamento-alimentare", "sku": "SW-AL-002", "slug": "demo-giacca-cuoco", "it": "Giacca cuoco", "en": "Chef jacket", "price": "42.00", "featured": True},
-    {"cat": "abbigliamento-alimentare", "sku": "SW-AL-003", "slug": "demo-cuffia-alimentare", "it": "Cuffia alimentare", "en": "Food industry hairnet (pack)", "price": "6.50"},
+    {"cat": "abbigliamento-alimentare", "brand": "ISACCO", "sku": "SW-AL-001", "slug": "demo-cappello-cuoco", "it": "Cappello cuoco", "en": "Chef hat", "price": "9.90"},
+    {"cat": "abbigliamento-alimentare", "brand": "ISACCO", "sku": "SW-AL-002", "slug": "demo-giacca-cuoco", "it": "Giacca cuoco", "en": "Chef jacket", "price": "42.00", "featured": True},
+    {"cat": "abbigliamento-alimentare", "brand": "Payper", "sku": "SW-AL-003", "slug": "demo-cuffia-alimentare", "it": "Cuffia alimentare", "en": "Food industry hairnet (pack)", "price": "6.50"},
     # Divise (3)
     {"cat": "divise-professionali", "sku": "SW-DV-001", "slug": "demo-divisa-completa", "it": "Divisa completa", "en": "Complete uniform set", "price": "79.00", "featured": True},
     {"cat": "divise-professionali", "sku": "SW-DV-002", "slug": "demo-giacca-divisa", "it": "Giacca divisa", "en": "Uniform jacket", "price": "45.00", "new": True},
@@ -154,12 +171,17 @@ class Command(BaseCommand):
                 },
             )
             product.slug = pdata["slug"]
+            product.brand = pdata.get("brand", "")
             product.is_featured = pdata.get("featured", False)
             product.is_new_arrival = pdata.get("new", False)
             product.is_bestseller = pdata.get("bestseller", False)
             product.is_active = True
             product.save()
-            product.categories.set([cat])
+            cats = [cat]
+            also = pdata.get("also_cat")
+            if also and also in categories:
+                cats.append(categories[also])
+            product.categories.set(cats)
 
             desc_it = (
                 f"<p>[DEMO] {pdata['it']} — prodotto dimostrativo per il catalogo SecurWork. "

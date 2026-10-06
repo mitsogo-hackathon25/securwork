@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 
 def send_order_confirmation(order) -> None:
@@ -29,17 +30,21 @@ def send_order_confirmation(order) -> None:
     msg.send(fail_silently=False)
 
 
+def _django_admin_order_url(order) -> str:
+    path = reverse("admin:orders_order_change", args=[order.pk])
+    if settings.DEBUG:
+        return f"http://127.0.0.1:8000{path}"
+    base = settings.FRONTEND_URL.rstrip("/")
+    return f"{base}{path}" if base else path
+
+
 def send_order_admin_notification(order) -> None:
     admin_email = getattr(settings, "ORDER_ADMIN_EMAIL", settings.CONTACT_EMAIL)
     subject = f"[SecurWork] Nuovo ordine {order.order_number} — €{order.total}"
     context = {
         "order": order,
         "items": order.items.all(),
-        "admin_url": (
-            f"http://localhost:8000/admin/orders/order/{order.pk}/change/"
-            if settings.DEBUG
-            else f"{settings.FRONTEND_URL.rstrip('/')}/admin/orders/order/{order.pk}/change/"
-        ),
+        "admin_url": _django_admin_order_url(order),
     }
     html = render_to_string("emails/order_admin.html", context)
     text = render_to_string("emails/order_admin.txt", context)

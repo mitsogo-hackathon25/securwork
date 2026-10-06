@@ -1,15 +1,19 @@
 # SecurWork — Local Development
 
-## Option A: Docker (recommended)
+## Option A: Docker
 
 ```powershell
 cd "c:\Users\wwwso\Desktop\my projects\securwork"
+cp docker-compose.override.example.yml docker-compose.override.yml
 docker compose up -d --build
 ```
 
 - Storefront: http://localhost:5180
 - API: http://localhost:8000/api/
-- Admin: http://localhost:8000/admin/ (admin / see `.env` ADMIN_PASSWORD)
+- React product admin: http://localhost:5180/admin/login
+- Django admin: http://localhost:5180/django-admin/ (or http://localhost:8000/django-admin/)
+
+Use `docker-compose.override.yml` for local-only settings (port 5180, SQLite, CORS/CSRF). It is gitignored and must not be deployed to production.
 
 ```powershell
 # View logs
@@ -31,12 +35,17 @@ docker compose up -d --build
 
 **Use two terminals** — `runserver` blocks the shell, so you cannot start both in one command.
 
+Copy `.env.example` to `.env` and use the **local development** values (or run `scripts/dev.ps1`, which sets them automatically).
+
 ```powershell
 # Terminal 1 — backend
 cd "c:\Users\wwwso\Desktop\my projects\securwork\backend"
 .\venv\Scripts\Activate.ps1
 $env:USE_SQLITE="true"
 $env:SECRET_KEY="dev"
+$env:FRONTEND_URL="http://127.0.0.1:5180"
+$env:CORS_ALLOWED_ORIGINS="http://127.0.0.1:5180,http://localhost:5180"
+$env:CSRF_TRUSTED_ORIGINS="http://127.0.0.1:5180,http://localhost:5180"
 python manage.py runserver
 
 # Terminal 2 — frontend
@@ -97,7 +106,7 @@ npm install
 npm run dev
 ```
 
-Vite proxies `/api`, `/media`, and `/admin` to `http://localhost:8000`.
+Vite proxies `/api`, `/media`, `/django-admin`, and `/sitemap.xml` to `http://localhost:8000`. The React product admin lives at `/admin/*` and is served by Vite directly.
 
 ## Useful commands
 

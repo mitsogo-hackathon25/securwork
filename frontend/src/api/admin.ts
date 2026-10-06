@@ -1,5 +1,12 @@
 import api from './client'
-import type { AdminCategoryOption, AdminProduct, AdminProductListItem, PaginatedResponse } from './types'
+import type {
+  AdminCategoryOption,
+  AdminOrder,
+  AdminOrderListItem,
+  AdminProduct,
+  AdminProductListItem,
+  PaginatedResponse,
+} from './types'
 
 export const fetchMe = () =>
   api.get<{ id: number; username: string; is_staff: boolean }>('/auth/me/').then((r) => r.data)
@@ -39,3 +46,12 @@ export const deleteProductImage = (productId: number, imageId: number) =>
 
 export const setPrimaryImage = (productId: number, imageId: number) =>
   api.patch(`/admin/products/${productId}/images/${imageId}/`, { is_primary: true })
+
+export const fetchAdminOrders = (params?: Record<string, string | number | boolean>) =>
+  api.get<PaginatedResponse<AdminOrderListItem>>('/admin/orders/', { params }).then((r) => r.data)
+
+export const fetchAdminOrder = (id: number) =>
+  api.get<AdminOrder>(`/admin/orders/${id}/`).then((r) => r.data)
+
+export const updateAdminOrder = (id: number, data: Partial<Pick<AdminOrder, 'status' | 'payment_status' | 'notes'>>) =>
+  api.patch<AdminOrder>(`/admin/orders/${id}/`, data).then((r) => r.data)

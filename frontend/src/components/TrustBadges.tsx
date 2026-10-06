@@ -4,7 +4,7 @@ import './TrustBadges.css'
 
 const badges = [
   { key: 'trustShipping', Icon: IconTruck },
-  { key: 'trustReturns', Icon: IconReturn },
+  { key: 'trustPromotions', Icon: IconReturn },
   { key: 'trustSecure', Icon: IconShield },
   { key: 'trustSupport', Icon: IconSupport },
   { key: 'trustPayment', Icon: IconPayment },

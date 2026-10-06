@@ -59,10 +59,29 @@
   margin-bottom: 1.5rem;
 }
 
+.home-category-block {
+  margin-top: 1.75rem;
+}
+
+.home-category-block-title {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  color: var(--color-primary);
+}
+
 .subcategory-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
+}
+
+.subcategory-grid--workwear {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.subcategory-grid--professional {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 560px;
 }
 
 .why-grid {
@@ -178,5 +197,7 @@
   .hero { padding: 3.5rem 0 4rem; }
   .hero-categories { grid-template-columns: 1fr; }
   .promo-banner-inner { flex-direction: column; text-align: center; }
+  .subcategory-grid--workwear,
+  .subcategory-grid--professional { grid-template-columns: repeat(2, 1fr); max-width: none; }
   .industry-grid { grid-template-columns: 1fr; }
 }

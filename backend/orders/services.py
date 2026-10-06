@@ -59,7 +59,7 @@ def apply_coupon(code: str, subtotal: Decimal) -> tuple[Decimal, Coupon | None]:
 
 @transaction.atomic
 def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
-    items = list(cart.items.select_related("variant", "variant__product"))
+    items = list(cart.items.select_related("variant", "variant__product", "customization"))
     if not items:
         raise ValueError("Cart is empty.")
 
@@ -119,9 +119,10 @@ def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
             sku=variant.sku,
             size=variant.size,
             color=variant.color,
-            unit_price=variant.effective_price,
+            unit_price=item.unit_price,
             quantity=item.quantity,
             line_total=item.line_total,
+            customization=item.customization,
         )
         variant.stock_quantity -= item.quantity
         variant.save(update_fields=["stock_quantity"])

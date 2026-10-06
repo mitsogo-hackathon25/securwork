@@ -10,8 +10,9 @@
         { "name_it": "Polo", "name_en": "Polo shirts", "slug": "polo" },
         { "name_it": "Pantaloni da lavoro", "name_en": "Work trousers", "slug": "pantaloni-da-lavoro" },
         { "name_it": "Scarpe da lavoro", "name_en": "Safety shoes", "slug": "scarpe-da-lavoro" },
-        { "name_it": "Giacche", "name_en": "Jackets", "slug": "giacche" },
+        { "name_it": "Giubbotti e Parka", "name_en": "Jackets & parkas", "slug": "giacche" },
         { "name_it": "Gilet", "name_en": "Body warmers", "slug": "gilet" },
+        { "name_it": "Cappelli", "name_en": "Hats & caps", "slug": "cappelli" },
         { "name_it": "Felpe", "name_en": "Hoodies", "slug": "felpe" },
         { "name_it": "Maglioni", "name_en": "Sweaters", "slug": "maglioni" },
         { "name_it": "Guanti", "name_en": "Gloves", "slug": "guanti" },
@@ -27,11 +28,16 @@
       "name_en": "Professional clothing",
       "slug": "abbigliamento-professionale",
       "children": [
+        { "name_it": "Linea Chef", "name_en": "Chef line", "slug": "linea-chef" },
+        { "name_it": "Taglia Unica", "name_en": "One size", "slug": "taglia-unica" },
+        { "name_it": "Hotel, Ristorante e Caffè", "name_en": "Hotel, restaurant & café", "slug": "hotel-ristorante-caffe" },
+        { "name_it": "Sanitario / Medicale", "name_en": "Healthcare / medical", "slug": "abbigliamento-sanitario" },
+        { "name_it": "Divise", "name_en": "Uniforms", "slug": "divise-professionali" },
+        { "name_it": "Parrucchiere", "name_en": "Hairdressing", "slug": "parrucchiere" },
         { "name_it": "Grembiuli", "name_en": "Aprons", "slug": "grembiuli" },
+        { "name_it": "Scarpe", "name_en": "Shoes", "slug": "scarpe-professionali" },
         { "name_it": "Pantaloni professionali", "name_en": "Professional trousers", "slug": "pantaloni-professionali" },
-        { "name_it": "Abbigliamento sanitario", "name_en": "Healthcare clothing", "slug": "abbigliamento-sanitario" },
-        { "name_it": "Abbigliamento alimentare", "name_en": "Food industry clothing", "slug": "abbigliamento-alimentare" },
-        { "name_it": "Divise professionali", "name_en": "Professional uniforms", "slug": "divise-professionali" }
+        { "name_it": "Abbigliamento alimentare", "name_en": "Food industry clothing", "slug": "abbigliamento-alimentare" }
       ]
     }
   ]

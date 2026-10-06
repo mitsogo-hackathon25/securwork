@@ -1,12 +1,37 @@
 from django.contrib import admin
+from django.utils.html import format_html
 
-from .models import Cart, Coupon, Order, OrderItem
+from .models import Cart, Coupon, LineItemCustomization, Order, OrderItem
 
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ("product_name", "sku", "size", "color", "unit_price", "quantity", "line_total")
+    readonly_fields = (
+        "product_name", "sku", "size", "color", "unit_price", "quantity",
+        "line_total", "customization_preview",
+    )
+    fields = readonly_fields
+
+    @admin.display(description="Custom design")
+    def customization_preview(self, obj):
+        if not obj.customization_id:
+            return "—"
+        c = obj.customization
+        parts = []
+        if c.preview:
+            parts.append(format_html('<img src="{}" style="max-height:80px;border-radius:4px;" />', c.preview.url))
+        if c.logo:
+            parts.append(format_html('<a href="{}" target="_blank">Download logo</a>', c.logo.url))
+        if c.design_data:
+            parts.append(format_html("<pre style='font-size:11px;margin:4px 0 0'>{}</pre>", c.design_data))
+        return format_html("".join(str(p) for p in parts)) if parts else "—"
+
+
+@admin.register(LineItemCustomization)
+class LineItemCustomizationAdmin(admin.ModelAdmin):
+    list_display = ("id", "created_at", "design_hash")
+    readonly_fields = ("design_hash", "design_data", "logo", "preview", "created_at")
 
 
 @admin.register(Order)

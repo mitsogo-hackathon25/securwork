@@ -17,8 +17,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
-      // Django admin: use http://127.0.0.1:8000/admin/ directly.
-      // /admin/* here is the React product admin panel.
+      // Django admin at /django-admin/ — /admin/* is the React product panel.
+      '/django-admin': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
       '/sitemap.xml': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

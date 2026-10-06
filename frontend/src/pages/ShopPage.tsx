@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
@@ -6,6 +6,7 @@ import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
 import ProductCard from '../components/ProductCard'
 import ShopFilters from '../components/ShopFilters'
+import ShopPagination from '../components/ShopPagination'
 import { fetchCategories, fetchProducts } from '../api/store'
 import './ShopPage.css'
 
@@ -23,10 +24,14 @@ export default function ShopPage() {
   const minPrice = params.get('min_price') || ''
   const maxPrice = params.get('max_price') || ''
   const ordering = params.get('ordering') || '-created_at'
+  const onSale = params.get('on_sale') || ''
+  const page = Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1)
+  const gridRef = useRef<HTMLDivElement>(null)
 
-  const queryParams: Record<string, string> = { ordering }
+  const queryParams: Record<string, string | number> = { ordering, page }
   if (section) queryParams.section = section
   if (category) queryParams.category = category
+  if (onSale) queryParams.on_sale = onSale
   if (search) queryParams.search = search
   if (inStock) queryParams.in_stock = inStock
   if (size) queryParams.size = size
@@ -48,16 +53,33 @@ export default function ShopPage() {
     const next = new URLSearchParams(params)
     if (value) next.set(key, value)
     else next.delete(key)
+    if (key === 'section') next.delete('category')
+    if (key !== 'page') next.delete('page')
+    setParams(next)
+  }
+
+  const setPage = (nextPage: number) => {
+    const next = new URLSearchParams(params)
+    if (nextPage <= 1) next.delete('page')
+    else next.set('page', String(nextPage))
     setParams(next)
   }
 
   const clearFilters = () => setParams({})
 
-  const pageTitle = section === 'workwear'
-    ? t('nav.workwear')
-    : section === 'professional'
-      ? t('nav.professional')
-      : t('shop.title')
+  useEffect(() => {
+    if (page > 1) {
+      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [page])
+
+  const pageTitle = onSale === 'true'
+    ? t('nav.promotions')
+    : section === 'workwear'
+      ? t('nav.workwear')
+      : section === 'professional'
+        ? t('nav.professional')
+        : t('shop.title')
 
   return (
     <>
@@ -73,14 +95,14 @@ export default function ShopPage() {
           <div className="shop-layout">
             <ShopFilters
               categories={categories}
-              filters={{ section, category, inStock, size, color, minPrice, maxPrice }}
+              filters={{ section, category, inStock, onSale, size, color, minPrice, maxPrice }}
               onChange={updateFilter}
               onClear={clearFilters}
               mobileOpen={mobileFilters}
               onCloseMobile={() => setMobileFilters(false)}
             />
 
-            <div className="shop-main">
+            <div className="shop-main" ref={gridRef}>
               <div className="shop-toolbar">
                 <div>
                   <h1 className="shop-title">{pageTitle}</h1>
@@ -112,9 +134,12 @@ export default function ShopPage() {
                   <button type="button" className="btn btn-secondary" onClick={clearFilters}>{t('shop.clearFilters')}</button>
                 </div>
               ) : (
-                <div className="grid-products">
-                  {products.map((p) => <ProductCard key={p.id} product={p} />)}
-                </div>
+                <>
+                  <div className="grid-products">
+                    {products.map((p) => <ProductCard key={p.id} product={p} />)}
+                  </div>
+                  <ShopPagination page={page} totalCount={total} onPageChange={setPage} />
+                </>
               )}
             </div>
           </div>

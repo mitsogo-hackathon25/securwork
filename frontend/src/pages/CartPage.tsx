@@ -56,11 +56,21 @@ export default function CartPage() {
                 {cart.items.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.product_name}</strong>
-                      <br />
-                      <small>{item.variant.sku} — {item.variant.size} {item.variant.color}</small>
+                      <div className="cart-product-cell">
+                        {item.customization?.preview && (
+                          <img src={item.customization.preview} alt="" className="cart-custom-preview" />
+                        )}
+                        <div>
+                          <strong>{item.product_name}</strong>
+                          {item.customization && (
+                            <span className="cart-custom-badge">{t('customizer.customized')}</span>
+                          )}
+                          <br />
+                          <small>{item.variant.sku} — {item.variant.size} {item.variant.color}</small>
+                        </div>
+                      </div>
                     </td>
-                    <td>{formatPrice(item.variant.effective_price)}</td>
+                    <td>{formatPrice(item.unit_price || item.variant.effective_price)}</td>
                     <td>
                       <input
                         type="number"

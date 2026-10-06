@@ -6,7 +6,7 @@ from django.urls import include, path
 from cms.sitemap import sitemap_xml
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path(f"{settings.DJANGO_ADMIN_PATH}/", admin.site.urls),
     path("sitemap.xml", sitemap_xml, name="sitemap"),
     path("api/", include("store.urls")),
     path("api/", include("orders.urls")),

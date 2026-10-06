@@ -22,6 +22,23 @@ export interface ProductVariant {
   is_low_stock: boolean
 }
 
+export interface CustomizationDesign {
+  view: string
+  x_pct: number
+  y_pct: number
+  width_pct: number
+  height_pct: number
+  rotation: number
+}
+
+export interface LineItemCustomization {
+  id: number
+  logo: string | null
+  preview: string | null
+  design_data: CustomizationDesign
+  created_at?: string
+}
+
 export interface Product {
   id: number
   slug: string
@@ -29,12 +46,16 @@ export interface Product {
   short_description: string
   description?: string
   sku: string
+  brand?: string
   primary_image: string | null
   min_price: string | null
   in_stock: boolean
   is_featured: boolean
   is_new_arrival: boolean
   is_bestseller: boolean
+  allows_customization?: boolean
+  mockup_front?: string | null
+  customization_fee?: string | null
   images?: { id: number; image: string; alt_text: string; is_primary: boolean }[]
   variants?: ProductVariant[]
   categories?: Category[]
@@ -47,8 +68,10 @@ export interface CartItem {
   id: number
   variant: ProductVariant
   quantity: number
+  unit_price?: string
   line_total: string
   product_name: string
+  customization?: LineItemCustomization | null
 }
 
 export interface Cart {
@@ -80,6 +103,17 @@ export interface FAQ {
   answer: string
 }
 
+export interface OrderItem {
+  product_name: string
+  sku: string
+  size: string
+  color: string
+  unit_price: string
+  quantity: number
+  line_total: string
+  customization?: LineItemCustomization | null
+}
+
 export interface Order {
   order_number: string
   status: string
@@ -90,9 +124,45 @@ export interface Order {
   shipping_cost: string
   tax_amount: string
   discount_amount: string
-  items: { product_name: string; sku: string; quantity: number; line_total: string }[]
+  items: OrderItem[]
   created_at: string
   paid_at?: string | null
+}
+
+export interface AdminOrderListItem {
+  id: number
+  order_number: string
+  email: string
+  status: string
+  payment_status: string
+  payment_method: string
+  total: string
+  item_count: number
+  created_at: string
+}
+
+export interface AdminOrder extends Order {
+  id: number
+  email: string
+  phone: string
+  language: string
+  billing_first_name: string
+  billing_last_name: string
+  billing_company: string
+  billing_address: string
+  billing_city: string
+  billing_postcode: string
+  billing_country: string
+  billing_vat: string
+  shipping_first_name: string
+  shipping_last_name: string
+  shipping_address: string
+  shipping_city: string
+  shipping_postcode: string
+  shipping_country: string
+  coupon_code: string
+  notes: string
+  updated_at: string
 }
 
 export interface PaymentConfig {
@@ -175,6 +245,7 @@ export interface AdminProduct {
   id?: number
   slug: string
   sku: string
+  brand?: string
   name_it: string
   name_en: string
   short_description_it: string

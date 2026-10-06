@@ -1,5 +1,8 @@
 import api from './client'
-import type { Cart, Category, CheckoutResponse, FAQ, Order, Page, PaginatedResponse, PaymentConfig, Product, SiteConfig } from './types'
+import type {
+  Cart, Category, CheckoutResponse, CustomizationDesign, FAQ, LineItemCustomization,
+  Order, Page, PaginatedResponse, PaymentConfig, Product, SiteConfig,
+} from './types'
 
 export const fetchCategories = () =>
   api.get<PaginatedResponse<Category> | Category[]>('/categories/').then((r) => {
@@ -28,8 +31,28 @@ export const fetchRelated = (slug: string) =>
 export const fetchCart = () =>
   api.get<Cart>('/cart/').then((r) => r.data)
 
-export const addToCart = (variantId: number, quantity = 1) =>
-  api.post<Cart>('/cart/', { variant_id: variantId, quantity }).then((r) => r.data)
+export const addToCart = (variantId: number, quantity = 1, customizationId?: number) =>
+  api.post<Cart>('/cart/', {
+    variant_id: variantId,
+    quantity,
+    ...(customizationId ? { customization_id: customizationId } : {}),
+  }).then((r) => r.data)
+
+export const uploadCustomization = (payload: {
+  variantId: number
+  logo: File
+  preview: File
+  designData: CustomizationDesign
+}) => {
+  const form = new FormData()
+  form.append('variant_id', String(payload.variantId))
+  form.append('logo', payload.logo)
+  form.append('preview', payload.preview)
+  form.append('design_data', JSON.stringify(payload.designData))
+  return api.post<LineItemCustomization>('/customizations/', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then((r) => r.data)
+}
 
 export const updateCartItem = (itemId: number, quantity: number) =>
   api.patch<Cart>(`/cart/items/${itemId}/`, { quantity }).then((r) => r.data)

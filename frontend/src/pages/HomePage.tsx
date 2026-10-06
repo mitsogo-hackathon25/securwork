@@ -23,6 +23,9 @@ const whyKeys = ['whySafety', 'whyQuality', 'whyService', 'whyDelivery'] as cons
 
 const industryKeys = ['industryConstruction', 'industryManufacturing', 'industryHealthcare', 'industryFood', 'industryLogistics'] as const
 
+const WORKWEAR_HOME_SLUGS = ['t-shirt', 'polo', 'pantaloni-da-lavoro', 'scarpe-da-lavoro']
+const PROFESSIONAL_HOME_SLUGS = ['linea-chef', 'divise-professionali']
+
 export default function HomePage() {
   const { t, i18n } = useTranslation()
 
@@ -41,6 +44,9 @@ export default function HomePage() {
 
   const workwear = categories.find((c) => c.section === 'workwear')
   const professional = categories.find((c) => c.section === 'professional')
+
+  const workwearHomeCards = workwear?.children?.filter((c) => WORKWEAR_HOME_SLUGS.includes(c.slug)) ?? []
+  const professionalHomeCards = professional?.children?.filter((c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug)) ?? []
 
   return (
     <>
@@ -78,11 +84,24 @@ export default function HomePage() {
             {workwear && <CategoryCard category={workwear} variant="hero" />}
             {professional && <CategoryCard category={professional} variant="hero" />}
           </div>
-          {workwear && workwear.children && workwear.children.length > 0 && (
-            <div className="subcategory-grid">
-              {workwear.children.slice(0, 6).map((cat) => (
-                <CategoryCard key={cat.id} category={cat} variant="compact" />
-              ))}
+          {workwearHomeCards.length > 0 && (
+            <div className="home-category-block">
+              <h3 className="home-category-block-title">{t('nav.workwear')}</h3>
+              <div className="subcategory-grid subcategory-grid--workwear">
+                {workwearHomeCards.map((cat) => (
+                  <CategoryCard key={cat.id} category={cat} variant="compact" />
+                ))}
+              </div>
+            </div>
+          )}
+          {professionalHomeCards.length > 0 && (
+            <div className="home-category-block">
+              <h3 className="home-category-block-title">{t('nav.professional')}</h3>
+              <div className="subcategory-grid subcategory-grid--professional">
+                {professionalHomeCards.map((cat) => (
+                  <CategoryCard key={cat.id} category={cat} variant="compact" />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -118,7 +137,7 @@ export default function HomePage() {
           <div className="container">
             <SectionHeader title={t('nav.professional')} subtitle={t('home.professionalSubtitle')} linkTo="/shop?section=professional" linkLabel={t('cta.discover')} />
             <div className="grid-products">
-              {professionalProducts.results.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}
+              {professionalProducts.results.slice(0, 2).map((p) => <ProductCard key={p.id} product={p} />)}
             </div>
           </div>
         </section>
@@ -189,7 +208,7 @@ export default function HomePage() {
             <h2>{t('home.promoTitle')}</h2>
             <p>{t('home.promoSubtitle')}</p>
           </div>
-          <Link to="/shop" className="btn btn-primary">{t('cta.shopNow')}</Link>
+          <Link to="/shop?on_sale=true" className="btn btn-primary">{t('nav.promotions')}</Link>
         </div>
       </section>
 

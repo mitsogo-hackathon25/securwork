@@ -48,11 +48,28 @@ class Product(TranslatableModel):
     )
     slug = models.SlugField(max_length=255, unique=True)
     sku = models.CharField(max_length=100, unique=True, help_text="Base SKU for simple products")
+    brand = models.CharField(max_length=100, blank=True, help_text="Manufacturer / brand name")
     categories = models.ManyToManyField(Category, related_name="products", blank=True)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     is_new_arrival = models.BooleanField(default=False)
     is_bestseller = models.BooleanField(default=False)
+    allows_customization = models.BooleanField(
+        default=False,
+        help_text="Customers can upload a logo and position it on this product.",
+    )
+    mockup_front = models.ImageField(
+        upload_to="mockups/",
+        blank=True,
+        null=True,
+        help_text="Front mockup image for the logo customizer (falls back to primary product photo).",
+    )
+    customization_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Extra charge per customized item (EUR).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

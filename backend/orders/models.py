@@ -7,6 +7,30 @@ from django.db import models
 from store.models import ProductVariant
 
 
+class LineItemCustomization(models.Model):
+    """Saved logo placement for a cart or order line."""
+
+    logo = models.ImageField(upload_to="customizations/logos/")
+    preview = models.ImageField(upload_to="customizations/previews/", blank=True)
+    design_data = models.JSONField(
+        help_text="Normalized placement: view, x_pct, y_pct, width_pct, height_pct, rotation",
+    )
+    design_hash = models.CharField(max_length=64, db_index=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Customization {self.pk}"
+
+    def save(self, *args, **kwargs):
+        if not self.design_hash and self.design_data:
+            import hashlib
+            import json
+
+            payload = json.dumps(self.design_data, sort_keys=True)
+            self.design_hash = hashlib.sha256(payload.encode()).hexdigest()
+        super().save(*args, **kwargs)
+
+
 class Cart(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="carts"
@@ -29,15 +53,36 @@ class Cart(models.Model):
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name="items", on_delete=models.CASCADE)
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
+    customization = models.ForeignKey(
+        LineItemCustomization,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="cart_items",
+    )
     quantity = models.PositiveIntegerField(default=1)
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("cart", "variant")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cart", "variant"],
+                condition=models.Q(customization__isnull=True),
+                name="unique_cart_variant_without_customization",
+            ),
+        ]
+
+    @property
+    def unit_price(self) -> Decimal:
+        price = self.variant.effective_price
+        if self.customization_id:
+            fee = self.variant.product.customization_fee or Decimal("0.00")
+            price += fee
+        return price
 
     @property
     def line_total(self) -> Decimal:
-        return self.variant.effective_price * self.quantity
+        return self.unit_price * self.quantity
 
 
 class Order(models.Model):
@@ -129,6 +174,13 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
     line_total = models.DecimalField(max_digits=10, decimal_places=2)
+    customization = models.ForeignKey(
+        LineItemCustomization,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_items",
+    )
 
     def __str__(self):
         return f"{self.sku} x{self.quantity}"

@@ -32,7 +32,8 @@ securwork/
 
 ```bash
 cp .env.example .env
-# Edit .env with strong passwords
+cp docker-compose.override.example.yml docker-compose.override.yml
+# Edit .env with strong passwords (use local dev block for Docker on your machine)
 ```
 
 ### 2. Start all services
@@ -45,7 +46,8 @@ docker compose up -d --build
 |---------|-----|
 | **Storefront** | http://localhost:5180 |
 | **API** | http://localhost:8000/api/ |
-| **Admin panel** | http://localhost:8000/admin/ |
+| **Product admin** (React) | http://localhost:5180/admin/login |
+| **Django admin** | http://localhost:5180/django-admin/ |
 
 ### 3. Admin credentials
 
@@ -80,16 +82,12 @@ npm install
 npm run dev
 ```
 
-## Client Admin Panel
+## Client Admin Panels
 
-The client manages the store via **Django Admin** (`/admin/`):
-
-- Products, categories, variants, inventory
-- Orders and order status
-- Coupons
-- CMS pages (bilingual via django-parler)
-- FAQ items
-- Contact form submissions
+| Panel | Path | Manages |
+|-------|------|---------|
+| **React product admin** | `/admin/` | Products, variants, images, stock |
+| **Django admin** | `/django-admin/` | Orders, coupons, CMS, FAQ, users |
 
 No developer needed for daily operations. See [docs/HANDOVER.md](docs/HANDOVER.md).
 

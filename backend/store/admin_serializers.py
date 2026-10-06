@@ -102,7 +102,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id", "slug", "sku",
+            "id", "slug", "sku", "brand",
             "name_it", "name_en",
             "short_description_it", "short_description_en",
             "description_it", "description_en",
@@ -110,6 +110,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
             "meta_description_it", "meta_description_en",
             "category_ids", "variants", "images",
             "is_active", "is_featured", "is_new_arrival", "is_bestseller",
+            "allows_customization", "mockup_front", "customization_fee",
             "min_price", "total_stock", "in_stock",
             "created_at", "updated_at",
         ]
