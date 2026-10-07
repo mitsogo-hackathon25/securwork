@@ -125,6 +125,7 @@ export default function AdminProductFormPage() {
         ...form,
         variants: form.variants.map((v) => ({
           ...v,
+          id: v.id ?? null,
           sale_price: v.sale_price || null,
         })),
       }

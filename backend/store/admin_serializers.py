@@ -45,6 +45,10 @@ class AdminProductVariantSerializer(serializers.ModelSerializer):
             "id", "sku", "size", "color", "price", "sale_price",
             "stock_quantity", "is_active", "effective_price", "in_stock",
         ]
+        extra_kwargs = {
+            # Uniqueness is validated in AdminProductSerializer.validate (supports updates).
+            "sku": {"validators": []},
+        }
 
 
 class AdminProductListSerializer(serializers.ModelSerializer):
@@ -145,6 +149,18 @@ class AdminProductSerializer(serializers.ModelSerializer):
         skus = [v["sku"] for v in variants if v.get("sku")]
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError({"variants": "Variant SKUs must be unique."})
+        for variant in variants:
+            sku = variant.get("sku")
+            if not sku:
+                continue
+            qs = ProductVariant.objects.filter(sku__iexact=sku)
+            variant_id = variant.get("id")
+            if variant_id:
+                qs = qs.exclude(pk=variant_id)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {"variants": f"Variant SKU '{sku}' is already used by another product."}
+                )
         if not self.instance and not attrs.get("name_it"):
             raise serializers.ValidationError({"name_it": "Italian product name is required."})
         return attrs
@@ -176,7 +192,18 @@ class AdminProductSerializer(serializers.ModelSerializer):
                 variant.save()
                 keep_ids.append(variant.id)
             else:
-                variant = ProductVariant.objects.create(product=product, **variant_data)
+                sku = variant_data.get("sku")
+                variant = (
+                    ProductVariant.objects.filter(product=product, sku=sku).first()
+                    if sku
+                    else None
+                )
+                if variant:
+                    for attr, value in variant_data.items():
+                        setattr(variant, attr, value)
+                    variant.save()
+                else:
+                    variant = ProductVariant.objects.create(product=product, **variant_data)
                 keep_ids.append(variant.id)
         product.variants.exclude(id__in=keep_ids).delete()
 
