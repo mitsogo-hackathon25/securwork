@@ -14,7 +14,7 @@ PAGE_CONTENT = {
     "about": {
         "title_it": "Chi siamo",
         "title_en": "About Us",
-        "meta_it": "SecurWork — abbigliamento da lavoro e professionale in Italia",
+        "meta_it": "SecurWork — Abbigliamento da Lavoro e Abbigliamento Professionale in Italia",
         "meta_en": "SecurWork — workwear and professional clothing in Italy",
         "content_it": f"""{DRAFT_NOTICE_IT}
 <h2>La nostra missione</h2>

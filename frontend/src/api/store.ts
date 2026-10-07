@@ -13,6 +13,9 @@ export const fetchCategories = () =>
 export const fetchProducts = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<Product>>('/products/', { params }).then((r) => r.data)
 
+export const fetchProductBrands = (params?: Record<string, string>) =>
+  api.get<string[]>('/products/brands/', { params }).then((r) => r.data)
+
 export const fetchProduct = (slug: string) =>
   api.get<Product>(`/products/${slug}/`).then((r) => r.data)
 

@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import type { Category } from '../api/types'
+import { CLOTHING_SIZES } from '../constants/clothingSizes'
 import './ShopFilters.css'
 
 interface FilterState {
   section: string
   category: string
+  brand: string
   inStock: string
   onSale: string
   size: string
@@ -15,6 +17,7 @@ interface FilterState {
 
 interface Props {
   categories: Category[]
+  brands: string[]
   filters: FilterState
   onChange: (key: string, value: string) => void
   onClear: () => void
@@ -24,6 +27,7 @@ interface Props {
 
 export default function ShopFilters({
   categories,
+  brands,
   filters,
   onChange,
   onClear,
@@ -68,6 +72,18 @@ export default function ShopFilters({
         </select>
       </div>
 
+      {brands.length > 0 && (
+        <div className="filter-group">
+          <label htmlFor="filter-brand">{t('shop.brand')}</label>
+          <select id="filter-brand" value={filters.brand} onChange={(e) => onChange('brand', e.target.value)}>
+            <option value="">—</option>
+            {brands.map((brand) => (
+              <option key={brand} value={brand}>{brand}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="filter-group">
         <label htmlFor="filter-stock">{t('shop.availability')}</label>
         <select id="filter-stock" value={filters.inStock} onChange={(e) => onChange('in_stock', e.target.value)}>
@@ -81,7 +97,7 @@ export default function ShopFilters({
         <label htmlFor="filter-size">{t('product.size')}</label>
         <select id="filter-size" value={filters.size} onChange={(e) => onChange('size', e.target.value)}>
           <option value="">—</option>
-          {['S', 'M', 'L', 'XL', 'XXL'].map((s) => <option key={s} value={s}>{s}</option>)}
+          {CLOTHING_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 

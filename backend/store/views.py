@@ -31,6 +31,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 class ProductFilter(filters.FilterSet):
     category = filters.CharFilter(field_name="categories__slug")
     section = filters.CharFilter(field_name="categories__section")
+    brand = filters.CharFilter(field_name="brand", lookup_expr="iexact")
     min_price = filters.NumberFilter(field_name="variants__price", lookup_expr="gte")
     max_price = filters.NumberFilter(field_name="variants__price", lookup_expr="lte")
     size = filters.CharFilter(field_name="variants__size", lookup_expr="iexact")
@@ -43,7 +44,7 @@ class ProductFilter(filters.FilterSet):
 
     class Meta:
         model = Product
-        fields = ["category", "section", "size", "color", "in_stock", "on_sale"]
+        fields = ["category", "section", "brand", "size", "color", "in_stock", "on_sale"]
 
     def filter_on_sale(self, queryset, name, value):
         if value:
@@ -79,6 +80,21 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         ctx = super().get_serializer_context()
         ctx["lang"] = self.request.query_params.get("lang", "it")
         return ctx
+
+    @action(detail=False, methods=["get"])
+    def brands(self, request):
+        qs = self.get_queryset().exclude(brand="")
+        section = request.query_params.get("section")
+        category = request.query_params.get("category")
+        if section:
+            qs = qs.filter(categories__section=section).distinct()
+        if category:
+            qs = qs.filter(categories__slug=category).distinct()
+        brands = sorted(
+            {b for b in qs.values_list("brand", flat=True) if b},
+            key=str.casefold,
+        )
+        return Response(brands)
 
     @action(detail=False, methods=["get"])
     def featured(self, request):

@@ -39,6 +39,16 @@ CATEGORY_PHOTOS: dict[str, list[str]] = {
         _unsplash("photo-1594938298603-c8148c4dae35", 960),
         _pexels(6474489, 960),
     ],
+    "pantaloncini-bermuda": [
+        _unsplash("photo-1594938298603-c8148c4dae35", 960),
+        _pexels(6474455, 960),
+        _pexels(6474489, 960),
+    ],
+    "accessori-antinfortunistica": [
+        _pexels(4484071, 960),
+        _unsplash("photo-1581094794329-c8112a89af12", 960),
+        _pexels(1216589, 960),
+    ],
     "scarpe-da-lavoro": [
         _unsplash("photo-1549298916-b41d501d3772", 960),
         _pexels(112406, 960),
@@ -154,6 +164,11 @@ CATEGORY_PHOTOS: dict[str, list[str]] = {
         _pexels(112406, 960),
         _pexels(631986, 960),
     ],
+    "imprese-di-pulizie": [
+        _unsplash("photo-1582719478250-c89cae4dc85b", 960),
+        _pexels(3182813, 960),
+        _unsplash("photo-1573496359142-b8d87734a5a2", 960),
+    ],
 }
 
 DEFAULT_WORKWEAR = [
@@ -177,6 +192,7 @@ _PROFESSIONAL_SLUGS = {
     "hotel-ristorante-caffe",
     "parrucchiere",
     "scarpe-professionali",
+    "imprese-di-pulizie",
 }
 
 

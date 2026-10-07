@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 
 from cms.content_seed import PAGE_CONTENT
 from cms.models import FAQItem, Page
+from store.constants import CLOTHING_SIZES
 from store.image_utils import get_category_image, get_product_image
 from store.models import Category, Product, ProductImage, ProductVariant
 
@@ -138,7 +139,7 @@ class Command(BaseCommand):
         categories = list(Category.objects.filter(parent__isnull=False)[:10])
         if not categories:
             return
-        sizes = ["S", "M", "L", "XL"]
+        sizes = list(CLOTHING_SIZES)
         colors = ["Nero", "Blu", "Grigio"]
         for i in range(1, 11):
             sku = f"DEMO-{i:03d}"

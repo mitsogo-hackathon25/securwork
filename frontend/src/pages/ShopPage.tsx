@@ -7,7 +7,7 @@ import Breadcrumbs from '../components/Breadcrumbs'
 import ProductCard from '../components/ProductCard'
 import ShopFilters from '../components/ShopFilters'
 import ShopPagination from '../components/ShopPagination'
-import { fetchCategories, fetchProducts } from '../api/store'
+import { fetchCategories, fetchProductBrands, fetchProducts } from '../api/store'
 import './ShopPage.css'
 
 export default function ShopPage() {
@@ -19,6 +19,7 @@ export default function ShopPage() {
   const category = params.get('category') || ''
   const search = params.get('search') || ''
   const inStock = params.get('in_stock') || ''
+  const brand = params.get('brand') || ''
   const size = params.get('size') || ''
   const color = params.get('color') || ''
   const minPrice = params.get('min_price') || ''
@@ -34,12 +35,22 @@ export default function ShopPage() {
   if (onSale) queryParams.on_sale = onSale
   if (search) queryParams.search = search
   if (inStock) queryParams.in_stock = inStock
+  if (brand) queryParams.brand = brand
   if (size) queryParams.size = size
   if (color) queryParams.color = color
   if (minPrice) queryParams.min_price = minPrice
   if (maxPrice) queryParams.max_price = maxPrice
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: fetchCategories })
+
+  const brandQueryParams: Record<string, string> = {}
+  if (section) brandQueryParams.section = section
+  if (category) brandQueryParams.category = category
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ['product-brands', brandQueryParams],
+    queryFn: () => fetchProductBrands(brandQueryParams),
+  })
 
   const { data, isLoading } = useQuery({
     queryKey: ['products', queryParams],
@@ -95,7 +106,8 @@ export default function ShopPage() {
           <div className="shop-layout">
             <ShopFilters
               categories={categories}
-              filters={{ section, category, inStock, onSale, size, color, minPrice, maxPrice }}
+              brands={brands}
+              filters={{ section, category, brand, inStock, onSale, size, color, minPrice, maxPrice }}
               onChange={updateFilter}
               onClear={clearFilters}
               mobileOpen={mobileFilters}

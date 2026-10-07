@@ -2,14 +2,15 @@
   "description": "Product category seed — loaded via python manage.py seed_data",
   "categories": [
     {
-      "name_it": "Abbigliamento da lavoro",
+      "name_it": "Abbigliamento da Lavoro",
       "name_en": "Workwear",
       "slug": "abbigliamento-da-lavoro",
       "children": [
         { "name_it": "T-shirt", "name_en": "T-shirts", "slug": "t-shirt" },
         { "name_it": "Polo", "name_en": "Polo shirts", "slug": "polo" },
         { "name_it": "Pantaloni da lavoro", "name_en": "Work trousers", "slug": "pantaloni-da-lavoro" },
-        { "name_it": "Scarpe da lavoro", "name_en": "Safety shoes", "slug": "scarpe-da-lavoro" },
+        { "name_it": "Pantaloncini e Bermuda", "name_en": "Shorts and Bermuda Shorts", "slug": "pantaloncini-bermuda" },
+        { "name_it": "Scarpe da Lavoro", "name_en": "Work Shoes", "slug": "scarpe-da-lavoro" },
         { "name_it": "Giubbotti e Parka", "name_en": "Jackets & parkas", "slug": "giacche" },
         { "name_it": "Gilet", "name_en": "Body warmers", "slug": "gilet" },
         { "name_it": "Cappelli", "name_en": "Hats & caps", "slug": "cappelli" },
@@ -19,12 +20,13 @@
         { "name_it": "Camicie", "name_en": "Shirts", "slug": "camicie" },
         { "name_it": "Salopette", "name_en": "Bib overalls", "slug": "salopette" },
         { "name_it": "Camici", "name_en": "Coats", "slug": "camici" },
+        { "name_it": "Accessori Antinfortunistica", "name_en": "Safety Accessories", "slug": "accessori-antinfortunistica" },
         { "name_it": "Estate", "name_en": "Summer", "slug": "estate" },
         { "name_it": "Inverno", "name_en": "Winter", "slug": "inverno" }
       ]
     },
     {
-      "name_it": "Abbigliamento professionale",
+      "name_it": "Abbigliamento Professionale",
       "name_en": "Professional clothing",
       "slug": "abbigliamento-professionale",
       "children": [
@@ -36,7 +38,8 @@
         { "name_it": "Parrucchiere", "name_en": "Hairdressing", "slug": "parrucchiere" },
         { "name_it": "Grembiuli", "name_en": "Aprons", "slug": "grembiuli" },
         { "name_it": "Scarpe", "name_en": "Shoes", "slug": "scarpe-professionali" },
-        { "name_it": "Pantaloni professionali", "name_en": "Professional trousers", "slug": "pantaloni-professionali" },
+        { "name_it": "Pantaloni", "name_en": "Trousers", "slug": "pantaloni-professionali" },
+        { "name_it": "Imprese di Pulizie", "name_en": "Cleaning Companies", "slug": "imprese-di-pulizie" },
         { "name_it": "Abbigliamento alimentare", "name_en": "Food industry clothing", "slug": "abbigliamento-alimentare" }
       ]
     }

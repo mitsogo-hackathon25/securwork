@@ -7,14 +7,16 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from orders.models import Coupon
+from store.constants import CLOTHING_SIZES
 from store.image_utils import generate_category_image, generate_product_image, get_category_image, get_product_image
 from store.models import Category, Product, ProductImage, ProductVariant
 
 CUSTOMIZABLE_CATEGORIES = {
     "t-shirt", "polo", "felpe", "camicie", "giacche", "gilet", "maglioni",
-    "salopette", "camici", "cappelli",
+    "salopette", "camici", "cappelli", "pantaloncini-bermuda",
     "grembiuli", "linea-chef", "abbigliamento-sanitario", "hotel-ristorante-caffe",
     "parrucchiere", "abbigliamento-alimentare", "divise-professionali", "taglia-unica",
+    "imprese-di-pulizie",
 }
 
 PRODUCTS = [
@@ -33,6 +35,9 @@ PRODUCTS = [
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-002", "slug": "demo-pantalone-elastico", "it": "Pantalone elastico", "en": "Elastic waist work trousers", "price": "35.00"},
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-003", "slug": "demo-pantalone-canvas", "it": "Pantalone canvas rinforzato", "en": "Reinforced canvas trousers", "price": "45.00"},
     {"cat": "pantaloni-da-lavoro", "sku": "SW-PT-004", "slug": "demo-pantalone-estivo", "it": "Pantalone estivo leggero", "en": "Light summer work trousers", "price": "32.00", "new": True},
+    # Pantaloncini e Bermuda (2)
+    {"cat": "pantaloncini-bermuda", "sku": "SW-PB-001", "slug": "demo-pantaloncino-operativo", "it": "Pantaloncino operativo", "en": "Work shorts", "price": "24.90", "new": True},
+    {"cat": "pantaloncini-bermuda", "sku": "SW-PB-002", "slug": "demo-bermuda-multitasche", "it": "Bermuda multitasche", "en": "Multi-pocket bermuda shorts", "price": "28.00"},
     # Scarpe (3) — also in Abbigliamento professionale via also_cat
     {"cat": "scarpe-da-lavoro", "also_cat": "scarpe-professionali", "brand": "U-Power", "sku": "SW-SC-001", "slug": "demo-scarpa-antinfortunistica-s3", "it": "Scarpa antinfortunistica S3", "en": "S3 safety shoes", "price": "59.90", "featured": True},
     {"cat": "scarpe-da-lavoro", "also_cat": "scarpe-professionali", "brand": "Valento", "sku": "SW-SC-002", "slug": "demo-scarpa-antiscivolo", "it": "Scarpa antiscivolo", "en": "Non-slip safety shoes", "price": "49.90", "bestseller": True},
@@ -58,6 +63,9 @@ PRODUCTS = [
     {"cat": "guanti", "sku": "SW-GU-001", "slug": "demo-guanti-anticorte", "it": "Guanti anticorte", "en": "Cut-resistant gloves", "price": "12.90"},
     {"cat": "guanti", "sku": "SW-GU-002", "slug": "demo-guanti-nitrile", "it": "Guanti nitrile", "en": "Nitrile gloves (pack)", "price": "8.50", "bestseller": True},
     {"cat": "guanti", "sku": "SW-GU-003", "slug": "demo-guanti-invernali", "it": "Guanti invernali", "en": "Winter work gloves", "price": "15.00"},
+    # Accessori Antinfortunistica (2)
+    {"cat": "accessori-antinfortunistica", "sku": "SW-AA-001", "slug": "demo-imbracatura-sicurezza", "it": "Imbracatura di sicurezza", "en": "Safety harness", "price": "45.00", "featured": True},
+    {"cat": "accessori-antinfortunistica", "sku": "SW-AA-002", "slug": "demo-cordino-anticaduta", "it": "Cordino anticaduta", "en": "Fall arrest lanyard", "price": "32.00"},
     # Camicie (3)
     {"cat": "camicie", "sku": "SW-CM-001", "slug": "demo-camicia-operativa", "it": "Camicia operativa", "en": "Work shirt", "price": "27.90"},
     {"cat": "camicie", "sku": "SW-CM-002", "slug": "demo-camicia-flanella", "it": "Camicia flanella", "en": "Flannel work shirt", "price": "32.00", "new": True},
@@ -76,6 +84,9 @@ PRODUCTS = [
     {"cat": "pantaloni-professionali", "sku": "SW-PP-001", "slug": "demo-pantalone-chef", "it": "Pantalone chef", "en": "Chef trousers", "price": "34.90"},
     {"cat": "pantaloni-professionali", "sku": "SW-PP-002", "slug": "demo-pantalone-servizio", "it": "Pantalone servizio", "en": "Service trousers", "price": "29.90", "new": True},
     {"cat": "pantaloni-professionali", "sku": "SW-PP-003", "slug": "demo-pantalone-bar", "it": "Pantalone bar", "en": "Bar staff trousers", "price": "31.00"},
+    # Imprese di Pulizie (2)
+    {"cat": "imprese-di-pulizie", "brand": "Kariban", "sku": "SW-IP-001", "slug": "demo-tunica-pulizie", "it": "Tunica imprese di pulizie", "en": "Cleaning company tunic", "price": "26.00", "featured": True},
+    {"cat": "imprese-di-pulizie", "brand": "Spargo", "sku": "SW-IP-002", "slug": "demo-pantalone-pulizie", "it": "Pantalone imprese di pulizie", "en": "Cleaning company trousers", "price": "29.00"},
     # Sanitario (3)
     {"cat": "abbigliamento-sanitario", "sku": "SW-SA-001", "slug": "demo-casacca-sanitaria", "it": "Casacca sanitaria", "en": "Healthcare tunic", "price": "28.00", "featured": True},
     {"cat": "abbigliamento-sanitario", "sku": "SW-SA-002", "slug": "demo-pantalone-sanitario", "it": "Pantalone sanitario", "en": "Healthcare trousers", "price": "24.90"},
@@ -158,7 +169,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("No categories found. Run seed_data first."))
             return
 
-        sizes = ["S", "M", "L", "XL", "XXL"]
+        sizes = list(CLOTHING_SIZES)
         colors = ["Nero", "Blu", "Grigio"]
         created_count = 0
 
