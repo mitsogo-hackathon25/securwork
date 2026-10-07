@@ -7,9 +7,17 @@ interface Props {
   categories: Category[]
   open?: boolean
   onNavigate?: () => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
 }
 
-export default function MegaMenu({ categories, open = false, onNavigate }: Props) {
+export default function MegaMenu({
+  categories,
+  open = false,
+  onNavigate,
+  onMouseEnter,
+  onMouseLeave,
+}: Props) {
   const { t } = useTranslation()
 
   const workwear = categories.find((c) => c.section === 'workwear')
@@ -18,7 +26,13 @@ export default function MegaMenu({ categories, open = false, onNavigate }: Props
   const handleClick = () => onNavigate?.()
 
   return (
-    <div className={`mega-menu ${open ? 'open' : ''}`} role="navigation" aria-label="Product categories">
+    <div
+      className={`mega-menu ${open ? 'open' : ''}`}
+      role="navigation"
+      aria-label="Product categories"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
       <div className="mega-menu-grid">
         {workwear && (
           <div className="mega-menu-col">

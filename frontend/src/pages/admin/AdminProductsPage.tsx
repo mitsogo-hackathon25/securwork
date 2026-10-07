@@ -1,15 +1,27 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteAdminProduct, fetchAdminProducts } from '../../api/admin'
+import {
+  deleteAdminProduct,
+  downloadProductCsvTemplate,
+  fetchAdminProducts,
+  importProductsCsv,
+  type CsvImportError,
+} from '../../api/admin'
 import { formatPrice } from '../../utils/format'
+import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
 
 export default function AdminProductsPage() {
   const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const [importing, setImporting] = useState(false)
+  const [importSuccess, setImportSuccess] = useState('')
+  const [importErrors, setImportErrors] = useState<CsvImportError[]>([])
+  const [importDetail, setImportDetail] = useState('')
 
   const params: Record<string, string | number | boolean> = { page, ordering: '-updated_at' }
   if (search) params.search = search
@@ -34,6 +46,45 @@ export default function AdminProductsPage() {
     await deleteMutation.mutateAsync(id)
   }
 
+  const handleDownloadTemplate = async () => {
+    setImportDetail('')
+    setImportErrors([])
+    setImportSuccess('')
+    try {
+      await downloadProductCsvTemplate()
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Could not download CSV template.'))
+    }
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setImporting(true)
+    setImportSuccess('')
+    setImportErrors([])
+    setImportDetail('')
+    try {
+      const result = await importProductsCsv(file)
+      setImportSuccess(result.detail)
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      const responseData = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { detail?: string; errors?: CsvImportError[] } } }).response?.data
+        : undefined
+      if (responseData?.errors?.length) {
+        setImportDetail(responseData.detail || 'CSV validation failed.')
+        setImportErrors(responseData.errors)
+      } else {
+        setImportDetail(formatApiError(err, 'Could not import CSV.'))
+      }
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -41,8 +92,59 @@ export default function AdminProductsPage() {
           <h1>Products</h1>
           <p>Manage catalog, inventory, pricing, and descriptions.</p>
         </div>
-        <Link to="/admin/products/new" className="btn btn-primary">Add product</Link>
+        <div className="admin-header-actions">
+          <button type="button" className="btn btn-secondary" onClick={handleDownloadTemplate}>
+            Download CSV template
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? 'Importing…' : 'Import CSV'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="admin-file-input"
+            onChange={handleImportFile}
+          />
+          <Link to="/admin/products/new" className="btn btn-primary">Add product</Link>
+        </div>
       </div>
+
+      <section className="admin-card admin-import-panel">
+        <h2>Bulk import</h2>
+        <p className="admin-hint">
+          Download the template, fill one row per size/color, then import. Brands and colors must match
+          Catalog exactly. Allowed sizes: XS, S, M, L, XL, XXL, XXXL, 4XL. Images can be uploaded after import.
+        </p>
+        {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
+        {importDetail && !importSuccess && (
+          <p className="admin-alert admin-alert-error">{importDetail}</p>
+        )}
+        {importErrors.length > 0 && (
+          <div className="admin-import-errors">
+            <strong>{importErrors.length} error{importErrors.length === 1 ? '' : 's'} found</strong>
+            <ul>
+              {importErrors.map((error, index) => (
+                <li key={`${error.row}-${error.field}-${index}`}>
+                  {error.row > 0 ? (
+                    <>
+                      Row {error.row}
+                      {error.field ? ` · ${error.field}` : ''}: {error.message}
+                    </>
+                  ) : (
+                    error.message
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
       <div className="admin-toolbar">
         <input

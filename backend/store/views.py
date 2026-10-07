@@ -4,7 +4,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Category, Product
+from .models import Brand, Category, Color, Product, ProductVariant
 from .serializers import CategorySerializer, ProductDetailSerializer, ProductListSerializer
 
 
@@ -83,6 +83,11 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def brands(self, request):
+        brand_names = list(
+            Brand.objects.filter(is_active=True).order_by("sort_order", "name").values_list("name", flat=True)
+        )
+        if brand_names:
+            return Response(brand_names)
         qs = self.get_queryset().exclude(brand="")
         section = request.query_params.get("section")
         category = request.query_params.get("category")
@@ -90,11 +95,26 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(categories__section=section).distinct()
         if category:
             qs = qs.filter(categories__slug=category).distinct()
-        brands = sorted(
-            {b for b in qs.values_list("brand", flat=True) if b},
-            key=str.casefold,
+        return Response(sorted({b for b in qs.values_list("brand", flat=True) if b}, key=str.casefold))
+
+    @action(detail=False, methods=["get"])
+    def colors(self, request):
+        color_names = list(
+            Color.objects.filter(is_active=True).order_by("sort_order", "name").values_list("name", flat=True)
         )
-        return Response(brands)
+        if color_names:
+            return Response(color_names)
+        qs = ProductVariant.objects.filter(is_active=True).exclude(color="")
+        section = request.query_params.get("section")
+        category = request.query_params.get("category")
+        if section or category:
+            product_qs = self.get_queryset()
+            if section:
+                product_qs = product_qs.filter(categories__section=section).distinct()
+            if category:
+                product_qs = product_qs.filter(categories__slug=category).distinct()
+            qs = qs.filter(product__in=product_qs)
+        return Response(sorted({c for c in qs.values_list("color", flat=True) if c}, key=str.casefold))
 
     @action(detail=False, methods=["get"])
     def featured(self, request):

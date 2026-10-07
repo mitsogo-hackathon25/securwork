@@ -7,7 +7,7 @@ import Breadcrumbs from '../components/Breadcrumbs'
 import ProductCard from '../components/ProductCard'
 import ShopFilters from '../components/ShopFilters'
 import ShopPagination from '../components/ShopPagination'
-import { fetchCategories, fetchProductBrands, fetchProducts } from '../api/store'
+import { fetchCategories, fetchProductBrands, fetchProductColors, fetchProducts } from '../api/store'
 import './ShopPage.css'
 
 export default function ShopPage() {
@@ -50,6 +50,15 @@ export default function ShopPage() {
   const { data: brands = [] } = useQuery({
     queryKey: ['product-brands', brandQueryParams],
     queryFn: () => fetchProductBrands(brandQueryParams),
+  })
+
+  const colorQueryParams: Record<string, string> = {}
+  if (section) colorQueryParams.section = section
+  if (category) colorQueryParams.category = category
+
+  const { data: colors = [] } = useQuery({
+    queryKey: ['product-colors', colorQueryParams],
+    queryFn: () => fetchProductColors(colorQueryParams),
   })
 
   const { data, isLoading } = useQuery({
@@ -107,6 +116,7 @@ export default function ShopPage() {
             <ShopFilters
               categories={categories}
               brands={brands}
+              colors={colors}
               filters={{ section, category, brand, inStock, onSale, size, color, minPrice, maxPrice }}
               onChange={updateFilter}
               onClear={clearFilters}

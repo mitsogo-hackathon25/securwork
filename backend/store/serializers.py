@@ -43,9 +43,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "alt_text", "sort_order", "is_primary"]
 
     def get_image(self, obj):
-        if obj.image:
-            return obj.image.url
-        return None
+        return obj.display_url(self.context.get("request"))
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -87,9 +85,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     def get_primary_image(self, obj):
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
-        if img:
-            return img.image.url
-        return None
+        return img.display_url(self.context.get("request")) if img else None
 
 
 class ProductDetailSerializer(ProductListSerializer):
@@ -115,7 +111,7 @@ class ProductDetailSerializer(ProductListSerializer):
         if obj.mockup_front:
             return obj.mockup_front.url
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
-        return img.image.url if img and img.image else None
+        return img.display_url(self.context.get("request")) if img else None
 
     def get_description(self, obj):
         return obj.safe_translation_getter("description", language_code=self._lang(), any_language=True)

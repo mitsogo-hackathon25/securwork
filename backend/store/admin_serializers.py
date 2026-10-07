@@ -1,7 +1,9 @@
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, Product, ProductImage, ProductVariant
+from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
+
+CATEGORY_TRANSLATION_FIELDS = ("name", "description")
 
 TRANSLATION_FIELDS = (
     "name",
@@ -23,6 +25,169 @@ class AdminCategoryOptionSerializer(serializers.ModelSerializer):
         return obj.safe_translation_getter("name", language_code="it", any_language=True) or obj.slug
 
 
+class AdminCategorySerializer(serializers.ModelSerializer):
+    name_it = serializers.CharField(required=False, allow_blank=True)
+    name_en = serializers.CharField(required=False, allow_blank=True)
+    description_it = serializers.CharField(required=False, allow_blank=True)
+    description_en = serializers.CharField(required=False, allow_blank=True)
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.filter(parent__isnull=True),
+        source="parent",
+        allow_null=True,
+        required=False,
+    )
+    product_count = serializers.SerializerMethodField()
+    parent_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Category
+        fields = [
+            "id", "slug", "section", "parent_id", "parent_name",
+            "name_it", "name_en", "description_it", "description_en",
+            "sort_order", "is_active", "product_count", "created_at",
+        ]
+        read_only_fields = ["id", "slug", "created_at"]
+
+    def get_product_count(self, obj):
+        return obj.products.count()
+
+    def get_parent_name(self, obj):
+        if not obj.parent_id:
+            return None
+        return obj.parent.safe_translation_getter("name", language_code="it", any_language=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for lang in ("it", "en"):
+            instance.set_current_language(lang)
+            for field in CATEGORY_TRANSLATION_FIELDS:
+                data[f"{field}_{lang}"] = getattr(instance, field, "") or ""
+        data["parent_id"] = instance.parent_id
+        return data
+
+    def validate(self, attrs):
+        parent = attrs.get("parent")
+        section = attrs.get("section", getattr(self.instance, "section", Category.Section.WORKWEAR))
+        if parent and parent.section != section:
+            raise serializers.ValidationError({"parent_id": "Parent category must belong to the same section."})
+        if not self.instance and not attrs.get("name_it"):
+            raise serializers.ValidationError({"name_it": "Italian category name is required."})
+        return attrs
+
+    def _save_translations(self, category, validated_data):
+        for lang in ("it", "en"):
+            category.set_current_language(lang)
+            for field in CATEGORY_TRANSLATION_FIELDS:
+                key = f"{field}_{lang}"
+                if key in validated_data:
+                    setattr(category, field, validated_data.get(key, ""))
+            category.save()
+
+    def create(self, validated_data):
+        translation_keys = [k for k in validated_data if k.endswith("_it") or k.endswith("_en")]
+        category_fields = {k: v for k, v in validated_data.items() if k not in translation_keys}
+        slug = category_fields.get("slug")
+        if not slug or not str(slug).strip():
+            name = validated_data.get("name_it") or validated_data.get("name_en") or "category"
+            base_slug = slugify(name)[:200] or "category"
+            slug = base_slug
+            counter = 1
+            while Category.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            category_fields["slug"] = slug
+        if category_fields.get("parent"):
+            category_fields["section"] = category_fields["parent"].section
+        category = Category.objects.create(**category_fields)
+        self._save_translations(category, validated_data)
+        return category
+
+    def update(self, instance, validated_data):
+        translation_keys = [k for k in validated_data if k.endswith("_it") or k.endswith("_en")]
+        category_fields = {k: v for k, v in validated_data.items() if k not in translation_keys}
+        if category_fields.get("parent"):
+            category_fields["section"] = category_fields["parent"].section
+        for attr, value in category_fields.items():
+            setattr(instance, attr, value)
+        instance.save()
+        self._save_translations(instance, validated_data)
+        return instance
+
+
+class AdminBrandSerializer(serializers.ModelSerializer):
+    product_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Brand
+        fields = ["id", "name", "slug", "is_active", "sort_order", "product_count", "created_at"]
+        read_only_fields = ["id", "created_at", "slug"]
+
+    def get_product_count(self, obj):
+        return Product.objects.filter(brand__iexact=obj.name).count()
+
+    def validate_name(self, value):
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Brand name is required.")
+        qs = Brand.objects.filter(name__iexact=name)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A brand with this name already exists.")
+        return name
+
+    def create(self, validated_data):
+        return Brand.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        old_name = instance.name
+        new_name = validated_data.get("name", old_name)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.slug = slugify(instance.name)[:120] or instance.slug
+        instance.save()
+        if new_name != old_name:
+            Product.objects.filter(brand__iexact=old_name).update(brand=new_name)
+        return instance
+
+
+class AdminColorSerializer(serializers.ModelSerializer):
+    variant_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Color
+        fields = ["id", "name", "slug", "is_active", "sort_order", "variant_count", "created_at"]
+        read_only_fields = ["id", "created_at", "slug"]
+
+    def get_variant_count(self, obj):
+        return ProductVariant.objects.filter(color__iexact=obj.name).count()
+
+    def validate_name(self, value):
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Color name is required.")
+        qs = Color.objects.filter(name__iexact=name)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A color with this name already exists.")
+        return name
+
+    def create(self, validated_data):
+        return Color.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        old_name = instance.name
+        new_name = validated_data.get("name", old_name)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.slug = slugify(instance.name)[:120] or instance.slug
+        instance.save()
+        if new_name != old_name:
+            ProductVariant.objects.filter(color__iexact=old_name).update(color=new_name)
+        return instance
+
+
 class AdminProductImageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
 
@@ -31,7 +196,7 @@ class AdminProductImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "alt_text", "sort_order", "is_primary"]
 
     def get_image(self, obj):
-        return obj.image.url if obj.image else None
+        return obj.display_url(self.context.get("request"))
 
 
 class AdminProductVariantSerializer(serializers.ModelSerializer):
@@ -73,7 +238,7 @@ class AdminProductListSerializer(serializers.ModelSerializer):
 
     def get_primary_image(self, obj):
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
-        return img.image.url if img and img.image else None
+        return img.display_url(self.context.get("request")) if img else None
 
     def get_total_stock(self, obj):
         return sum(v.stock_quantity for v in obj.variants.all() if v.is_active)
@@ -119,7 +284,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
             "min_price", "total_stock", "in_stock",
             "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "slug", "created_at", "updated_at"]
 
     def get_total_stock(self, obj):
         return sum(v.stock_quantity for v in obj.variants.all() if v.is_active)
@@ -149,6 +314,15 @@ class AdminProductSerializer(serializers.ModelSerializer):
         skus = [v["sku"] for v in variants if v.get("sku")]
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError({"variants": "Variant SKUs must be unique."})
+        size_color_pairs = [
+            (v.get("size", ""), v.get("color", ""))
+            for v in variants
+            if v.get("size") or v.get("color")
+        ]
+        if len(size_color_pairs) != len(set(size_color_pairs)):
+            raise serializers.ValidationError(
+                {"variants": "Each size and color combination must be unique."}
+            )
         for variant in variants:
             sku = variant.get("sku")
             if not sku:
@@ -213,7 +387,8 @@ class AdminProductSerializer(serializers.ModelSerializer):
         translation_keys = [k for k in validated_data if k.endswith("_it") or k.endswith("_en")]
         product_fields = {k: v for k, v in validated_data.items() if k not in translation_keys}
 
-        if not product_fields.get("slug"):
+        slug = product_fields.get("slug")
+        if not slug or not str(slug).strip():
             name = validated_data.get("name_it") or validated_data.get("name_en") or product_fields.get("sku", "product")
             base_slug = slugify(name)[:240] or "product"
             slug = base_slug

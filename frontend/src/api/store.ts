@@ -16,6 +16,9 @@ export const fetchProducts = (params?: Record<string, string | number | boolean>
 export const fetchProductBrands = (params?: Record<string, string>) =>
   api.get<string[]>('/products/brands/', { params }).then((r) => r.data)
 
+export const fetchProductColors = (params?: Record<string, string>) =>
+  api.get<string[]>('/products/colors/', { params }).then((r) => r.data)
+
 export const fetchProduct = (slug: string) =>
   api.get<Product>(`/products/${slug}/`).then((r) => r.data)
 

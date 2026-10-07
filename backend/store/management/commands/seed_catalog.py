@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from orders.models import Coupon
-from store.constants import CLOTHING_SIZES
+from store.constants import CLOTHING_SIZES, PRODUCT_COLORS
 from store.image_utils import generate_category_image, generate_product_image, get_category_image, get_product_image
 from store.models import Category, Product, ProductImage, ProductVariant
 
@@ -170,7 +170,7 @@ class Command(BaseCommand):
             return
 
         sizes = list(CLOTHING_SIZES)
-        colors = ["Nero", "Blu", "Grigio"]
+        colors = list(PRODUCT_COLORS)
         created_count = 0
 
         for i, pdata in enumerate(PRODUCTS):

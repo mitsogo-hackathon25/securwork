@@ -20,6 +20,7 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage'
 import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage'
 import AdminCouponsPage from './pages/admin/AdminCouponsPage'
 import AdminCouponFormPage from './pages/admin/AdminCouponFormPage'
+import AdminCatalogPage from './pages/admin/AdminCatalogPage'
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="coupons" element={<AdminCouponsPage />} />
             <Route path="coupons/new" element={<AdminCouponFormPage />} />
             <Route path="coupons/:id" element={<AdminCouponFormPage />} />
+            <Route path="catalog" element={<AdminCatalogPage />} />
           </Route>
         </Route>
 

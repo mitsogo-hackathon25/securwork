@@ -78,6 +78,46 @@
   margin-bottom: 1.5rem;
 }
 
+.admin-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.admin-file-input {
+  display: none;
+}
+
+.admin-import-panel {
+  margin-bottom: 1.5rem;
+}
+
+.admin-import-errors {
+  margin-top: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius);
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.admin-import-errors ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.admin-import-errors li {
+  margin-bottom: 0.35rem;
+}
+
+.admin-alert-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
 .admin-page-header h1 {
   margin: 0.25rem 0 0;
   color: var(--color-primary);
@@ -396,7 +436,49 @@
 
 .admin-section-header h2 { margin: 0; }
 
-.admin-variant-table input { min-width: 90px; }
+.admin-variant-table input,
+.admin-variant-table select { min-width: 90px; }
+
+.admin-variant-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-variant-group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--color-surface);
+}
+
+.admin-variant-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.admin-variant-size-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.admin-variant-size-label select {
+  min-width: 140px;
+}
+
+.admin-variant-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
 
 .admin-images {
   display: grid;
@@ -437,6 +519,10 @@
 }
 
 .admin-upload input { display: none; }
+
+.admin-hint-error {
+  color: #b91c1c;
+}
 
 .admin-form-actions {
   display: flex;
@@ -503,6 +589,38 @@
   align-items: center;
   justify-content: center;
   color: var(--color-muted);
+}
+
+.admin-catalog-tabs {
+  margin-bottom: 1.25rem;
+}
+
+.admin-catalog-section {
+  margin-bottom: 1.5rem;
+}
+
+.admin-inline-form {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-inline-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admin-checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: end;
+}
+
+.admin-muted {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
 }
 
 @media (max-width: 900px) {

@@ -9,6 +9,7 @@ import { BreadcrumbSchema, ProductSchema } from '../components/SeoSchema'
 import ProductCustomizer, { type ProductCustomizerHandle } from '../components/ProductCustomizer'
 import { addToCart, fetchProduct, fetchRelated } from '../api/store'
 import type { ProductVariant } from '../api/types'
+import { sortClothingSizes } from '../constants/clothingSizes'
 import { formatPrice } from '../utils/format'
 import './ProductPage.css'
 
@@ -66,14 +67,20 @@ export default function ProductPage() {
     }
   }
 
-  const sizes = [...new Set(variants.map((v) => v.size).filter(Boolean))]
-  const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))]
+  const sizes = sortClothingSizes([...new Set(variants.map((v) => v.size).filter(Boolean))])
+  const activeSize = variant?.size ?? sizes[0]
+  const colorsForSize = activeSize
+    ? [...new Set(variants.filter((v) => v.size === activeSize).map((v) => v.color).filter(Boolean))]
+    : [...new Set(variants.map((v) => v.color).filter(Boolean))]
   const productUrl = `${window.location.origin}/product/${product.slug}`
 
   const selectVariant = (size?: string, color?: string) => {
-    const match = variants.find((v) =>
-      (!size || v.size === size) && (!color || v.color === color)
-    )
+    const pool = size ? variants.filter((v) => v.size === size) : variants
+    const colorAvailable = color ? pool.some((v) => v.color === color) : false
+    const match = (colorAvailable
+      ? pool.find((v) => v.color === color)
+      : pool.find((v) => v.in_stock) || pool[0])
+      || variants.find((v) => (!size || v.size === size) && (!color || v.color === color))
     if (match) setSelectedVariant(match)
   }
 
@@ -177,11 +184,11 @@ export default function ProductPage() {
                 </div>
               )}
 
-              {colors.length > 0 && (
+              {colorsForSize.length > 0 && (
                 <div className="variant-select">
                   <label>{t('product.color')}</label>
                   <div className="variant-options">
-                    {colors.map((color) => (
+                    {colorsForSize.map((color) => (
                       <button
                         key={color}
                         type="button"

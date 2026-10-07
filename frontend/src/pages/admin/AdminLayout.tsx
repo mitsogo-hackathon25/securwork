@@ -21,11 +21,9 @@ export default function AdminLayout() {
           <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Products</NavLink>
           <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Orders</NavLink>
           <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Coupons</NavLink>
+          <NavLink to="/admin/catalog" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Catalog</NavLink>
           <a href="/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
             View storefront
-          </a>
-          <a href="/django-admin/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
-            Django admin
           </a>
         </nav>
         <button type="button" className="admin-logout" onClick={handleLogout}>Logout</button>

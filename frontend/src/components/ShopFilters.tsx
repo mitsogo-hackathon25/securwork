@@ -18,6 +18,7 @@ interface FilterState {
 interface Props {
   categories: Category[]
   brands: string[]
+  colors: string[]
   filters: FilterState
   onChange: (key: string, value: string) => void
   onClear: () => void
@@ -28,6 +29,7 @@ interface Props {
 export default function ShopFilters({
   categories,
   brands,
+  colors,
   filters,
   onChange,
   onClear,
@@ -101,13 +103,15 @@ export default function ShopFilters({
         </select>
       </div>
 
-      <div className="filter-group">
-        <label htmlFor="filter-color">{t('product.color')}</label>
-        <select id="filter-color" value={filters.color} onChange={(e) => onChange('color', e.target.value)}>
-          <option value="">—</option>
-          {['Nero', 'Blu', 'Grigio'].map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
+      {colors.length > 0 && (
+        <div className="filter-group">
+          <label htmlFor="filter-color">{t('product.color')}</label>
+          <select id="filter-color" value={filters.color} onChange={(e) => onChange('color', e.target.value)}>
+            <option value="">—</option>
+            {colors.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      )}
 
       <div className="filter-group filter-group--row">
         <div>

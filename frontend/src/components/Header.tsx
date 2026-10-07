@@ -56,13 +56,9 @@ export default function Header() {
           </Link>
 
           <nav className={`main-nav ${mobileOpen ? 'open' : ''}`} aria-label="Main navigation">
-            <Link to="/" onClick={closeAll}>{t('nav.home')}</Link>
+            <Link to="/" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.home')}</Link>
 
-            <div
-              className="nav-dropdown"
-              onMouseEnter={() => setMegaOpen(true)}
-              onMouseLeave={() => setMegaOpen(false)}
-            >
+            <div className="nav-dropdown" onMouseEnter={() => setMegaOpen(true)}>
               <Link
                 to="/shop"
                 className={megaOpen ? 'active' : ''}
@@ -74,10 +70,10 @@ export default function Header() {
               </Link>
             </div>
 
-            <Link to="/shop?on_sale=true" onClick={closeAll}>{t('nav.promotions')}</Link>
-            <Link to="/about" onClick={closeAll}>{t('nav.about')}</Link>
-            <Link to="/contact" onClick={closeAll}>{t('nav.contact')}</Link>
-            <Link to="/faq" onClick={closeAll}>{t('nav.faq')}</Link>
+            <Link to="/shop?on_sale=true" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.promotions')}</Link>
+            <Link to="/about" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.about')}</Link>
+            <Link to="/contact" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.contact')}</Link>
+            <Link to="/faq" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.faq')}</Link>
 
             {mobileOpen && categories.length > 0 && (
               <div className="mobile-categories">
@@ -139,7 +135,13 @@ export default function Header() {
           </div>
         </div>
 
-        <MegaMenu categories={categories} open={megaOpen} onNavigate={closeAll} />
+        <MegaMenu
+          categories={categories}
+          open={megaOpen}
+          onNavigate={closeAll}
+          onMouseEnter={() => setMegaOpen(true)}
+          onMouseLeave={() => setMegaOpen(false)}
+        />
       </div>
     </header>
   )

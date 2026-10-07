@@ -1,5 +1,8 @@
 import api from './client'
 import type {
+  AdminBrand,
+  AdminColor,
+  AdminCategory,
   AdminCategoryOption,
   AdminCoupon,
   AdminOrder,
@@ -30,8 +33,79 @@ export const updateAdminProduct = (id: number, data: Partial<AdminProduct>) =>
 export const deleteAdminProduct = (id: number) =>
   api.delete(`/admin/products/${id}/`)
 
+export type CsvImportError = {
+  row: number
+  field: string
+  message: string
+}
+
+export type CsvImportResult = {
+  detail: string
+  errors: CsvImportError[]
+  created_products: number
+  created_variants: number
+}
+
+export const downloadProductCsvTemplate = () =>
+  api
+    .get('/admin/products/csv_template/', { responseType: 'blob' })
+    .then((r) => {
+      const url = window.URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'securwork-products-template.csv'
+      a.click()
+      window.URL.revokeObjectURL(url)
+    })
+
+export const importProductsCsv = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post<CsvImportResult>('/admin/products/import_csv/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+}
+
 export const fetchAdminCategories = () =>
-  api.get<AdminCategoryOption[]>('/admin/categories/').then((r) => r.data)
+  api.get<AdminCategoryOption[]>('/admin/categories/', { params: { options: 'true' } }).then((r) => r.data)
+
+export const fetchAdminCategoryList = () =>
+  api.get<AdminCategory[]>('/admin/categories/').then((r) => r.data)
+
+export const createAdminCategory = (data: Partial<AdminCategory>) =>
+  api.post<AdminCategory>('/admin/categories/', data).then((r) => r.data)
+
+export const updateAdminCategory = (id: number, data: Partial<AdminCategory>) =>
+  api.patch<AdminCategory>(`/admin/categories/${id}/`, data).then((r) => r.data)
+
+export const deleteAdminCategory = (id: number) =>
+  api.delete(`/admin/categories/${id}/`)
+
+export const fetchAdminBrands = () =>
+  api.get<AdminBrand[]>('/admin/brands/').then((r) => r.data)
+
+export const createAdminBrand = (data: Partial<AdminBrand>) =>
+  api.post<AdminBrand>('/admin/brands/', data).then((r) => r.data)
+
+export const updateAdminBrand = (id: number, data: Partial<AdminBrand>) =>
+  api.patch<AdminBrand>(`/admin/brands/${id}/`, data).then((r) => r.data)
+
+export const deleteAdminBrand = (id: number) =>
+  api.delete(`/admin/brands/${id}/`)
+
+export const fetchAdminColors = () =>
+  api.get<AdminColor[]>('/admin/colors/').then((r) => r.data)
+
+export const createAdminColor = (data: Partial<AdminColor>) =>
+  api.post<AdminColor>('/admin/colors/', data).then((r) => r.data)
+
+export const updateAdminColor = (id: number, data: Partial<AdminColor>) =>
+  api.patch<AdminColor>(`/admin/colors/${id}/`, data).then((r) => r.data)
+
+export const deleteAdminColor = (id: number) =>
+  api.delete(`/admin/colors/${id}/`)
 
 export const uploadProductImage = (productId: number, file: File, isPrimary = false) => {
   const form = new FormData()

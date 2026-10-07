@@ -216,6 +216,42 @@ export interface AdminCategoryOption {
   parent: number | null
 }
 
+export interface AdminCategory {
+  id?: number
+  slug: string
+  section: 'workwear' | 'professional'
+  parent_id: number | null
+  parent_name?: string | null
+  name_it: string
+  name_en: string
+  description_it?: string
+  description_en?: string
+  sort_order: number
+  is_active: boolean
+  product_count?: number
+  created_at?: string
+}
+
+export interface AdminBrand {
+  id?: number
+  name: string
+  slug?: string
+  is_active: boolean
+  sort_order: number
+  product_count?: number
+  created_at?: string
+}
+
+export interface AdminColor {
+  id?: number
+  name: string
+  slug?: string
+  is_active: boolean
+  sort_order: number
+  variant_count?: number
+  created_at?: string
+}
+
 export interface AdminProductVariant {
   id?: number | null
   sku: string

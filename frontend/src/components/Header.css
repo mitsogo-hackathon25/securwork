@@ -2,6 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
+  isolation: isolate;
   background: var(--color-primary);
   color: #fff;
   transition: box-shadow var(--duration) var(--ease-out);

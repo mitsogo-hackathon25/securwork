@@ -97,13 +97,22 @@ class Product(TranslatableModel):
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, related_name="images", on_delete=models.CASCADE)
-    image = models.ImageField(upload_to="products/")
+    image = models.ImageField(upload_to="products/", blank=True, null=True)
+    external_url = models.URLField(max_length=500, blank=True)
     alt_text = models.CharField(max_length=255, blank=True)
     sort_order = models.PositiveIntegerField(default=0)
     is_primary = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["sort_order"]
+
+    def display_url(self, request=None) -> str | None:
+        if self.image:
+            url = self.image.url
+            if request and url.startswith("/"):
+                return request.build_absolute_uri(url)
+            return url
+        return self.external_url or None
 
     def __str__(self):
         return f"Image for {self.product_id}"
@@ -145,3 +154,41 @@ class ProductVariant(models.Model):
         from django.conf import settings
         threshold = getattr(settings, "SECURWORK_LOW_STOCK_THRESHOLD", 5)
         return 0 < self.stock_quantity <= threshold
+
+
+class Brand(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)[:120] or "brand"
+        super().save(*args, **kwargs)
+
+
+class Color(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)[:120] or "color"
+        super().save(*args, **kwargs)

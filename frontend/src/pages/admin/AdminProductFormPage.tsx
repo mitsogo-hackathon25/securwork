@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdminProduct,
   deleteProductImage,
+  fetchAdminBrands,
   fetchAdminCategories,
+  fetchAdminColors,
   fetchAdminProduct,
   removeProductMockup,
   setPrimaryImage,
@@ -13,7 +15,39 @@ import {
   uploadProductMockup,
 } from '../../api/admin'
 import type { AdminProduct, AdminProductVariant } from '../../api/types'
+import { CLOTHING_SIZES } from '../../constants/clothingSizes'
+import { PRODUCT_COLORS } from '../../constants/productColors'
+import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
+
+type SizeGroup = {
+  size: string
+  indices: number[]
+}
+
+const suggestVariantSku = (productSku: string, size: string, color: string) => {
+  const parts = [productSku.trim()]
+  if (size) parts.push(size)
+  if (color) parts.push(color.slice(0, 3).toUpperCase())
+  return parts.filter(Boolean).join('-')
+}
+
+const getSizeGroups = (variants: AdminProductVariant[]): SizeGroup[] => {
+  const groups: SizeGroup[] = []
+  const seen = new Set<string>()
+
+  variants.forEach((variant, index) => {
+    const key = variant.size
+    if (seen.has(key)) {
+      groups.find((group) => group.size === key)?.indices.push(index)
+      return
+    }
+    seen.add(key)
+    groups.push({ size: key, indices: [index] })
+  })
+
+  return groups
+}
 
 const emptyVariant = (): AdminProductVariant => ({
   sku: '',
@@ -26,7 +60,6 @@ const emptyVariant = (): AdminProductVariant => ({
 })
 
 const emptyProduct = (): AdminProduct => ({
-  slug: '',
   sku: '',
   brand: '',
   name_it: '',
@@ -59,11 +92,35 @@ export default function AdminProductFormPage() {
   const [langTab, setLangTab] = useState<'it' | 'en'>('it')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [imageError, setImageError] = useState('')
 
   const { data: categories = [] } = useQuery({
     queryKey: ['admin-categories'],
     queryFn: fetchAdminCategories,
   })
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ['admin-brands'],
+    queryFn: fetchAdminBrands,
+  })
+
+  const { data: adminColors = [] } = useQuery({
+    queryKey: ['admin-colors'],
+    queryFn: fetchAdminColors,
+  })
+
+  const colorOptions = useMemo(() => {
+    const names = new Set(
+      adminColors.filter((color) => color.is_active).map((color) => color.name),
+    )
+    if (names.size === 0) {
+      PRODUCT_COLORS.forEach((color) => names.add(color))
+    }
+    form.variants.forEach((variant) => {
+      if (variant.color) names.add(variant.color)
+    })
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [adminColors, form.variants])
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['admin-product', productId],
@@ -96,16 +153,77 @@ export default function AdminProductFormPage() {
     })
   }
 
-  const addVariant = () => {
-    setForm((prev) => ({ ...prev, variants: [...prev.variants, emptyVariant()] }))
+  const addSizeGroup = () => {
+    setForm((prev) => {
+      const usedSizes = new Set(prev.variants.map((variant) => variant.size))
+      const nextSize = CLOTHING_SIZES.find((size) => !usedSizes.has(size)) || ''
+      const color = colorOptions[0] || ''
+      const template = prev.variants[0]
+      const variant: AdminProductVariant = {
+        ...emptyVariant(),
+        size: nextSize,
+        color,
+        price: template?.price ?? '0.00',
+        sale_price: template?.sale_price ?? null,
+        sku: suggestVariantSku(prev.sku, nextSize, color),
+      }
+      return { ...prev, variants: [...prev.variants, variant] }
+    })
+  }
+
+  const addColorToSize = (size: string) => {
+    setForm((prev) => {
+      const siblings = prev.variants.filter((variant) => variant.size === size)
+      const usedColors = new Set(siblings.map((variant) => variant.color))
+      const nextColor = colorOptions.find((color) => !usedColors.has(color)) || ''
+      const template = siblings[0]
+      const variant: AdminProductVariant = {
+        ...emptyVariant(),
+        size,
+        color: nextColor,
+        price: template?.price ?? '0.00',
+        sale_price: template?.sale_price ?? null,
+        sku: suggestVariantSku(prev.sku, size, nextColor),
+      }
+      return { ...prev, variants: [...prev.variants, variant] }
+    })
+  }
+
+  const updateSizeForGroup = (currentSize: string, nextSize: string) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant) => (
+        variant.size === currentSize
+          ? {
+            ...variant,
+            size: nextSize,
+            sku: variant.sku || suggestVariantSku(prev.sku, nextSize, variant.color),
+          }
+          : variant
+      )),
+    }))
   }
 
   const removeVariant = (index: number) => {
     setForm((prev) => ({
       ...prev,
-      variants: prev.variants.filter((_, i) => i !== index),
+      variants: prev.variants.length > 1
+        ? prev.variants.filter((_, i) => i !== index)
+        : prev.variants,
     }))
   }
+
+  const removeSizeGroup = (size: string) => {
+    setForm((prev) => {
+      const nextVariants = prev.variants.filter((variant) => variant.size !== size)
+      return {
+        ...prev,
+        variants: nextVariants.length > 0 ? nextVariants : [emptyVariant()],
+      }
+    })
+  }
+
+  const sizeGroups = getSizeGroups(form.variants)
 
   const toggleCategory = (categoryId: number) => {
     setForm((prev) => {
@@ -141,11 +259,21 @@ export default function AdminProductFormPage() {
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !productId) return
-    await uploadProductImage(productId, file, !form.images?.length)
-    queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
-    e.target.value = ''
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length || !productId) return
+    setImageError('')
+    let hasImages = (form.images?.length ?? 0) > 0
+    try {
+      for (const file of files) {
+        await uploadProductImage(productId, file, !hasImages)
+        hasImages = true
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
+    } catch (err: unknown) {
+      setImageError(formatApiError(err, 'Could not upload image.'))
+    } finally {
+      e.target.value = ''
+    }
   }
 
   const handleDeleteImage = async (imageId: number) => {
@@ -204,20 +332,19 @@ export default function AdminProductFormPage() {
               />
             </label>
             <label>
-              Slug
-              <input
-                value={form.slug}
-                onChange={(e) => updateField('slug', e.target.value)}
-                placeholder="auto-generated if empty"
-              />
-            </label>
-            <label>
               Brand
-              <input
+              <select
                 value={form.brand || ''}
                 onChange={(e) => updateField('brand', e.target.value)}
-                placeholder="e.g. ISACCO, U-Power"
-              />
+              >
+                <option value="">— No brand —</option>
+                {brands.filter((b) => b.is_active).map((brand) => (
+                  <option key={brand.id} value={brand.name}>{brand.name}</option>
+                ))}
+                {form.brand && !brands.some((b) => b.name === form.brand) && (
+                  <option value={form.brand}>{form.brand}</option>
+                )}
+              </select>
             </label>
           </div>
           <div className="admin-checkbox-grid">
@@ -294,42 +421,154 @@ export default function AdminProductFormPage() {
 
         <section className="admin-card">
           <div className="admin-section-header">
-            <h2>Variants — price &amp; stock</h2>
-            <button type="button" className="btn btn-secondary" onClick={addVariant}>Add variant</button>
+            <div>
+              <h2>Variants — sizes &amp; colors</h2>
+              <p className="admin-hint">Add a size, then add multiple colors for that size (each color has its own SKU, price, and stock).</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={addSizeGroup}>Add size</button>
           </div>
-          <div className="admin-table-wrap">
-            <table className="admin-table admin-variant-table">
-              <thead>
-                <tr>
-                  <th>SKU *</th>
-                  <th>Size</th>
-                  <th>Color</th>
-                  <th>Price *</th>
-                  <th>Sale price</th>
-                  <th>Stock *</th>
-                  <th>Active</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {form.variants.map((variant, index) => (
-                  <tr key={variant.id ?? `new-${index}`}>
-                    <td><input value={variant.sku} onChange={(e) => updateVariant(index, 'sku', e.target.value)} required /></td>
-                    <td><input value={variant.size} onChange={(e) => updateVariant(index, 'size', e.target.value)} /></td>
-                    <td><input value={variant.color} onChange={(e) => updateVariant(index, 'color', e.target.value)} /></td>
-                    <td><input type="number" step="0.01" min="0" value={variant.price} onChange={(e) => updateVariant(index, 'price', e.target.value)} required /></td>
-                    <td><input type="number" step="0.01" min="0" value={variant.sale_price ?? ''} onChange={(e) => updateVariant(index, 'sale_price', e.target.value || null)} /></td>
-                    <td><input type="number" min="0" value={variant.stock_quantity} onChange={(e) => updateVariant(index, 'stock_quantity', Number(e.target.value))} required /></td>
-                    <td><input type="checkbox" checked={variant.is_active} onChange={(e) => updateVariant(index, 'is_active', e.target.checked)} /></td>
-                    <td>
-                      {form.variants.length > 1 && (
-                        <button type="button" className="admin-link admin-link-danger" onClick={() => removeVariant(index)}>Remove</button>
+
+          <div className="admin-variant-groups">
+            {sizeGroups.map((group) => (
+              <div key={`size-${group.size}-${group.indices[0]}`} className="admin-variant-group">
+                <div className="admin-variant-group-header">
+                  <label className="admin-variant-size-label">
+                    Size
+                    <select
+                      value={group.size}
+                      onChange={(e) => updateSizeForGroup(group.size, e.target.value)}
+                    >
+                      <option value="">— No size —</option>
+                      {CLOTHING_SIZES.map((size) => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                      {group.size && !CLOTHING_SIZES.includes(group.size as typeof CLOTHING_SIZES[number]) && (
+                        <option value={group.size}>{group.size}</option>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </select>
+                  </label>
+                  <div className="admin-variant-group-actions">
+                    <button type="button" className="btn btn-secondary" onClick={() => addColorToSize(group.size)}>
+                      Add color
+                    </button>
+                    {sizeGroups.length > 1 && (
+                      <button
+                        type="button"
+                        className="admin-link admin-link-danger"
+                        onClick={() => removeSizeGroup(group.size)}
+                      >
+                        Remove size
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table admin-variant-table">
+                    <thead>
+                      <tr>
+                        <th>Color *</th>
+                        <th>SKU *</th>
+                        <th>Price *</th>
+                        <th>Sale price</th>
+                        <th>Stock *</th>
+                        <th>Active</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.indices.map((index) => {
+                        const variant = form.variants[index]
+                        return (
+                          <tr key={variant.id ?? `new-${index}`}>
+                            <td>
+                              <select
+                                value={variant.color}
+                                onChange={(e) => {
+                                  const color = e.target.value
+                                  setForm((prev) => {
+                                    const variants = [...prev.variants]
+                                    const current = variants[index]
+                                    variants[index] = {
+                                      ...current,
+                                      color,
+                                      sku: current.sku || suggestVariantSku(prev.sku, current.size, color),
+                                    }
+                                    return { ...prev, variants }
+                                  })
+                                }}
+                                required
+                              >
+                                <option value="">— Select —</option>
+                                {colorOptions.map((color) => (
+                                  <option key={color} value={color}>{color}</option>
+                                ))}
+                                {variant.color && !colorOptions.includes(variant.color) && (
+                                  <option value={variant.color}>{variant.color}</option>
+                                )}
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                value={variant.sku}
+                                onChange={(e) => updateVariant(index, 'sku', e.target.value)}
+                                required
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={variant.price}
+                                onChange={(e) => updateVariant(index, 'price', e.target.value)}
+                                required
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={variant.sale_price ?? ''}
+                                onChange={(e) => updateVariant(index, 'sale_price', e.target.value || null)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                value={variant.stock_quantity}
+                                onChange={(e) => updateVariant(index, 'stock_quantity', Number(e.target.value))}
+                                required
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={variant.is_active}
+                                onChange={(e) => updateVariant(index, 'is_active', e.target.checked)}
+                              />
+                            </td>
+                            <td>
+                              {group.indices.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="admin-link admin-link-danger"
+                                  onClick={() => removeVariant(index)}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -387,6 +626,9 @@ export default function AdminProductFormPage() {
         {!isNew && (
           <section className="admin-card">
             <h2>Images</h2>
+            <p className="admin-hint">
+              Upload as many images as you need. The first image becomes primary.
+            </p>
             <div className="admin-images">
               {(form.images ?? []).map((img) => (
                 <div key={img.id} className="admin-image-card">
@@ -402,9 +644,10 @@ export default function AdminProductFormPage() {
               ))}
             </div>
             <label className="admin-upload">
-              <span className="btn btn-secondary">Upload image</span>
-              <input type="file" accept="image/*" onChange={handleImageUpload} />
+              <span className="btn btn-secondary">Upload images</span>
+              <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
             </label>
+            {imageError && <p className="admin-hint admin-hint-error">{imageError}</p>}
           </section>
         )}
 
