@@ -60,6 +60,7 @@ const emptyVariant = (): AdminProductVariant => ({
 })
 
 const emptyProduct = (): AdminProduct => ({
+  slug: '',
   sku: '',
   brand: '',
   name_it: '',
@@ -80,11 +81,19 @@ const emptyProduct = (): AdminProduct => ({
   is_bestseller: false,
   allows_customization: false,
   customization_fee: '0.00',
+  embroidery_chest_enabled: false,
+  embroidery_chest_fee: '0.00',
+  embroidery_large_enabled: false,
+  embroidery_large_fee: '0.00',
+  dtf_chest_enabled: false,
+  dtf_chest_fee: '0.00',
+  dtf_large_enabled: false,
+  dtf_large_fee: '0.00',
 })
 
 export default function AdminProductFormPage() {
   const { id } = useParams()
-  const isNew = id === 'new'
+  const isNew = !id || id === 'new'
   const productId = isNew ? null : Number(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -93,6 +102,7 @@ export default function AdminProductFormPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [imageError, setImageError] = useState('')
+  const [pendingImages, setPendingImages] = useState<{ file: File; preview: string }[]>([])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['admin-categories'],
@@ -135,9 +145,8 @@ export default function AdminProductFormPage() {
   const saveMutation = useMutation({
     mutationFn: (payload: AdminProduct) =>
       isNew ? createAdminProduct(payload) : updateAdminProduct(productId!, payload),
-    onSuccess: (saved) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] })
-      if (isNew) navigate(`/admin/products/${saved.id}`)
     },
   })
 
@@ -237,6 +246,7 @@ export default function AdminProductFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setImageError('')
     setSaving(true)
     try {
       const payload = {
@@ -247,11 +257,21 @@ export default function AdminProductFormPage() {
           sale_price: v.sale_price || null,
         })),
       }
-      await saveMutation.mutateAsync(payload)
+      const saved = await saveMutation.mutateAsync(payload)
+      if (isNew && pendingImages.length > 0 && saved.id) {
+        let hasImages = false
+        for (const item of pendingImages) {
+          await uploadProductImage(saved.id, item.file, !hasImages)
+          hasImages = true
+        }
+        pendingImages.forEach((item) => URL.revokeObjectURL(item.preview))
+        setPendingImages([])
+      }
+      if (isNew && saved.id) navigate(`/admin/products/${saved.id}`)
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not save product.'
+        : 'Impossibile salvare il prodotto.'
       setError(message)
     } finally {
       setSaving(false)
@@ -260,8 +280,18 @@ export default function AdminProductFormPage() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (!files.length || !productId) return
+    e.target.value = ''
+    if (!files.length) return
     setImageError('')
+
+    if (!productId) {
+      setPendingImages((prev) => [
+        ...prev,
+        ...files.map((file) => ({ file, preview: URL.createObjectURL(file) })),
+      ])
+      return
+    }
+
     let hasImages = (form.images?.length ?? 0) > 0
     try {
       for (const file of files) {
@@ -270,14 +300,20 @@ export default function AdminProductFormPage() {
       }
       queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
     } catch (err: unknown) {
-      setImageError(formatApiError(err, 'Could not upload image.'))
-    } finally {
-      e.target.value = ''
+      setImageError(formatApiError(err, 'Impossibile caricare l\'immagine.'))
     }
   }
 
+  const removePendingImage = (index: number) => {
+    setPendingImages((prev) => {
+      const target = prev[index]
+      if (target) URL.revokeObjectURL(target.preview)
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
   const handleDeleteImage = async (imageId: number) => {
-    if (!productId || !window.confirm('Delete this image?')) return
+    if (!productId || !window.confirm('Eliminare questa immagine?')) return
     await deleteProductImage(productId, imageId)
     queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
   }
@@ -298,13 +334,13 @@ export default function AdminProductFormPage() {
   }
 
   const handleRemoveMockup = async () => {
-    if (!productId || !window.confirm('Remove mockup image?')) return
+    if (!productId || !window.confirm('Rimuovere l\'immagine mockup?')) return
     await removeProductMockup(productId)
     setForm((prev) => ({ ...prev, mockup_front: null }))
     queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
   }
 
-  if (!isNew && isLoading) return <p>Loading product…</p>
+  if (!isNew && isLoading) return <p>Caricamento prodotto…</p>
 
   const lang = langTab
 
@@ -312,8 +348,8 @@ export default function AdminProductFormPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <Link to="/admin/products" className="admin-back">← Back to products</Link>
-          <h1>{isNew ? 'Add product' : 'Edit product'}</h1>
+          <Link to="/admin/products" className="admin-back">← Torna ai prodotti</Link>
+          <h1>{isNew ? 'Aggiungi prodotto' : 'Modifica prodotto'}</h1>
         </div>
       </div>
 
@@ -321,7 +357,7 @@ export default function AdminProductFormPage() {
 
       <form className="admin-form" onSubmit={handleSubmit}>
         <section className="admin-card">
-          <h2>Basic info</h2>
+          <h2>Informazioni di base</h2>
           <div className="admin-form-grid">
             <label>
               SKU *
@@ -332,12 +368,12 @@ export default function AdminProductFormPage() {
               />
             </label>
             <label>
-              Brand
+              Marca
               <select
                 value={form.brand || ''}
                 onChange={(e) => updateField('brand', e.target.value)}
               >
-                <option value="">— No brand —</option>
+                <option value="">— Nessuna marca —</option>
                 {brands.filter((b) => b.is_active).map((brand) => (
                   <option key={brand.id} value={brand.name}>{brand.name}</option>
                 ))}
@@ -348,15 +384,15 @@ export default function AdminProductFormPage() {
             </label>
           </div>
           <div className="admin-checkbox-grid">
-            <label><input type="checkbox" checked={form.is_active} onChange={(e) => updateField('is_active', e.target.checked)} /> Active</label>
-            <label><input type="checkbox" checked={form.is_featured} onChange={(e) => updateField('is_featured', e.target.checked)} /> Featured</label>
-            <label><input type="checkbox" checked={form.is_new_arrival} onChange={(e) => updateField('is_new_arrival', e.target.checked)} /> New arrival</label>
-            <label><input type="checkbox" checked={form.is_bestseller} onChange={(e) => updateField('is_bestseller', e.target.checked)} /> Bestseller</label>
+            <label><input type="checkbox" checked={form.is_active} onChange={(e) => updateField('is_active', e.target.checked)} /> Attivo</label>
+            <label><input type="checkbox" checked={form.is_featured} onChange={(e) => updateField('is_featured', e.target.checked)} /> In evidenza</label>
+            <label><input type="checkbox" checked={form.is_new_arrival} onChange={(e) => updateField('is_new_arrival', e.target.checked)} /> Nuovo arrivo</label>
+            <label><input type="checkbox" checked={form.is_bestseller} onChange={(e) => updateField('is_bestseller', e.target.checked)} /> Best seller</label>
           </div>
         </section>
 
         <section className="admin-card">
-          <h2>Categories</h2>
+          <h2>Categorie</h2>
           <div className="admin-category-grid">
             {categories.map((cat) => (
               <label key={cat.id} className="admin-category-chip">
@@ -378,7 +414,7 @@ export default function AdminProductFormPage() {
           </div>
           <div className="admin-form-grid">
             <label className="full-width">
-              Name ({lang}) *
+              Nome ({lang}) *
               <input
                 value={form[`name_${lang}`]}
                 onChange={(e) => updateField(`name_${lang}` as keyof AdminProduct, e.target.value)}
@@ -386,7 +422,7 @@ export default function AdminProductFormPage() {
               />
             </label>
             <label className="full-width">
-              Short description ({lang})
+              Descrizione breve ({lang})
               <textarea
                 rows={2}
                 value={form[`short_description_${lang}`]}
@@ -394,7 +430,7 @@ export default function AdminProductFormPage() {
               />
             </label>
             <label className="full-width">
-              Description ({lang})
+              Descrizione ({lang})
               <textarea
                 rows={6}
                 value={form[`description_${lang}`]}
@@ -422,10 +458,10 @@ export default function AdminProductFormPage() {
         <section className="admin-card">
           <div className="admin-section-header">
             <div>
-              <h2>Variants — sizes &amp; colors</h2>
-              <p className="admin-hint">Add a size, then add multiple colors for that size (each color has its own SKU, price, and stock).</p>
+              <h2>Varianti — taglie e colori</h2>
+              <p className="admin-hint">Aggiungi una taglia, poi più colori per quella taglia (ogni colore ha SKU, prezzo e scorte propri).</p>
             </div>
-            <button type="button" className="btn btn-secondary" onClick={addSizeGroup}>Add size</button>
+            <button type="button" className="btn btn-secondary" onClick={addSizeGroup}>Aggiungi taglia</button>
           </div>
 
           <div className="admin-variant-groups">
@@ -433,12 +469,12 @@ export default function AdminProductFormPage() {
               <div key={`size-${group.size}-${group.indices[0]}`} className="admin-variant-group">
                 <div className="admin-variant-group-header">
                   <label className="admin-variant-size-label">
-                    Size
+                    Taglia
                     <select
                       value={group.size}
                       onChange={(e) => updateSizeForGroup(group.size, e.target.value)}
                     >
-                      <option value="">— No size —</option>
+                      <option value="">— Nessuna taglia —</option>
                       {CLOTHING_SIZES.map((size) => (
                         <option key={size} value={size}>{size}</option>
                       ))}
@@ -449,7 +485,7 @@ export default function AdminProductFormPage() {
                   </label>
                   <div className="admin-variant-group-actions">
                     <button type="button" className="btn btn-secondary" onClick={() => addColorToSize(group.size)}>
-                      Add color
+                      Aggiungi colore
                     </button>
                     {sizeGroups.length > 1 && (
                       <button
@@ -457,7 +493,7 @@ export default function AdminProductFormPage() {
                         className="admin-link admin-link-danger"
                         onClick={() => removeSizeGroup(group.size)}
                       >
-                        Remove size
+                        Rimuovi taglia
                       </button>
                     )}
                   </div>
@@ -467,12 +503,12 @@ export default function AdminProductFormPage() {
                   <table className="admin-table admin-variant-table">
                     <thead>
                       <tr>
-                        <th>Color *</th>
+                        <th>Colore *</th>
                         <th>SKU *</th>
-                        <th>Price *</th>
-                        <th>Sale price</th>
-                        <th>Stock *</th>
-                        <th>Active</th>
+                        <th>Prezzo *</th>
+                        <th>Prezzo scontato</th>
+                        <th>Scorte *</th>
+                        <th>Attivo</th>
                         <th />
                       </tr>
                     </thead>
@@ -499,7 +535,7 @@ export default function AdminProductFormPage() {
                                 }}
                                 required
                               >
-                                <option value="">— Select —</option>
+                                <option value="">— Seleziona —</option>
                                 {colorOptions.map((color) => (
                                   <option key={color} value={color}>{color}</option>
                                 ))}
@@ -557,7 +593,7 @@ export default function AdminProductFormPage() {
                                   className="admin-link admin-link-danger"
                                   onClick={() => removeVariant(index)}
                                 >
-                                  Remove
+                                  Rimuovi
                                 </button>
                               )}
                             </td>
@@ -573,89 +609,113 @@ export default function AdminProductFormPage() {
         </section>
 
         <section className="admin-card">
-          <h2>Logo customization</h2>
+          <h2>Personalizzazione logo</h2>
           <p className="admin-hint">
-            Enable this to let customers upload a logo and position it on the product page.
-            If no mockup image is set, the primary product photo is used.
+            Abilita uno o più metodi di personalizzazione con il relativo costo.
+            Se non è impostata un&apos;immagine mockup, viene usata la foto principale del prodotto.
           </p>
-          <div className="admin-checkbox-grid">
-            <label>
-              <input
-                type="checkbox"
-                checked={form.allows_customization ?? false}
-                onChange={(e) => updateField('allows_customization', e.target.checked)}
-              />
-              Allow logo customization
-            </label>
+          <div className="admin-method-grid">
+            {([
+              ['embroidery_chest_enabled', 'embroidery_chest_fee', 'Ricamo — lato cuore/petto'],
+              ['embroidery_large_enabled', 'embroidery_large_fee', 'Ricamo grande'],
+              ['dtf_chest_enabled', 'dtf_chest_fee', 'DTF — lato cuore/petto'],
+              ['dtf_large_enabled', 'dtf_large_fee', 'DTF grande (formato A4)'],
+            ] as const).map(([enabledKey, feeKey, label]) => (
+              <div key={enabledKey} className="admin-method-row">
+                <label className="admin-checkbox-inline">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form[enabledKey])}
+                    onChange={(e) => updateField(enabledKey, e.target.checked)}
+                  />
+                  <span>{label}</span>
+                </label>
+                <label>
+                  Costo (EUR)
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form[feeKey] ?? '0.00'}
+                    onChange={(e) => updateField(feeKey, e.target.value)}
+                    disabled={!form[enabledKey]}
+                  />
+                </label>
+              </div>
+            ))}
           </div>
-          <label>
-            Customization fee (EUR)
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.customization_fee ?? '0.00'}
-              onChange={(e) => updateField('customization_fee', e.target.value)}
-              disabled={!form.allows_customization}
-            />
-          </label>
-          {!isNew && form.allows_customization && (
+          {!isNew && (
+            form.embroidery_chest_enabled
+            || form.embroidery_large_enabled
+            || form.dtf_chest_enabled
+            || form.dtf_large_enabled
+          ) ? (
             <div className="admin-mockup">
               {form.mockup_front ? (
                 <div className="admin-image-card">
-                  <img src={form.mockup_front} alt="Mockup front" />
+                  <img src={form.mockup_front} alt="Mockup fronte" />
                   <div className="admin-image-actions">
                     <button type="button" className="admin-link-danger" onClick={handleRemoveMockup}>
-                      Remove mockup
+                      Rimuovi mockup
                     </button>
                   </div>
                 </div>
               ) : (
-                <p className="admin-hint">No mockup uploaded — primary product image will be used.</p>
+                <p className="admin-hint">Nessun mockup caricato — verrà usata l&apos;immagine principale del prodotto.</p>
               )}
               <label className="admin-upload">
                 <span className="btn btn-secondary">
-                  {form.mockup_front ? 'Replace mockup' : 'Upload mockup image'}
+                  {form.mockup_front ? 'Sostituisci mockup' : 'Carica immagine mockup'}
                 </span>
                 <input type="file" accept="image/*" onChange={handleMockupUpload} />
               </label>
             </div>
-          )}
+          ) : null}
         </section>
 
-        {!isNew && (
-          <section className="admin-card">
-            <h2>Images</h2>
-            <p className="admin-hint">
-              Upload as many images as you need. The first image becomes primary.
-            </p>
-            <div className="admin-images">
-              {(form.images ?? []).map((img) => (
-                <div key={img.id} className="admin-image-card">
-                  <img src={img.image} alt={img.alt_text || ''} />
-                  {img.is_primary && <span className="admin-badge admin-badge-success">Primary</span>}
-                  <div className="admin-image-actions">
-                    {!img.is_primary && (
-                      <button type="button" onClick={() => handleSetPrimary(img.id)}>Set primary</button>
-                    )}
-                    <button type="button" className="admin-link-danger" onClick={() => handleDeleteImage(img.id)}>Delete</button>
-                  </div>
+        <section className="admin-card">
+          <h2>Immagini</h2>
+          <p className="admin-hint">
+            {isNew
+              ? 'Seleziona le immagini ora: verranno caricate dopo la creazione del prodotto. La prima diventa principale.'
+              : 'Carica tutte le immagini necessarie. La prima diventa l\'immagine principale.'}
+          </p>
+          <div className="admin-images">
+            {(form.images ?? []).map((img) => (
+              <div key={img.id} className="admin-image-card">
+                <img src={img.image} alt={img.alt_text || ''} />
+                {img.is_primary && <span className="admin-badge admin-badge-success">Principale</span>}
+                <div className="admin-image-actions">
+                  {!img.is_primary && (
+                    <button type="button" onClick={() => handleSetPrimary(img.id)}>Imposta principale</button>
+                  )}
+                  <button type="button" className="admin-link-danger" onClick={() => handleDeleteImage(img.id)}>Elimina</button>
                 </div>
-              ))}
-            </div>
-            <label className="admin-upload">
-              <span className="btn btn-secondary">Upload images</span>
-              <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
-            </label>
-            {imageError && <p className="admin-hint admin-hint-error">{imageError}</p>}
-          </section>
-        )}
+              </div>
+            ))}
+            {pendingImages.map((item, index) => (
+              <div key={`${item.file.name}-${index}`} className="admin-image-card">
+                <img src={item.preview} alt={item.file.name} />
+                <span className="admin-badge admin-badge-muted">In attesa</span>
+                <div className="admin-image-actions">
+                  <button type="button" className="admin-link-danger" onClick={() => removePendingImage(index)}>
+                    Rimuovi
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="admin-upload">
+            <span className="btn btn-secondary">Carica immagini</span>
+            <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
+          </label>
+          {imageError && <p className="admin-hint admin-hint-error">{imageError}</p>}
+        </section>
 
         <div className="admin-form-actions">
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : isNew ? 'Create product' : 'Save changes'}
+            {saving ? 'Salvataggio…' : isNew ? 'Crea prodotto' : 'Salva modifiche'}
           </button>
-          {isNew && <p className="admin-hint">You can upload images after creating the product.</p>}
         </div>
       </form>
     </div>

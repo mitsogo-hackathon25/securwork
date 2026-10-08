@@ -98,14 +98,22 @@
   },
   "customizer": {
     "title": "Customize with your logo",
-    "subtitle": "Upload your logo and drag it to the preferred position on the garment.",
+    "subtitle": "Choose a customization type, upload your logo and drag it to the preferred position on the garment.",
     "enable": "Add custom logo",
     "uploadLogo": "Upload logo",
     "size": "Logo size",
     "rotation": "Rotation",
     "dragHint": "Drag the logo to position it. The dashed area shows the recommended print zone.",
     "fee": "Customization fee: {{price}} per item",
-    "customized": "Customized"
+    "method": "Customization type",
+    "selectMethod": "Select a method",
+    "customized": "Customized",
+    "methods": {
+      "embroidery_chest": "Embroidery — heart/chest side",
+      "embroidery_large": "Large embroidery",
+      "dtf_chest": "DTF — heart/chest side",
+      "dtf_large": "Large DTF (A4 size)"
+    }
   },
   "product": {
     "size": "Size",

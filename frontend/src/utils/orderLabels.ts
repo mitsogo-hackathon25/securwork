@@ -1,23 +1,23 @@
 const ORDER_STATUS: Record<string, string> = {
-  pending: 'Pending',
-  processing: 'Processing',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
+  pending: 'In attesa',
+  processing: 'In elaborazione',
+  shipped: 'Spedito',
+  delivered: 'Consegnato',
+  cancelled: 'Annullato',
+  refunded: 'Rimborsato',
 }
 
 const PAYMENT_STATUS: Record<string, string> = {
-  pending: 'Pending',
-  paid: 'Paid',
-  failed: 'Failed',
-  refunded: 'Refunded',
+  pending: 'In attesa',
+  paid: 'Pagato',
+  failed: 'Fallito',
+  refunded: 'Rimborsato',
 }
 
 const PAYMENT_METHOD: Record<string, string> = {
-  stripe: 'Card (Stripe)',
-  bank_transfer: 'Bank transfer',
-  manual: 'Manual',
+  stripe: 'Carta (Stripe)',
+  bank_transfer: 'Bonifico bancario',
+  manual: 'Manuale',
 }
 
 export function formatOrderStatus(value: string): string {

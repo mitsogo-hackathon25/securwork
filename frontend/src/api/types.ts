@@ -31,10 +31,23 @@ export interface CustomizationDesign {
   rotation: number
 }
 
+export type CustomizationMethodCode =
+  | 'embroidery_chest'
+  | 'embroidery_large'
+  | 'dtf_chest'
+  | 'dtf_large'
+
+export interface CustomizationOption {
+  code: CustomizationMethodCode
+  label: string
+  fee: string
+}
+
 export interface LineItemCustomization {
   id: number
   logo: string | null
   preview: string | null
+  method?: CustomizationMethodCode | string
   design_data: CustomizationDesign
   created_at?: string
 }
@@ -56,6 +69,15 @@ export interface Product {
   allows_customization?: boolean
   mockup_front?: string | null
   customization_fee?: string | null
+  customization_options?: CustomizationOption[]
+  embroidery_chest_enabled?: boolean
+  embroidery_chest_fee?: string
+  embroidery_large_enabled?: boolean
+  embroidery_large_fee?: string
+  dtf_chest_enabled?: boolean
+  dtf_chest_fee?: string
+  dtf_large_enabled?: boolean
+  dtf_large_fee?: string
   images?: { id: number; image: string; alt_text: string; is_primary: boolean }[]
   variants?: ProductVariant[]
   categories?: Category[]
@@ -316,6 +338,14 @@ export interface AdminProduct {
   allows_customization?: boolean
   mockup_front?: string | null
   customization_fee?: string
+  embroidery_chest_enabled?: boolean
+  embroidery_chest_fee?: string
+  embroidery_large_enabled?: boolean
+  embroidery_large_fee?: string
+  dtf_chest_enabled?: boolean
+  dtf_chest_fee?: string
+  dtf_large_enabled?: boolean
+  dtf_large_fee?: string
   min_price?: string | null
   total_stock?: number
   in_stock?: boolean

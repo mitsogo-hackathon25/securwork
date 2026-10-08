@@ -32,57 +32,57 @@ export default function AdminOrdersPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Orders</h1>
-          <p>View order details, payment status, and fulfilment.</p>
+          <h1>Ordini</h1>
+          <p>Visualizza dettagli ordine, stato pagamento e evasione.</p>
         </div>
       </div>
 
       <div className="admin-toolbar">
         <input
           type="search"
-          placeholder="Search by order #, email, or name…"
+          placeholder="Cerca per n. ordine, email o nome…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         />
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}>
-          <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="processing">Processing</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="refunded">Refunded</option>
+          <option value="all">Tutti gli stati</option>
+          <option value="pending">In attesa</option>
+          <option value="processing">In elaborazione</option>
+          <option value="shipped">Spedito</option>
+          <option value="delivered">Consegnato</option>
+          <option value="cancelled">Annullato</option>
+          <option value="refunded">Rimborsato</option>
         </select>
         <select value={paymentFilter} onChange={(e) => { setPaymentFilter(e.target.value); setPage(1) }}>
-          <option value="all">All payments</option>
-          <option value="pending">Payment pending</option>
-          <option value="paid">Paid</option>
-          <option value="failed">Failed</option>
-          <option value="refunded">Refunded</option>
+          <option value="all">Tutti i pagamenti</option>
+          <option value="pending">Pagamento in attesa</option>
+          <option value="paid">Pagato</option>
+          <option value="failed">Fallito</option>
+          <option value="refunded">Rimborsato</option>
         </select>
       </div>
 
       {isLoading ? (
-        <p>Loading orders…</p>
+        <p>Caricamento ordini…</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th>Payment</th>
-                <th>Date</th>
+                <th>Ordine</th>
+                <th>Cliente</th>
+                <th>Articoli</th>
+                <th>Totale</th>
+                <th>Stato</th>
+                <th>Pagamento</th>
+                <th>Data</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="admin-empty">No orders found.</td>
+                  <td colSpan={8} className="admin-empty">Nessun ordine trovato.</td>
                 </tr>
               ) : orders.map((order) => (
                 <tr key={order.id}>
@@ -102,7 +102,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td>{formatDate(order.created_at)}</td>
                   <td className="admin-actions">
-                    <Link to={`/admin/orders/${order.id}`} className="admin-link">View</Link>
+                    <Link to={`/admin/orders/${order.id}`} className="admin-link">Dettaglio</Link>
                   </td>
                 </tr>
               ))}
@@ -113,9 +113,9 @@ export default function AdminOrdersPage() {
 
       {totalPages > 1 && (
         <div className="admin-pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-          <span>Page {page} of {totalPages}</span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Precedente</button>
+          <span>Pagina {page} di {totalPages}</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Successiva</button>
         </div>
       )}
     </div>

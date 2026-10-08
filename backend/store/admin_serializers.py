@@ -281,6 +281,10 @@ class AdminProductSerializer(serializers.ModelSerializer):
             "category_ids", "variants", "images",
             "is_active", "is_featured", "is_new_arrival", "is_bestseller",
             "allows_customization", "mockup_front", "customization_fee",
+            "embroidery_chest_enabled", "embroidery_chest_fee",
+            "embroidery_large_enabled", "embroidery_large_fee",
+            "dtf_chest_enabled", "dtf_chest_fee",
+            "dtf_large_enabled", "dtf_large_fee",
             "min_price", "total_stock", "in_stock",
             "created_at", "updated_at",
         ]
@@ -399,6 +403,10 @@ class AdminProductSerializer(serializers.ModelSerializer):
             product_fields["slug"] = slug
 
         product = Product.objects.create(**product_fields)
+        from .customization import sync_allows_customization
+
+        sync_allows_customization(product)
+        product.save(update_fields=["allows_customization", "customization_fee"])
         self._save_translations(product, validated_data)
         if categories:
             product.categories.set(categories)
@@ -413,6 +421,9 @@ class AdminProductSerializer(serializers.ModelSerializer):
 
         for attr, value in product_fields.items():
             setattr(instance, attr, value)
+        from .customization import sync_allows_customization
+
+        sync_allows_customization(instance)
         instance.save()
 
         self._save_translations(instance, validated_data)

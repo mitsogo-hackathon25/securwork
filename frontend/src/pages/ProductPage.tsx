@@ -220,7 +220,15 @@ export default function ProductPage() {
                   ref={customizerRef}
                   mockupUrl={mockupUrl}
                   variantId={variant.id}
-                  customizationFee={product.customization_fee}
+                  options={
+                    product.customization_options?.length
+                      ? product.customization_options
+                      : [{
+                          code: 'embroidery_chest',
+                          label: t('customizer.methods.embroidery_chest'),
+                          fee: product.customization_fee || '0.00',
+                        }]
+                  }
                   onReadyChange={setHasLogo}
                 />
               )}

@@ -25,6 +25,24 @@
   font-weight: 600;
 }
 
+.product-customizer-method {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.product-customizer-method select {
+  font-weight: 500;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
 .product-customizer-upload input {
   display: none;
 }

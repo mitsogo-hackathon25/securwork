@@ -18,12 +18,12 @@ function formatUses(coupon: { used_count?: number; max_uses: number | null; uses
 }
 
 function formatDateRange(from: string | null, until: string | null) {
-  if (!from && !until) return 'No expiry'
+  if (!from && !until) return 'Nessuna scadenza'
   const fmt = (value: string) =>
     new Date(value).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
   if (from && until) return `${fmt(from)} → ${fmt(until)}`
-  if (from) return `From ${fmt(from)}`
-  return `Until ${fmt(until!)}`
+  if (from) return `Dal ${fmt(from)}`
+  return `Fino al ${fmt(until!)}`
 }
 
 export default function AdminCouponsPage() {
@@ -51,7 +51,7 @@ export default function AdminCouponsPage() {
   const totalPages = data ? Math.ceil(data.count / 12) : 1
 
   const handleDelete = async (id: number, code: string) => {
-    if (!window.confirm(`Delete coupon "${code}"?`)) return
+    if (!window.confirm(`Eliminare il coupon "${code}"?`)) return
     await deleteMutation.mutateAsync(id)
   }
 
@@ -59,46 +59,46 @@ export default function AdminCouponsPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Coupons</h1>
-          <p>Create discount codes for customers. Set a usage limit to control how many times each code can be used.</p>
+          <h1>Coupon</h1>
+          <p>Crea codici sconto per i clienti. Imposta un limite di utilizzi per controllare quante volte ogni codice può essere usato.</p>
         </div>
-        <Link to="/admin/coupons/new" className="btn btn-primary">Add coupon</Link>
+        <Link to="/admin/coupons/new" className="btn btn-primary">Aggiungi coupon</Link>
       </div>
 
       <div className="admin-toolbar">
         <input
           type="search"
-          placeholder="Search by code…"
+          placeholder="Cerca per codice…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         />
         <select value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1) }}>
-          <option value="all">All coupons</option>
-          <option value="active">Active only</option>
-          <option value="inactive">Inactive only</option>
+          <option value="all">Tutti i coupon</option>
+          <option value="active">Solo attivi</option>
+          <option value="inactive">Solo inattivi</option>
         </select>
       </div>
 
       {isLoading ? (
-        <p>Loading coupons…</p>
+        <p>Caricamento coupon…</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Discount</th>
-                <th>Min. order</th>
-                <th>Uses</th>
-                <th>Validity</th>
-                <th>Status</th>
+                <th>Codice</th>
+                <th>Sconto</th>
+                <th>Ordine min.</th>
+                <th>Utilizzi</th>
+                <th>Validità</th>
+                <th>Stato</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="admin-empty">No coupons found.</td>
+                  <td colSpan={7} className="admin-empty">Nessun coupon trovato.</td>
                 </tr>
               ) : coupons.map((coupon) => (
                 <tr key={coupon.id}>
@@ -108,23 +108,23 @@ export default function AdminCouponsPage() {
                   <td>
                     {formatUses(coupon)}
                     {coupon.max_uses != null && coupon.uses_remaining === 0 && (
-                      <span className="admin-flag">Limit reached</span>
+                      <span className="admin-flag">Limite raggiunto</span>
                     )}
                   </td>
                   <td>{formatDateRange(coupon.valid_from, coupon.valid_until)}</td>
                   <td>
                     <span className={`admin-badge ${coupon.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                      {coupon.is_active ? 'Active' : 'Inactive'}
+                      {coupon.is_active ? 'Attivo' : 'Inattivo'}
                     </span>
                   </td>
                   <td className="admin-actions">
-                    <Link to={`/admin/coupons/${coupon.id}`} className="admin-link">Edit</Link>
+                    <Link to={`/admin/coupons/${coupon.id}`} className="admin-link">Modifica</Link>
                     <button
                       type="button"
                       className="admin-link admin-link-danger"
                       onClick={() => handleDelete(coupon.id!, coupon.code)}
                     >
-                      Delete
+                      Elimina
                     </button>
                   </td>
                 </tr>
@@ -136,9 +136,9 @@ export default function AdminCouponsPage() {
 
       {totalPages > 1 && (
         <div className="admin-pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-          <span>Page {page} of {totalPages}</span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Precedente</button>
+          <span>Pagina {page} di {totalPages}</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Successiva</button>
         </div>
       )}
     </div>

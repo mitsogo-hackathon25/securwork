@@ -113,13 +113,13 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         upload = request.FILES.get("file")
         if not upload:
             return Response(
-                {"detail": "Upload a CSV file using the file field."},
+                {"detail": "Carica un file CSV usando il campo file."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
         if not name.endswith(".csv"):
             return Response(
-                {"detail": "Only .csv files are accepted."},
+                {"detail": "Sono accettati solo file .csv."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -127,7 +127,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         if errors:
             return Response(
                 {
-                    "detail": "CSV validation failed. Fix the errors below and try again.",
+                    "detail": "Validazione CSV non riuscita. Correggi gli errori sotto e riprova.",
                     "errors": errors,
                     "created_products": 0,
                     "created_variants": 0,
@@ -136,11 +136,13 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             )
 
         result = import_parsed_rows(parsed_rows)
+        products = result["created_products"]
+        variants = result["created_variants"]
         return Response(
             {
                 "detail": (
-                    f"Imported {result['created_products']} product(s) "
-                    f"with {result['created_variants']} variant(s)."
+                    f"Importati {products} prodott{'o' if products == 1 else 'i'} "
+                    f"con {variants} variant{'e' if variants == 1 else 'i'}."
                 ),
                 "errors": [],
                 **result,

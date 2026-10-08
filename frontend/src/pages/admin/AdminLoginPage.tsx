@@ -24,12 +24,12 @@ export default function AdminLoginPage() {
       if (!user.is_staff) {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        setError('This account does not have admin access.')
+        setError('Questo account non ha accesso amministratore.')
         return
       }
       navigate('/admin/products')
     } catch {
-      setError('Invalid username or password.')
+      setError('Nome utente o password non validi.')
     } finally {
       setLoading(false)
     }
@@ -39,10 +39,10 @@ export default function AdminLoginPage() {
     <div className="admin-login-page">
       <form className="admin-login-card" onSubmit={handleSubmit}>
         <h1>SecurWork Admin</h1>
-        <p>Sign in with your staff account to manage products.</p>
+        <p>Accedi con il tuo account staff per gestire i prodotti.</p>
         {error && <div className="admin-alert admin-alert-error">{error}</div>}
         <label>
-          Username
+          Nome utente
           <input name="username" required autoComplete="username" />
         </label>
         <label>
@@ -50,7 +50,7 @@ export default function AdminLoginPage() {
           <input name="password" type="password" required autoComplete="current-password" />
         </label>
         <button type="submit" className="btn btn-primary admin-login-btn" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? 'Accesso in corso…' : 'Accedi'}
         </button>
       </form>
     </div>

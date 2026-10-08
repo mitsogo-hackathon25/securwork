@@ -195,8 +195,28 @@ class Command(BaseCommand):
             product.is_bestseller = pdata.get("bestseller", False)
             product.is_active = True
             product.allows_customization = pdata["cat"] in CUSTOMIZABLE_CATEGORIES
-            if product.allows_customization and product.customization_fee == Decimal("0.00"):
-                product.customization_fee = Decimal("5.00")
+            if product.allows_customization:
+                if not product.embroidery_chest_enabled and not product.dtf_chest_enabled:
+                    product.embroidery_chest_enabled = True
+                    product.dtf_chest_enabled = True
+                    product.embroidery_large_enabled = True
+                    product.dtf_large_enabled = True
+                if product.embroidery_chest_fee == Decimal("0.00"):
+                    product.embroidery_chest_fee = Decimal("5.00")
+                if product.embroidery_large_fee == Decimal("0.00"):
+                    product.embroidery_large_fee = Decimal("12.00")
+                if product.dtf_chest_fee == Decimal("0.00"):
+                    product.dtf_chest_fee = Decimal("4.00")
+                if product.dtf_large_fee == Decimal("0.00"):
+                    product.dtf_large_fee = Decimal("9.00")
+                product.customization_fee = min(
+                    fee for fee in (
+                        product.embroidery_chest_fee,
+                        product.embroidery_large_fee,
+                        product.dtf_chest_fee,
+                        product.dtf_large_fee,
+                    ) if fee is not None
+                )
             product.save()
             cats = [cat]
             also = pdata.get("also_cat")

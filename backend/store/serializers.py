@@ -98,12 +98,18 @@ class ProductDetailSerializer(ProductListSerializer):
     is_variable = serializers.BooleanField(read_only=True)
     mockup_front = serializers.SerializerMethodField()
     customization_fee = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    customization_options = serializers.SerializerMethodField()
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
             "description", "meta_title", "meta_description",
             "images", "variants", "categories", "is_variable",
             "allows_customization", "mockup_front", "customization_fee",
+            "customization_options",
+            "embroidery_chest_enabled", "embroidery_chest_fee",
+            "embroidery_large_enabled", "embroidery_large_fee",
+            "dtf_chest_enabled", "dtf_chest_fee",
+            "dtf_large_enabled", "dtf_large_fee",
             "created_at",
         ]
 
@@ -112,6 +118,11 @@ class ProductDetailSerializer(ProductListSerializer):
             return obj.mockup_front.url
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
         return img.display_url(self.context.get("request")) if img else None
+
+    def get_customization_options(self, obj):
+        from .customization import product_customization_options
+
+        return product_customization_options(obj, lang=self._lang())
 
     def get_description(self, obj):
         return obj.safe_translation_getter("description", language_code=self._lang(), any_language=True)

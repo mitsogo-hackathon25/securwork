@@ -15,7 +15,7 @@ class LineItemCustomizationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LineItemCustomization
-        fields = ["id", "logo", "preview", "design_data", "created_at"]
+        fields = ["id", "logo", "preview", "method", "design_data", "created_at"]
 
     def get_logo(self, obj):
         return obj.logo.url if obj.logo else None
@@ -83,8 +83,15 @@ class AddToCartSerializer(serializers.Serializer):
                 customization = LineItemCustomization.objects.get(pk=customization_id)
             except LineItemCustomization.DoesNotExist:
                 raise serializers.ValidationError({"customization_id": "Customization not found."})
-            if not variant.product.allows_customization:
+            from store.customization import product_has_customization, product_method_enabled
+
+            if not product_has_customization(variant.product):
                 raise serializers.ValidationError({"customization_id": "Product is not customizable."})
+            method = customization.method or "embroidery_chest"
+            if not product_method_enabled(variant.product, method):
+                raise serializers.ValidationError(
+                    {"customization_id": "Selected customization method is not available for this product."}
+                )
             data["customization"] = customization
         data["variant"] = variant
         return data

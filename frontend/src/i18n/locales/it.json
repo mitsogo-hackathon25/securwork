@@ -98,14 +98,22 @@
   },
   "customizer": {
     "title": "Personalizza con il tuo logo",
-    "subtitle": "Carica il logo e trascinalo nella posizione desiderata sul capo.",
+    "subtitle": "Scegli il tipo di personalizzazione, carica il logo e trascinalo nella posizione desiderata sul capo.",
     "enable": "Aggiungi logo personalizzato",
     "uploadLogo": "Carica logo",
     "size": "Dimensione logo",
     "rotation": "Rotazione",
     "dragHint": "Trascina il logo per posizionarlo. L'area tratteggiata indica la zona consigliata.",
     "fee": "Supplemento personalizzazione: {{price}} per articolo",
-    "customized": "Personalizzato"
+    "method": "Tipo di personalizzazione",
+    "selectMethod": "Seleziona un metodo",
+    "customized": "Personalizzato",
+    "methods": {
+      "embroidery_chest": "Ricamo — lato cuore/petto",
+      "embroidery_large": "Ricamo grande",
+      "dtf_chest": "DTF — lato cuore/petto",
+      "dtf_large": "DTF grande (formato A4)"
+    }
   },
   "product": {
     "size": "Taglia",

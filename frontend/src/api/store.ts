@@ -49,11 +49,13 @@ export const uploadCustomization = (payload: {
   logo: File
   preview: File
   designData: CustomizationDesign
+  method: string
 }) => {
   const form = new FormData()
   form.append('variant_id', String(payload.variantId))
   form.append('logo', payload.logo)
   form.append('preview', payload.preview)
+  form.append('method', payload.method)
   form.append('design_data', JSON.stringify(payload.designData))
   return api.post<LineItemCustomization>('/customizations/', form, {
     headers: { 'Content-Type': 'multipart/form-data' },

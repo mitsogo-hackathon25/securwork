@@ -12,65 +12,126 @@ from django.utils.text import slugify
 from .constants import CLOTHING_SIZES
 from .models import Brand, Category, Color, Product, ProductVariant
 
+# Canonical Italian headers used in template / export.
 CSV_HEADERS = [
-    "product_sku",
-    "brand",
-    "name_it",
-    "name_en",
-    "description_it",
-    "description_en",
-    "size",
-    "color",
-    "price",
-    "stock",
-    "variant_sku",
-    "category_slugs",
-    "sale_price",
+    "sku_prodotto",
+    "marca",
+    "nome_it",
+    "nome_en",
+    "descrizione_it",
+    "descrizione_en",
+    "taglia",
+    "colore",
+    "prezzo",
+    "scorte",
+    "sku_variante",
+    "slug_categorie",
+    "prezzo_scontato",
+    "ricamo_petto",
+    "costo_ricamo_petto",
+    "ricamo_grande",
+    "costo_ricamo_grande",
+    "dtf_petto",
+    "costo_dtf_petto",
+    "dtf_grande",
+    "costo_dtf_grande",
 ]
 
+# Accept legacy English / previous Italian headers and map them to Italian keys.
+HEADER_ALIASES = {
+    "product_sku": "sku_prodotto",
+    "brand": "marca",
+    "name_it": "nome_it",
+    "name_en": "nome_en",
+    "description_it": "descrizione_it",
+    "description_en": "descrizione_en",
+    "size": "taglia",
+    "color": "colore",
+    "price": "prezzo",
+    "stock": "scorte",
+    "variant_sku": "sku_variante",
+    "category_slugs": "slug_categorie",
+    "sale_price": "prezzo_scontato",
+    "allows_customization": "ricamo_petto",
+    "customization_fee": "costo_ricamo_petto",
+    "personalizzazione": "ricamo_petto",
+    "costo_personalizzazione": "costo_ricamo_petto",
+    "embroidery_chest": "ricamo_petto",
+    "embroidery_chest_fee": "costo_ricamo_petto",
+    "embroidery_large": "ricamo_grande",
+    "embroidery_large_fee": "costo_ricamo_grande",
+    "dtf_chest": "dtf_petto",
+    "dtf_chest_fee": "costo_dtf_petto",
+    "dtf_large": "dtf_grande",
+    "dtf_large_fee": "costo_dtf_grande",
+}
+
+METHOD_CSV_FIELDS = (
+    ("ricamo_petto", "costo_ricamo_petto", "embroidery_chest_enabled", "embroidery_chest_fee"),
+    ("ricamo_grande", "costo_ricamo_grande", "embroidery_large_enabled", "embroidery_large_fee"),
+    ("dtf_petto", "costo_dtf_petto", "dtf_chest_enabled", "dtf_chest_fee"),
+    ("dtf_grande", "costo_dtf_grande", "dtf_large_enabled", "dtf_large_fee"),
+)
+
 REQUIRED_FIELDS = [
-    "product_sku",
-    "brand",
-    "name_it",
-    "name_en",
-    "description_it",
-    "description_en",
-    "size",
-    "color",
-    "price",
-    "stock",
+    "sku_prodotto",
+    "marca",
+    "nome_it",
+    "nome_en",
+    "descrizione_it",
+    "descrizione_en",
+    "taglia",
+    "colore",
+    "prezzo",
+    "scorte",
 ]
 
 TEMPLATE_EXAMPLE_ROWS = [
     {
-        "product_sku": "SW-POLO-01",
-        "brand": "ExampleBrand",
-        "name_it": "Polo da lavoro",
-        "name_en": "Work polo",
-        "description_it": "Polo resistente per uso professionale.",
-        "description_en": "Durable polo for professional use.",
-        "size": "M",
-        "color": "Blu",
-        "price": "29.90",
-        "stock": "10",
-        "variant_sku": "SW-POLO-01-M-BLU",
-        "category_slugs": "polo",
-        "sale_price": "",
+        "sku_prodotto": "SW-POLO-01",
+        "marca": "ExampleBrand",
+        "nome_it": "Polo da lavoro",
+        "nome_en": "Work polo",
+        "descrizione_it": "Polo resistente per uso professionale.",
+        "descrizione_en": "Durable polo for professional use.",
+        "taglia": "M",
+        "colore": "Blu",
+        "prezzo": "29.90",
+        "scorte": "10",
+        "sku_variante": "SW-POLO-01-M-BLU",
+        "slug_categorie": "polo",
+        "prezzo_scontato": "",
+        "ricamo_petto": "si",
+        "costo_ricamo_petto": "5.00",
+        "ricamo_grande": "si",
+        "costo_ricamo_grande": "12.00",
+        "dtf_petto": "si",
+        "costo_dtf_petto": "4.00",
+        "dtf_grande": "no",
+        "costo_dtf_grande": "",
     },
     {
-        "product_sku": "SW-POLO-01",
-        "brand": "ExampleBrand",
-        "name_it": "Polo da lavoro",
-        "name_en": "Work polo",
-        "description_it": "Polo resistente per uso professionale.",
-        "description_en": "Durable polo for professional use.",
-        "size": "L",
-        "color": "Blu",
-        "price": "29.90",
-        "stock": "8",
-        "variant_sku": "SW-POLO-01-L-BLU",
-        "category_slugs": "polo",
-        "sale_price": "",
+        "sku_prodotto": "SW-POLO-01",
+        "marca": "ExampleBrand",
+        "nome_it": "Polo da lavoro",
+        "nome_en": "Work polo",
+        "descrizione_it": "Polo resistente per uso professionale.",
+        "descrizione_en": "Durable polo for professional use.",
+        "taglia": "L",
+        "colore": "Blu",
+        "prezzo": "29.90",
+        "scorte": "8",
+        "sku_variante": "SW-POLO-01-L-BLU",
+        "slug_categorie": "polo",
+        "prezzo_scontato": "",
+        "ricamo_petto": "si",
+        "costo_ricamo_petto": "5.00",
+        "ricamo_grande": "si",
+        "costo_ricamo_grande": "12.00",
+        "dtf_petto": "si",
+        "costo_dtf_petto": "4.00",
+        "dtf_grande": "no",
+        "costo_dtf_grande": "",
     },
 ]
 
@@ -88,6 +149,10 @@ def _translation(product: Product, field: str, lang: str) -> str:
     return product.safe_translation_getter(field, language_code=lang, any_language=True) or ""
 
 
+def _bool_to_csv(value: bool) -> str:
+    return "si" if value else "no"
+
+
 def export_products_csv() -> str:
     """Export all products as CSV (one row per variant), matching import columns."""
     buffer = io.StringIO()
@@ -103,41 +168,50 @@ def export_products_csv() -> str:
             product.categories.order_by("slug").values_list("slug", flat=True)
         )
         base = {
-            "product_sku": product.sku,
-            "brand": product.brand or "",
-            "name_it": _translation(product, "name", "it"),
-            "name_en": _translation(product, "name", "en"),
-            "description_it": _translation(product, "description", "it"),
-            "description_en": _translation(product, "description", "en"),
-            "category_slugs": category_slugs,
+            "sku_prodotto": product.sku,
+            "marca": product.brand or "",
+            "nome_it": _translation(product, "name", "it"),
+            "nome_en": _translation(product, "name", "en"),
+            "descrizione_it": _translation(product, "description", "it"),
+            "descrizione_en": _translation(product, "description", "en"),
+            "slug_categorie": category_slugs,
+            "ricamo_petto": _bool_to_csv(bool(product.embroidery_chest_enabled)),
+            "costo_ricamo_petto": f"{product.embroidery_chest_fee:.2f}",
+            "ricamo_grande": _bool_to_csv(bool(product.embroidery_large_enabled)),
+            "costo_ricamo_grande": f"{product.embroidery_large_fee:.2f}",
+            "dtf_petto": _bool_to_csv(bool(product.dtf_chest_enabled)),
+            "costo_dtf_petto": f"{product.dtf_chest_fee:.2f}",
+            "dtf_grande": _bool_to_csv(bool(product.dtf_large_enabled)),
+            "costo_dtf_grande": f"{product.dtf_large_fee:.2f}",
         }
         variants = list(product.variants.all())
         if not variants:
             writer.writerow({
                 **base,
-                "size": "",
-                "color": "",
-                "price": "",
-                "stock": "",
-                "variant_sku": "",
-                "sale_price": "",
+                "taglia": "",
+                "colore": "",
+                "prezzo": "",
+                "scorte": "",
+                "sku_variante": "",
+                "prezzo_scontato": "",
             })
             continue
         for variant in variants:
             writer.writerow({
                 **base,
-                "size": variant.size or "",
-                "color": variant.color or "",
-                "price": f"{variant.price:.2f}",
-                "stock": str(variant.stock_quantity),
-                "variant_sku": variant.sku,
-                "sale_price": f"{variant.sale_price:.2f}" if variant.sale_price is not None else "",
+                "taglia": variant.size or "",
+                "colore": variant.color or "",
+                "prezzo": f"{variant.price:.2f}",
+                "scorte": str(variant.stock_quantity),
+                "sku_variante": variant.sku,
+                "prezzo_scontato": f"{variant.sale_price:.2f}" if variant.sale_price is not None else "",
             })
     return buffer.getvalue()
 
 
 def _normalize_header(value: str) -> str:
-    return (value or "").strip().lower().replace(" ", "_")
+    normalized = (value or "").strip().lower().replace(" ", "_")
+    return HEADER_ALIASES.get(normalized, normalized)
 
 
 def _cell(row: dict, key: str) -> str:
@@ -160,27 +234,43 @@ def _parse_price(value: str, field: str, row_num: int, errors: list[dict]) -> De
     try:
         amount = Decimal(cleaned)
     except (InvalidOperation, ValueError):
-        errors.append({"row": row_num, "field": field, "message": f"Invalid {field}: '{value}'."})
+        errors.append({"row": row_num, "field": field, "message": f"{field} non valido: '{value}'."})
         return None
     if amount < 0:
-        errors.append({"row": row_num, "field": field, "message": f"{field} cannot be negative."})
+        errors.append({"row": row_num, "field": field, "message": f"{field} non può essere negativo."})
         return None
     return amount
 
 
 def _parse_stock(value: str, row_num: int, errors: list[dict]) -> int | None:
     if value == "":
-        errors.append({"row": row_num, "field": "stock", "message": "stock is required."})
+        errors.append({"row": row_num, "field": "scorte", "message": "scorte è obbligatorio."})
         return None
     try:
         stock = int(value)
     except ValueError:
-        errors.append({"row": row_num, "field": "stock", "message": f"Invalid stock: '{value}'."})
+        errors.append({"row": row_num, "field": "scorte", "message": f"scorte non valido: '{value}'."})
         return None
     if stock < 0:
-        errors.append({"row": row_num, "field": "stock", "message": "stock cannot be negative."})
+        errors.append({"row": row_num, "field": "scorte", "message": "scorte non può essere negativo."})
         return None
     return stock
+
+
+def _parse_bool(value: str, field: str, row_num: int, errors: list[dict], default: bool = False) -> bool | None:
+    if not value:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"si", "sì", "s", "yes", "y", "true", "1"}:
+        return True
+    if normalized in {"no", "n", "false", "0"}:
+        return False
+    errors.append({
+        "row": row_num,
+        "field": field,
+        "message": f"{field} non valido: '{value}'. Usa si/no.",
+    })
+    return None
 
 
 def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
@@ -189,11 +279,11 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
     try:
         text = file_bytes.decode("utf-8-sig")
     except UnicodeDecodeError:
-        return [], [{"row": 0, "field": "file", "message": "CSV must be UTF-8 encoded."}]
+        return [], [{"row": 0, "field": "file", "message": "Il CSV deve essere codificato in UTF-8."}]
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
-        return [], [{"row": 0, "field": "file", "message": "CSV has no header row."}]
+        return [], [{"row": 0, "field": "file", "message": "Il CSV non ha una riga di intestazione."}]
 
     normalized_headers = [_normalize_header(h) for h in reader.fieldnames if h is not None]
     missing_headers = [h for h in REQUIRED_FIELDS if h not in normalized_headers]
@@ -201,7 +291,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         return [], [{
             "row": 0,
             "field": "headers",
-            "message": f"Missing required columns: {', '.join(missing_headers)}.",
+            "message": f"Colonne obbligatorie mancanti: {', '.join(missing_headers)}.",
         }]
 
     brands = {b.name.lower(): b.name for b in Brand.objects.filter(is_active=True)}
@@ -230,57 +320,86 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
 
         for field in REQUIRED_FIELDS:
             if not _cell(row, field):
-                errors.append({"row": row_num, "field": field, "message": f"{field} is required."})
+                errors.append({"row": row_num, "field": field, "message": f"{field} è obbligatorio."})
 
-        product_sku = _cell(row, "product_sku")
-        brand_raw = _cell(row, "brand")
-        name_it = _cell(row, "name_it")
-        name_en = _cell(row, "name_en")
-        description_it = _cell(row, "description_it")
-        description_en = _cell(row, "description_en")
-        size = _cell(row, "size").upper()
-        color_raw = _cell(row, "color")
-        price_raw = _cell(row, "price")
-        stock_raw = _cell(row, "stock")
-        variant_sku = _cell(row, "variant_sku")
-        category_slugs_raw = _cell(row, "category_slugs")
-        sale_price_raw = _cell(row, "sale_price")
+        product_sku = _cell(row, "sku_prodotto")
+        brand_raw = _cell(row, "marca")
+        name_it = _cell(row, "nome_it")
+        name_en = _cell(row, "nome_en")
+        description_it = _cell(row, "descrizione_it")
+        description_en = _cell(row, "descrizione_en")
+        size = _cell(row, "taglia").upper()
+        color_raw = _cell(row, "colore")
+        price_raw = _cell(row, "prezzo")
+        stock_raw = _cell(row, "scorte")
+        variant_sku = _cell(row, "sku_variante")
+        category_slugs_raw = _cell(row, "slug_categorie")
+        sale_price_raw = _cell(row, "prezzo_scontato")
 
         brand = None
         if brand_raw:
             brand = brands.get(brand_raw.lower())
             if not brand:
-                hint = f" Allowed brands: {', '.join(brand_names)}." if brand_names else " No active brands in catalog."
+                hint = f" Marche ammesse: {', '.join(brand_names)}." if brand_names else " Nessuna marca attiva nel catalogo."
                 errors.append({
                     "row": row_num,
-                    "field": "brand",
-                    "message": f"Brand '{brand_raw}' not found.{hint}",
+                    "field": "marca",
+                    "message": f"Marca '{brand_raw}' non trovata.{hint}",
                 })
 
         color = None
         if color_raw:
             color = colors.get(color_raw.lower())
             if not color:
-                hint = f" Allowed colors: {', '.join(color_names)}." if color_names else " No active colors in catalog."
+                hint = f" Colori ammessi: {', '.join(color_names)}." if color_names else " Nessun colore attivo nel catalogo."
                 errors.append({
                     "row": row_num,
-                    "field": "color",
-                    "message": f"Color '{color_raw}' not found.{hint}",
+                    "field": "colore",
+                    "message": f"Colore '{color_raw}' non trovato.{hint}",
                 })
 
         if size and size not in allowed_sizes:
             errors.append({
                 "row": row_num,
-                "field": "size",
-                "message": f"Size '{_cell(row, 'size')}' is invalid. Allowed sizes: {size_list}.",
+                "field": "taglia",
+                "message": f"Taglia '{_cell(row, 'taglia')}' non valida. Taglie ammesse: {size_list}.",
             })
 
-        price = _parse_price(price_raw, "price", row_num, errors) if price_raw else None
+        price = _parse_price(price_raw, "prezzo", row_num, errors) if price_raw else None
         stock = _parse_stock(stock_raw, row_num, errors) if stock_raw != "" else None
 
         sale_price = None
         if sale_price_raw:
-            sale_price = _parse_price(sale_price_raw, "sale_price", row_num, errors)
+            sale_price = _parse_price(sale_price_raw, "prezzo_scontato", row_num, errors)
+
+        method_values: dict[str, bool | Decimal] = {}
+        method_parse_ok = True
+        for enabled_csv, fee_csv, enabled_attr, fee_attr in METHOD_CSV_FIELDS:
+            enabled = _parse_bool(_cell(row, enabled_csv), enabled_csv, row_num, errors, default=False)
+            if enabled is None:
+                method_parse_ok = False
+                enabled = False
+            fee = Decimal("0.00")
+            fee_raw = _cell(row, fee_csv)
+            if fee_raw:
+                parsed_fee = _parse_price(fee_raw, fee_csv, row_num, errors)
+                if parsed_fee is None:
+                    method_parse_ok = False
+                else:
+                    fee = parsed_fee
+            method_values[enabled_attr] = bool(enabled)
+            method_values[fee_attr] = fee
+
+        allows_customization = any(
+            method_values[enabled_attr]
+            for _, _, enabled_attr, _ in METHOD_CSV_FIELDS
+        )
+        enabled_fees = [
+            method_values[fee_attr]
+            for _, _, enabled_attr, fee_attr in METHOD_CSV_FIELDS
+            if method_values[enabled_attr]
+        ]
+        customization_fee = min(enabled_fees) if enabled_fees else Decimal("0.00")
 
         category_ids: list[int] = []
         if category_slugs_raw:
@@ -289,8 +408,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                 if not cat:
                     errors.append({
                         "row": row_num,
-                        "field": "category_slugs",
-                        "message": f"Category slug '{slug}' not found.",
+                        "field": "slug_categorie",
+                        "message": f"Slug categoria '{slug}' non trovato.",
                     })
                 else:
                     category_ids.append(cat.id)
@@ -298,8 +417,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         if product_sku and product_sku.lower() in existing_product_skus:
             errors.append({
                 "row": row_num,
-                "field": "product_sku",
-                "message": f"Product SKU '{product_sku}' already exists.",
+                "field": "sku_prodotto",
+                "message": f"Lo SKU prodotto '{product_sku}' esiste già.",
             })
 
         if not variant_sku and product_sku and size and color:
@@ -310,16 +429,16 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             if key in existing_variant_skus:
                 errors.append({
                     "row": row_num,
-                    "field": "variant_sku",
-                    "message": f"Variant SKU '{variant_sku}' already exists.",
+                    "field": "sku_variante",
+                    "message": f"Lo SKU variante '{variant_sku}' esiste già.",
                 })
             if key in seen_variant_skus:
                 errors.append({
                     "row": row_num,
-                    "field": "variant_sku",
+                    "field": "sku_variante",
                     "message": (
-                        f"Variant SKU '{variant_sku}' is duplicated in the CSV "
-                        f"(also on row {seen_variant_skus[key]})."
+                        f"Lo SKU variante '{variant_sku}' è duplicato nel CSV "
+                        f"(anche alla riga {seen_variant_skus[key]})."
                     ),
                 })
             else:
@@ -331,10 +450,10 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             if prev:
                 errors.append({
                     "row": row_num,
-                    "field": "size",
+                    "field": "taglia",
                     "message": (
-                        f"Size '{size}' + color '{color or color_raw}' is duplicated "
-                        f"for product '{product_sku}' (also on row {prev})."
+                        f"Taglia '{size}' + colore '{color or color_raw}' è duplicata "
+                        f"per il prodotto '{product_sku}' (anche alla riga {prev})."
                     ),
                 })
             else:
@@ -343,36 +462,58 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         if product_sku:
             meta_key = product_sku.lower()
             current = {
-                "brand": brand or brand_raw,
-                "name_it": name_it,
-                "name_en": name_en,
-                "description_it": description_it,
-                "description_en": description_en,
+                "marca": brand or brand_raw,
+                "nome_it": name_it,
+                "nome_en": name_en,
+                "descrizione_it": description_it,
+                "descrizione_en": description_en,
                 "category_ids": category_ids,
+                "allows_customization": allows_customization,
+                "customization_fee": customization_fee,
+                **method_values,
             }
             if meta_key in product_meta:
                 prev = product_meta[meta_key]
-                for field in ("brand", "name_it", "name_en", "description_it", "description_en"):
+                for field in ("marca", "nome_it", "nome_en", "descrizione_it", "descrizione_en"):
                     if prev.get(field) and current.get(field) and prev[field] != current[field]:
                         errors.append({
                             "row": row_num,
                             "field": field,
                             "message": (
-                                f"{field} for product '{product_sku}' does not match an earlier row "
+                                f"{field} per il prodotto '{product_sku}' non corrisponde a una riga precedente "
                                 f"('{prev[field]}' vs '{current[field]}')."
                             ),
                         })
                 if prev.get("category_ids") and category_ids and set(prev["category_ids"]) != set(category_ids):
                     errors.append({
                         "row": row_num,
-                        "field": "category_slugs",
-                        "message": f"category_slugs for product '{product_sku}' does not match an earlier row.",
+                        "field": "slug_categorie",
+                        "message": f"slug_categorie per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
                     })
+                for enabled_csv, fee_csv, enabled_attr, fee_attr in METHOD_CSV_FIELDS:
+                    if prev.get(enabled_attr) != current.get(enabled_attr):
+                        errors.append({
+                            "row": row_num,
+                            "field": enabled_csv,
+                            "message": f"{enabled_csv} per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
+                        })
+                    if prev.get(fee_attr) != current.get(fee_attr):
+                        errors.append({
+                            "row": row_num,
+                            "field": fee_csv,
+                            "message": f"{fee_csv} per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
+                        })
             else:
                 product_meta[meta_key] = current
 
-        # Skip collecting row if critical fields failed hard — still collect when only soft? collect always if minimal ok
-        if not product_sku or price is None or stock is None or not size or not (color or color_raw):
+        if (
+            not product_sku
+            or price is None
+            or stock is None
+            or not size
+            or not (color or color_raw)
+            or not method_parse_ok
+        ):
             continue
 
         parsed_rows.append({
@@ -390,6 +531,9 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "sale_price": sale_price,
             "variant_sku": variant_sku,
             "category_ids": category_ids,
+            "allows_customization": allows_customization,
+            "customization_fee": customization_fee,
+            **method_values,
         })
 
     if errors:
@@ -397,7 +541,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         return [], errors
 
     if not parsed_rows:
-        return [], [{"row": 0, "field": "file", "message": "CSV has no data rows."}]
+        return [], [{"row": 0, "field": "file", "message": "Il CSV non contiene righe di dati."}]
 
     return parsed_rows, []
 
@@ -425,6 +569,16 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
                 brand=first["brand"],
                 slug=slug,
                 is_active=True,
+                allows_customization=bool(first.get("allows_customization")),
+                customization_fee=first.get("customization_fee") or Decimal("0.00"),
+                embroidery_chest_enabled=bool(first.get("embroidery_chest_enabled")),
+                embroidery_chest_fee=first.get("embroidery_chest_fee") or Decimal("0.00"),
+                embroidery_large_enabled=bool(first.get("embroidery_large_enabled")),
+                embroidery_large_fee=first.get("embroidery_large_fee") or Decimal("0.00"),
+                dtf_chest_enabled=bool(first.get("dtf_chest_enabled")),
+                dtf_chest_fee=first.get("dtf_chest_fee") or Decimal("0.00"),
+                dtf_large_enabled=bool(first.get("dtf_large_enabled")),
+                dtf_large_fee=first.get("dtf_large_fee") or Decimal("0.00"),
             )
             product.set_current_language("it")
             product.name = first["name_it"]

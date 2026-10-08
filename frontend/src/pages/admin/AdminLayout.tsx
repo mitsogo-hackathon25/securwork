@@ -18,15 +18,15 @@ export default function AdminLayout() {
           <span>SecurWork Admin</span>
         </Link>
         <nav className="admin-nav">
-          <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Products</NavLink>
-          <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Orders</NavLink>
-          <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Coupons</NavLink>
-          <NavLink to="/admin/catalog" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Catalog</NavLink>
+          <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Prodotti</NavLink>
+          <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Ordini</NavLink>
+          <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Coupon</NavLink>
+          <NavLink to="/admin/catalog" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Catalogo</NavLink>
           <a href="/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
-            View storefront
+            Vai al negozio
           </a>
         </nav>
-        <button type="button" className="admin-logout" onClick={handleLogout}>Logout</button>
+        <button type="button" className="admin-logout" onClick={handleLogout}>Esci</button>
       </aside>
       <main className="admin-main">
         <Outlet />

@@ -17,7 +17,7 @@ export default function AdminRoute() {
   }, [])
 
   if (status === 'loading') {
-    return <div className="admin-loading">Loading admin panel…</div>
+    return <div className="admin-loading">Caricamento pannello admin…</div>
   }
 
   if (status === 'denied') {

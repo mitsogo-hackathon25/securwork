@@ -5,6 +5,11 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from store.customization import (
+    CUSTOMIZATION_METHOD_CODES,
+    product_has_customization,
+    product_method_enabled,
+)
 from store.models import ProductVariant
 
 from .models import LineItemCustomization
@@ -20,6 +25,7 @@ class CustomizationCreateView(APIView):
         logo = request.FILES.get("logo")
         preview = request.FILES.get("preview")
         variant_id = request.data.get("variant_id")
+        method = (request.data.get("method") or "").strip()
         raw_design = request.data.get("design_data", "{}")
 
         if not logo:
@@ -30,8 +36,19 @@ class CustomizationCreateView(APIView):
         except (ProductVariant.DoesNotExist, TypeError, ValueError):
             return Response({"detail": "Invalid variant."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not variant.product.allows_customization:
+        product = variant.product
+        if not product_has_customization(product):
             return Response({"detail": "This product does not support customization."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not method:
+            method = LineItemCustomization.Method.EMBROIDERY_CHEST
+        if method not in CUSTOMIZATION_METHOD_CODES:
+            return Response({"detail": "Invalid customization method."}, status=status.HTTP_400_BAD_REQUEST)
+        if not product_method_enabled(product, method):
+            return Response(
+                {"detail": "Selected customization method is not available for this product."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             design_data = json.loads(raw_design) if isinstance(raw_design, str) else raw_design
@@ -45,6 +62,7 @@ class CustomizationCreateView(APIView):
         customization = LineItemCustomization.objects.create(
             logo=logo,
             preview=preview,
+            method=method,
             design_data=design_data,
         )
         return Response(

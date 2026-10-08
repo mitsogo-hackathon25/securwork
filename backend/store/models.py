@@ -68,7 +68,35 @@ class Product(TranslatableModel):
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Extra charge per customized item (EUR).",
+        help_text="Legacy/minimum customization fee (EUR). Prefer per-method fees.",
+    )
+    embroidery_chest_enabled = models.BooleanField(
+        default=False,
+        help_text="Embroidery customization — heart/chest side.",
+    )
+    embroidery_chest_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+    )
+    embroidery_large_enabled = models.BooleanField(
+        default=False,
+        help_text="Large embroidery customization.",
+    )
+    embroidery_large_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+    )
+    dtf_chest_enabled = models.BooleanField(
+        default=False,
+        help_text="DTF customization — heart/chest side.",
+    )
+    dtf_chest_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+    )
+    dtf_large_enabled = models.BooleanField(
+        default=False,
+        help_text="Large DTF customization (A4 size).",
+    )
+    dtf_large_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

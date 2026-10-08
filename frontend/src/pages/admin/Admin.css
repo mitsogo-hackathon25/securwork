@@ -390,6 +390,29 @@
   font-weight: 500;
 }
 
+.admin-method-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 1rem 0;
+}
+
+.admin-method-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 1rem;
+  align-items: end;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fafafa;
+}
+
+.admin-method-row .admin-checkbox-inline {
+  margin: 0;
+  align-items: center;
+}
+
 .admin-category-grid {
   display: flex;
   flex-wrap: wrap;

@@ -94,7 +94,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not save category.')
+        : 'Impossibile salvare la categoria.')
     },
   })
 
@@ -109,7 +109,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not save brand.')
+        : 'Impossibile salvare la marca.')
     },
   })
 
@@ -119,7 +119,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not delete category.')
+        : 'Impossibile eliminare la categoria.')
     },
   })
 
@@ -129,7 +129,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not delete brand.')
+        : 'Impossibile eliminare la marca.')
     },
   })
 
@@ -144,7 +144,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not save color.')
+        : 'Impossibile salvare il colore.')
     },
   })
 
@@ -154,7 +154,7 @@ export default function AdminCatalogPage() {
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not delete color.')
+        : 'Impossibile eliminare il colore.')
     },
   })
 
@@ -180,8 +180,8 @@ export default function AdminCatalogPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Catalog</h1>
-          <p>Manage categories, brands, and colors used in shop filters and product variants.</p>
+          <h1>Catalogo</h1>
+          <p>Gestisci categorie, marche e colori usati nei filtri del negozio e nelle varianti prodotto.</p>
         </div>
       </div>
 
@@ -193,30 +193,30 @@ export default function AdminCatalogPage() {
           className={catalogTab === 'categories' ? 'active' : ''}
           onClick={() => switchTab('categories')}
         >
-          Categories
+          Categorie
         </button>
         <button
           type="button"
           className={catalogTab === 'brands' ? 'active' : ''}
           onClick={() => switchTab('brands')}
         >
-          Brands
+          Marche
         </button>
         <button
           type="button"
           className={catalogTab === 'colors' ? 'active' : ''}
           onClick={() => switchTab('colors')}
         >
-          Colors
+          Colori
         </button>
       </div>
 
       {catalogTab === 'categories' && (
       <section className="admin-card admin-catalog-section">
         <div className="admin-section-header">
-          <h2>Categories</h2>
+          <h2>Categorie</h2>
           <button type="button" className="btn btn-secondary" onClick={() => setCategoryForm(emptyCategory())}>
-            Add category
+            Aggiungi categoria
           </button>
         </div>
 
@@ -224,7 +224,7 @@ export default function AdminCatalogPage() {
           <form className="admin-inline-form" onSubmit={handleCategorySubmit}>
             <div className="admin-form-grid">
               <label>
-                Name (IT) *
+                Nome (IT) *
                 <input
                   value={categoryForm.name_it}
                   onChange={(e) => setCategoryForm({ ...categoryForm, name_it: e.target.value })}
@@ -232,14 +232,14 @@ export default function AdminCatalogPage() {
                 />
               </label>
               <label>
-                Name (EN)
+                Nome (EN)
                 <input
                   value={categoryForm.name_en}
                   onChange={(e) => setCategoryForm({ ...categoryForm, name_en: e.target.value })}
                 />
               </label>
               <label>
-                Section
+                Sezione
                 <select
                   value={categoryForm.section}
                   onChange={(e) => setCategoryForm({
@@ -247,31 +247,31 @@ export default function AdminCatalogPage() {
                     section: e.target.value as AdminCategory['section'],
                   })}
                 >
-                  <option value="workwear">Workwear</option>
-                  <option value="professional">Professional</option>
+                  <option value="workwear">Abbigliamento da lavoro</option>
+                  <option value="professional">Professionale</option>
                 </select>
               </label>
             </div>
             <div className="admin-inline-form-actions">
               <button type="submit" className="btn btn-primary" disabled={saveCategory.isPending}>
-                {categoryForm.id ? 'Save category' : 'Create category'}
+                {categoryForm.id ? 'Salva categoria' : 'Crea categoria'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setCategoryForm(null)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setCategoryForm(null)}>Annulla</button>
             </div>
           </form>
         )}
 
         {loadingCategories ? (
-          <p>Loading categories…</p>
+          <p>Caricamento categorie…</p>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Name (IT)</th>
-                  <th>Section</th>
-                  <th>Parent</th>
-                  <th>Products</th>
+                  <th>Nome (IT)</th>
+                  <th>Sezione</th>
+                  <th>Genitore</th>
+                  <th>Prodotti</th>
                   <th />
                 </tr>
               </thead>
@@ -279,20 +279,20 @@ export default function AdminCatalogPage() {
                 {categories.map((cat) => (
                   <tr key={cat.id}>
                     <td><strong>{cat.name_it}</strong><br /><span className="admin-muted">{cat.slug}</span></td>
-                    <td>{cat.section === 'workwear' ? 'Workwear' : 'Professional'}</td>
+                    <td>{cat.section === 'workwear' ? 'Abbigliamento da lavoro' : 'Professionale'}</td>
                     <td>{cat.parent_name || '—'}</td>
                     <td>{cat.product_count ?? 0}</td>
                     <td className="admin-actions">
-                      <button type="button" className="admin-link" onClick={() => setCategoryForm(cat)}>Edit</button>
+                      <button type="button" className="admin-link" onClick={() => setCategoryForm(cat)}>Modifica</button>
                       <button
                         type="button"
                         className="admin-link admin-link-danger"
                         onClick={() => {
-                          if (!cat.id || !window.confirm(`Delete category "${cat.name_it}"?`)) return
+                          if (!cat.id || !window.confirm(`Eliminare la categoria "${cat.name_it}"?`)) return
                           removeCategory.mutate(cat.id)
                         }}
                       >
-                        Delete
+                        Elimina
                       </button>
                     </td>
                   </tr>
@@ -307,9 +307,9 @@ export default function AdminCatalogPage() {
       {catalogTab === 'brands' && (
       <section className="admin-card admin-catalog-section">
         <div className="admin-section-header">
-          <h2>Brands</h2>
+          <h2>Marche</h2>
           <button type="button" className="btn btn-secondary" onClick={() => setBrandForm(emptyBrand())}>
-            Add brand
+            Aggiungi marca
           </button>
         </div>
 
@@ -317,7 +317,7 @@ export default function AdminCatalogPage() {
           <form className="admin-inline-form" onSubmit={handleBrandSubmit}>
             <div className="admin-form-grid">
               <label>
-                Brand name *
+                Nome marca *
                 <input
                   value={brandForm.name}
                   onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
@@ -327,43 +327,43 @@ export default function AdminCatalogPage() {
             </div>
             <div className="admin-inline-form-actions">
               <button type="submit" className="btn btn-primary" disabled={saveBrand.isPending}>
-                {brandForm.id ? 'Save brand' : 'Create brand'}
+                {brandForm.id ? 'Salva marca' : 'Crea marca'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setBrandForm(null)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setBrandForm(null)}>Annulla</button>
             </div>
           </form>
         )}
 
         {loadingBrands ? (
-          <p>Loading brands…</p>
+          <p>Caricamento marche…</p>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Products</th>
+                  <th>Nome</th>
+                  <th>Prodotti</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {brands.length === 0 ? (
-                  <tr><td colSpan={3} className="admin-empty">No brands yet.</td></tr>
+                  <tr><td colSpan={3} className="admin-empty">Nessuna marca ancora.</td></tr>
                 ) : brands.map((brand) => (
                   <tr key={brand.id}>
                     <td><strong>{brand.name}</strong></td>
                     <td>{brand.product_count ?? 0}</td>
                     <td className="admin-actions">
-                      <button type="button" className="admin-link" onClick={() => setBrandForm(brand)}>Edit</button>
+                      <button type="button" className="admin-link" onClick={() => setBrandForm(brand)}>Modifica</button>
                       <button
                         type="button"
                         className="admin-link admin-link-danger"
                         onClick={() => {
-                          if (!brand.id || !window.confirm(`Delete brand "${brand.name}"?`)) return
+                          if (!brand.id || !window.confirm(`Eliminare la marca "${brand.name}"?`)) return
                           removeBrand.mutate(brand.id)
                         }}
                       >
-                        Delete
+                        Elimina
                       </button>
                     </td>
                   </tr>
@@ -378,9 +378,9 @@ export default function AdminCatalogPage() {
       {catalogTab === 'colors' && (
       <section className="admin-card admin-catalog-section">
         <div className="admin-section-header">
-          <h2>Colors</h2>
+          <h2>Colori</h2>
           <button type="button" className="btn btn-secondary" onClick={() => setColorForm(emptyColor())}>
-            Add color
+            Aggiungi colore
           </button>
         </div>
 
@@ -388,7 +388,7 @@ export default function AdminCatalogPage() {
           <form className="admin-inline-form" onSubmit={handleColorSubmit}>
             <div className="admin-form-grid">
               <label>
-                  Color name *
+                  Nome colore *
                 <input
                   value={colorForm.name}
                   onChange={(e) => setColorForm({ ...colorForm, name: e.target.value })}
@@ -398,43 +398,43 @@ export default function AdminCatalogPage() {
             </div>
             <div className="admin-inline-form-actions">
               <button type="submit" className="btn btn-primary" disabled={saveColor.isPending}>
-                {colorForm.id ? 'Save color' : 'Create color'}
+                {colorForm.id ? 'Salva colore' : 'Crea colore'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setColorForm(null)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setColorForm(null)}>Annulla</button>
             </div>
           </form>
         )}
 
         {loadingColors ? (
-          <p>Loading colors…</p>
+          <p>Caricamento colori…</p>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Variants</th>
+                  <th>Nome</th>
+                  <th>Varianti</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {colors.length === 0 ? (
-                  <tr><td colSpan={3} className="admin-empty">No colors yet.</td></tr>
+                  <tr><td colSpan={3} className="admin-empty">Nessun colore ancora.</td></tr>
                 ) : colors.map((color) => (
                   <tr key={color.id}>
                     <td><strong>{color.name}</strong></td>
                     <td>{color.variant_count ?? 0}</td>
                     <td className="admin-actions">
-                      <button type="button" className="admin-link" onClick={() => setColorForm(color)}>Edit</button>
+                      <button type="button" className="admin-link" onClick={() => setColorForm(color)}>Modifica</button>
                       <button
                         type="button"
                         className="admin-link admin-link-danger"
                         onClick={() => {
-                          if (!color.id || !window.confirm(`Delete color "${color.name}"?`)) return
+                          if (!color.id || !window.confirm(`Eliminare il colore "${color.name}"?`)) return
                           removeColor.mutate(color.id)
                         }}
                       >
-                        Delete
+                        Elimina
                       </button>
                     </td>
                   </tr>

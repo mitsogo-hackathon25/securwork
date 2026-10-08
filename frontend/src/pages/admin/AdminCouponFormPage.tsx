@@ -31,7 +31,7 @@ const fromLocalDatetime = (value: string) => (value ? new Date(value).toISOStrin
 
 export default function AdminCouponFormPage() {
   const { id } = useParams()
-  const isNew = id === 'new'
+  const isNew = !id || id === 'new'
   const couponId = isNew ? null : Number(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -81,21 +81,21 @@ export default function AdminCouponFormPage() {
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Could not save coupon.'
+        : 'Impossibile salvare il coupon.'
       setError(message)
     } finally {
       setSaving(false)
     }
   }
 
-  if (!isNew && isLoading) return <p>Loading coupon…</p>
+  if (!isNew && isLoading) return <p>Caricamento coupon…</p>
 
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <Link to="/admin/coupons" className="admin-back">← Back to coupons</Link>
-          <h1>{isNew ? 'Add coupon' : 'Edit coupon'}</h1>
+          <Link to="/admin/coupons" className="admin-back">← Torna ai coupon</Link>
+          <h1>{isNew ? 'Aggiungi coupon' : 'Modifica coupon'}</h1>
         </div>
       </div>
 
@@ -103,14 +103,14 @@ export default function AdminCouponFormPage() {
 
       <form className="admin-form" onSubmit={handleSubmit}>
         <section className="admin-card">
-          <h2>Coupon details</h2>
+          <h2>Dettagli coupon</h2>
           <div className="admin-form-grid">
             <label>
-              Code *
+              Codice *
               <input
                 value={form.code}
                 onChange={(e) => updateField('code', e.target.value.toUpperCase())}
-                placeholder="e.g. SUMMER20"
+                placeholder="es. ESTATE20"
                 required
               />
             </label>
@@ -120,33 +120,33 @@ export default function AdminCouponFormPage() {
                 checked={form.is_active}
                 onChange={(e) => updateField('is_active', e.target.checked)}
               />
-              <span>Active (customers can use this code)</span>
+              <span>Attivo (i clienti possono usare questo codice)</span>
             </label>
           </div>
         </section>
 
         <section className="admin-card">
-          <h2>Discount</h2>
+          <h2>Sconto</h2>
           <div className="admin-tabs">
             <button
               type="button"
               className={discountType === 'percent' ? 'active' : ''}
               onClick={() => setDiscountType('percent')}
             >
-              Percentage
+              Percentuale
             </button>
             <button
               type="button"
               className={discountType === 'amount' ? 'active' : ''}
               onClick={() => setDiscountType('amount')}
             >
-              Fixed amount
+              Importo fisso
             </button>
           </div>
           <div className="admin-form-grid">
             {discountType === 'percent' ? (
               <label>
-                Discount (%)
+                Sconto (%)
                 <input
                   type="number"
                   step="0.01"
@@ -159,7 +159,7 @@ export default function AdminCouponFormPage() {
               </label>
             ) : (
               <label>
-                Discount (EUR)
+                Sconto (EUR)
                 <input
                   type="number"
                   step="0.01"
@@ -171,7 +171,7 @@ export default function AdminCouponFormPage() {
               </label>
             )}
             <label>
-              Minimum order (EUR)
+              Ordine minimo (EUR)
               <input
                 type="number"
                 step="0.01"
@@ -184,25 +184,25 @@ export default function AdminCouponFormPage() {
         </section>
 
         <section className="admin-card">
-          <h2>Usage limit</h2>
+          <h2>Limite utilizzi</h2>
           <p className="admin-hint">
-            Set how many times customers can use this coupon across all orders.
-            Leave empty for unlimited uses.
+            Imposta quante volte i clienti possono usare questo coupon su tutti gli ordini.
+            Lascia vuoto per utilizzi illimitati.
           </p>
           <div className="admin-form-grid">
             <label>
-              Max uses
+              Utilizzi massimi
               <input
                 type="number"
                 min="1"
                 value={form.max_uses ?? ''}
                 onChange={(e) => updateField('max_uses', e.target.value ? Number(e.target.value) : null)}
-                placeholder="Unlimited"
+                placeholder="Illimitati"
               />
             </label>
             {!isNew && (
               <label>
-                Times used (read-only)
+                Volte usato (sola lettura)
                 <input value={form.used_count ?? 0} readOnly disabled />
               </label>
             )}
@@ -210,11 +210,11 @@ export default function AdminCouponFormPage() {
         </section>
 
         <section className="admin-card">
-          <h2>Validity period</h2>
-          <p className="admin-hint">Optional. Leave blank for no date restrictions.</p>
+          <h2>Periodo di validità</h2>
+          <p className="admin-hint">Opzionale. Lascia vuoto per nessuna restrizione di data.</p>
           <div className="admin-form-grid">
             <label>
-              Valid from
+              Valido dal
               <input
                 type="datetime-local"
                 value={toLocalDatetime(form.valid_from)}
@@ -222,7 +222,7 @@ export default function AdminCouponFormPage() {
               />
             </label>
             <label>
-              Valid until
+              Valido fino al
               <input
                 type="datetime-local"
                 value={toLocalDatetime(form.valid_until)}
@@ -234,7 +234,7 @@ export default function AdminCouponFormPage() {
 
         <div className="admin-form-actions">
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : isNew ? 'Create coupon' : 'Save changes'}
+            {saving ? 'Salvataggio…' : isNew ? 'Crea coupon' : 'Salva modifiche'}
           </button>
         </div>
       </form>

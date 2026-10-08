@@ -64,7 +64,13 @@ export default function CartPage() {
                         <div>
                           <strong>{item.product_name}</strong>
                           {item.customization && (
-                            <span className="cart-custom-badge">{t('customizer.customized')}</span>
+                            <span className="cart-custom-badge">
+                              {item.customization.method
+                                ? t(`customizer.methods.${item.customization.method}`, {
+                                    defaultValue: t('customizer.customized'),
+                                  })
+                                : t('customizer.customized')}
+                            </span>
                           )}
                           <br />
                           <small>{item.variant.sku} — {item.variant.size} {item.variant.color}</small>

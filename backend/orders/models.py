@@ -10,8 +10,20 @@ from store.models import ProductVariant
 class LineItemCustomization(models.Model):
     """Saved logo placement for a cart or order line."""
 
+    class Method(models.TextChoices):
+        EMBROIDERY_CHEST = "embroidery_chest", "Ricamo — lato cuore/petto"
+        EMBROIDERY_LARGE = "embroidery_large", "Ricamo grande"
+        DTF_CHEST = "dtf_chest", "DTF — lato cuore/petto"
+        DTF_LARGE = "dtf_large", "DTF grande (formato A4)"
+
     logo = models.ImageField(upload_to="customizations/logos/")
     preview = models.ImageField(upload_to="customizations/previews/", blank=True)
+    method = models.CharField(
+        max_length=32,
+        choices=Method.choices,
+        default=Method.EMBROIDERY_CHEST,
+        blank=True,
+    )
     design_data = models.JSONField(
         help_text="Normalized placement: view, x_pct, y_pct, width_pct, height_pct, rotation",
     )
@@ -74,9 +86,14 @@ class CartItem(models.Model):
 
     @property
     def unit_price(self) -> Decimal:
+        from store.customization import product_fee_for_method
+
         price = self.variant.effective_price
         if self.customization_id:
-            fee = self.variant.product.customization_fee or Decimal("0.00")
+            fee = product_fee_for_method(
+                self.variant.product,
+                getattr(self.customization, "method", None),
+            )
             price += fee
         return price
 

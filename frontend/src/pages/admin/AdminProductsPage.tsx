@@ -44,7 +44,7 @@ export default function AdminProductsPage() {
   const totalPages = data ? Math.ceil(data.count / 12) : 1
 
   const handleDelete = async (id: number, name: string) => {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
+    if (!window.confirm(`Eliminare "${name}"? L'operazione non può essere annullata.`)) return
     await deleteMutation.mutateAsync(id)
   }
 
@@ -55,7 +55,7 @@ export default function AdminProductsPage() {
     try {
       await downloadProductCsvTemplate()
     } catch (err: unknown) {
-      setImportDetail(formatApiError(err, 'Could not download CSV template.'))
+      setImportDetail(formatApiError(err, 'Impossibile scaricare il modello CSV.'))
     }
   }
 
@@ -67,7 +67,7 @@ export default function AdminProductsPage() {
     try {
       await exportProductsCsv()
     } catch (err: unknown) {
-      setImportDetail(formatApiError(err, 'Could not export products CSV.'))
+      setImportDetail(formatApiError(err, 'Impossibile esportare i prodotti in CSV.'))
     } finally {
       setExporting(false)
     }
@@ -91,10 +91,10 @@ export default function AdminProductsPage() {
         ? (err as { response?: { data?: { detail?: string; errors?: CsvImportError[] } } }).response?.data
         : undefined
       if (responseData?.errors?.length) {
-        setImportDetail(responseData.detail || 'CSV validation failed.')
+        setImportDetail(responseData.detail || 'Validazione CSV non riuscita.')
         setImportErrors(responseData.errors)
       } else {
-        setImportDetail(formatApiError(err, 'Could not import CSV.'))
+        setImportDetail(formatApiError(err, 'Impossibile importare il CSV.'))
       }
     } finally {
       setImporting(false)
@@ -105,12 +105,12 @@ export default function AdminProductsPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Products</h1>
-          <p>Manage catalog, inventory, pricing, and descriptions.</p>
+          <h1>Prodotti</h1>
+          <p>Gestisci catalogo, magazzino, prezzi e descrizioni.</p>
         </div>
         <div className="admin-header-actions">
           <button type="button" className="btn btn-secondary" onClick={handleDownloadTemplate}>
-            Download CSV template
+            Scarica modello CSV
           </button>
           <button
             type="button"
@@ -118,7 +118,7 @@ export default function AdminProductsPage() {
             disabled={exporting}
             onClick={handleExportCsv}
           >
-            {exporting ? 'Exporting…' : 'Export CSV'}
+            {exporting ? 'Esportazione…' : 'Esporta CSV'}
           </button>
           <button
             type="button"
@@ -126,7 +126,7 @@ export default function AdminProductsPage() {
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
-            {importing ? 'Importing…' : 'Import CSV'}
+            {importing ? 'Importazione…' : 'Importa CSV'}
           </button>
           <input
             ref={fileInputRef}
@@ -135,16 +135,19 @@ export default function AdminProductsPage() {
             className="admin-file-input"
             onChange={handleImportFile}
           />
-          <Link to="/admin/products/new" className="btn btn-primary">Add product</Link>
+          <Link to="/admin/products/new" className="btn btn-primary">Aggiungi prodotto</Link>
         </div>
       </div>
 
       <section className="admin-card admin-import-panel">
-        <h2>Bulk import / export</h2>
+        <h2>Import / export massivo</h2>
         <p className="admin-hint">
-          Export downloads all current products (one row per size/color). Download the template to start
-          fresh, or edit an export and re-import new SKUs only. Brands and colors must match Catalog
-          exactly. Allowed sizes: XS, S, M, L, XL, XXL, XXXL, 4XL. Images are not included in CSV.
+          L&apos;export scarica tutti i prodotti attuali (una riga per taglia/colore). Scarica il modello
+          per iniziare da zero, oppure modifica un export e reimporta solo nuovi SKU. Marche e colori
+          devono corrispondere esattamente al Catalogo. Taglie ammesse: XS, S, M, L, XL, XXL, XXXL, 4XL.
+          Per la personalizzazione logo usa: ricamo_petto, costo_ricamo_petto, ricamo_grande,
+          costo_ricamo_grande, dtf_petto, costo_dtf_petto, dtf_grande, costo_dtf_grande (si/no + prezzo).
+          Le immagini prodotto non sono incluse nel CSV.
         </p>
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
         {importDetail && !importSuccess && (
@@ -152,13 +155,13 @@ export default function AdminProductsPage() {
         )}
         {importErrors.length > 0 && (
           <div className="admin-import-errors">
-            <strong>{importErrors.length} error{importErrors.length === 1 ? '' : 's'} found</strong>
+            <strong>{importErrors.length} error{importErrors.length === 1 ? 'e' : 'i'} trovat{importErrors.length === 1 ? 'o' : 'i'}</strong>
             <ul>
               {importErrors.map((error, index) => (
                 <li key={`${error.row}-${error.field}-${index}`}>
                   {error.row > 0 ? (
                     <>
-                      Row {error.row}
+                      Riga {error.row}
                       {error.field ? ` · ${error.field}` : ''}: {error.message}
                     </>
                   ) : (
@@ -174,37 +177,37 @@ export default function AdminProductsPage() {
       <div className="admin-toolbar">
         <input
           type="search"
-          placeholder="Search by name, SKU, or slug…"
+          placeholder="Cerca per nome, SKU o slug…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         />
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}>
-          <option value="all">All statuses</option>
-          <option value="active">Active only</option>
-          <option value="inactive">Inactive only</option>
+          <option value="all">Tutti gli stati</option>
+          <option value="active">Solo attivi</option>
+          <option value="inactive">Solo inattivi</option>
         </select>
       </div>
 
       {isLoading ? (
-        <p>Loading products…</p>
+        <p>Caricamento prodotti…</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Product</th>
+                <th>Prodotto</th>
                 <th>SKU</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Status</th>
-                <th>Flags</th>
+                <th>Prezzo</th>
+                <th>Scorte</th>
+                <th>Stato</th>
+                <th>Flag</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="admin-empty">No products found.</td>
+                  <td colSpan={7} className="admin-empty">Nessun prodotto trovato.</td>
                 </tr>
               ) : products.map((product) => (
                 <tr key={product.id}>
@@ -230,24 +233,24 @@ export default function AdminProductsPage() {
                   </td>
                   <td>
                     <span className={`admin-badge ${product.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                      {product.is_active ? 'Active' : 'Inactive'}
+                      {product.is_active ? 'Attivo' : 'Inattivo'}
                     </span>
                   </td>
                   <td>
                     <div className="admin-flags">
-                      {product.is_featured && <span className="admin-flag">Featured</span>}
-                      {product.is_new_arrival && <span className="admin-flag">New</span>}
+                      {product.is_featured && <span className="admin-flag">In evidenza</span>}
+                      {product.is_new_arrival && <span className="admin-flag">Nuovo</span>}
                       {product.is_bestseller && <span className="admin-flag">Best</span>}
                     </div>
                   </td>
                   <td className="admin-actions">
-                    <Link to={`/admin/products/${product.id}`} className="admin-link">Edit</Link>
+                    <Link to={`/admin/products/${product.id}`} className="admin-link">Modifica</Link>
                     <button
                       type="button"
                       className="admin-link admin-link-danger"
                       onClick={() => handleDelete(product.id, product.name)}
                     >
-                      Delete
+                      Elimina
                     </button>
                   </td>
                 </tr>
@@ -259,9 +262,9 @@ export default function AdminProductsPage() {
 
       {totalPages > 1 && (
         <div className="admin-pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-          <span>Page {page} of {totalPages}</span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Precedente</button>
+          <span>Pagina {page} di {totalPages}</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Successiva</button>
         </div>
       )}
     </div>

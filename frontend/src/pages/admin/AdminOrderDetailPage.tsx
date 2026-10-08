@@ -41,12 +41,12 @@ export default function AdminOrderDetailPage() {
     return new Date(value).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })
   }
 
-  if (isLoading) return <p>Loading order…</p>
+  if (isLoading) return <p>Caricamento ordine…</p>
   if (error || !order) {
     return (
       <div className="admin-page">
-        <p className="admin-alert admin-alert-error">Order not found.</p>
-        <Link to="/admin/orders" className="admin-back">← Back to orders</Link>
+        <p className="admin-alert admin-alert-error">Ordine non trovato.</p>
+        <Link to="/admin/orders" className="admin-back">← Torna agli ordini</Link>
       </div>
     )
   }
@@ -57,9 +57,9 @@ export default function AdminOrderDetailPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <Link to="/admin/orders" className="admin-back">← Back to orders</Link>
+          <Link to="/admin/orders" className="admin-back">← Torna agli ordini</Link>
           <h1>{order.order_number}</h1>
-          <p>Placed {formatDate(order.created_at)} · {order.language.toUpperCase()}</p>
+          <p>Effettuato il {formatDate(order.created_at)} · {order.language.toUpperCase()}</p>
         </div>
         <div className="admin-order-badges">
           <span className={`admin-badge ${orderStatusBadgeClass(order.status)}`}>
@@ -73,30 +73,30 @@ export default function AdminOrderDetailPage() {
 
       <div className="admin-order-grid">
         <div className="admin-card">
-          <h2>Update order</h2>
+          <h2>Aggiorna ordine</h2>
           <div className="admin-form-grid">
             <label>
-              Order status
+              Stato ordine
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="refunded">Refunded</option>
+                <option value="pending">In attesa</option>
+                <option value="processing">In elaborazione</option>
+                <option value="shipped">Spedito</option>
+                <option value="delivered">Consegnato</option>
+                <option value="cancelled">Annullato</option>
+                <option value="refunded">Rimborsato</option>
               </select>
             </label>
             <label>
-              Payment status
+              Stato pagamento
               <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="failed">Failed</option>
-                <option value="refunded">Refunded</option>
+                <option value="pending">In attesa</option>
+                <option value="paid">Pagato</option>
+                <option value="failed">Fallito</option>
+                <option value="refunded">Rimborsato</option>
               </select>
             </label>
             <label className="full-width">
-              Internal notes
+              Note interne
               <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </label>
           </div>
@@ -107,27 +107,27 @@ export default function AdminOrderDetailPage() {
               disabled={saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
-              {saveMutation.isPending ? 'Saving…' : 'Save changes'}
+              {saveMutation.isPending ? 'Salvataggio…' : 'Salva modifiche'}
             </button>
-            {saveMutation.isSuccess && <span className="admin-hint">Saved.</span>}
-            {saveMutation.isError && <span className="admin-hint" style={{ color: '#b91c1c' }}>Save failed.</span>}
+            {saveMutation.isSuccess && <span className="admin-hint">Salvato.</span>}
+            {saveMutation.isError && <span className="admin-hint" style={{ color: '#b91c1c' }}>Salvataggio non riuscito.</span>}
           </div>
         </div>
 
         <div className="admin-card">
-          <h2>Customer</h2>
+          <h2>Cliente</h2>
           <dl className="admin-detail-list">
             <dt>Email</dt><dd>{order.email}</dd>
-            <dt>Phone</dt><dd>{order.phone || '—'}</dd>
+            <dt>Telefono</dt><dd>{order.phone || '—'}</dd>
           </dl>
         </div>
 
         <div className="admin-card">
-          <h2>Payment</h2>
+          <h2>Pagamento</h2>
           <dl className="admin-detail-list">
-            <dt>Method</dt><dd>{formatPaymentMethod(order.payment_method)}</dd>
-            <dt>Status</dt><dd>{formatOrderStatus(order.payment_status)}</dd>
-            <dt>Paid at</dt><dd>{formatDate(order.paid_at)}</dd>
+            <dt>Metodo</dt><dd>{formatPaymentMethod(order.payment_method)}</dd>
+            <dt>Stato</dt><dd>{formatOrderStatus(order.payment_status)}</dd>
+            <dt>Pagato il</dt><dd>{formatDate(order.paid_at)}</dd>
             {order.coupon_code && (
               <>
                 <dt>Coupon</dt><dd>{order.coupon_code}</dd>
@@ -137,7 +137,7 @@ export default function AdminOrderDetailPage() {
         </div>
 
         <div className="admin-card">
-          <h2>Billing address</h2>
+          <h2>Indirizzo di fatturazione</h2>
           <p className="admin-address">
             <strong>{order.billing_first_name} {order.billing_last_name}</strong>
             {order.billing_company && <><br />{order.billing_company}</>}
@@ -148,7 +148,7 @@ export default function AdminOrderDetailPage() {
         </div>
 
         <div className="admin-card">
-          <h2>Shipping address</h2>
+          <h2>Indirizzo di spedizione</h2>
           <p className="admin-address">
             <strong>{order.shipping_first_name} {order.shipping_last_name}</strong>
             <br />{order.shipping_address}
@@ -158,18 +158,18 @@ export default function AdminOrderDetailPage() {
       </div>
 
       <div className="admin-card">
-        <h2>Line items</h2>
+        <h2>Articoli</h2>
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Product</th>
+                <th>Prodotto</th>
                 <th>SKU</th>
-                <th>Size / Color</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Total</th>
-                <th>Customization</th>
+                <th>Taglia / Colore</th>
+                <th>Qtà</th>
+                <th>Unitario</th>
+                <th>Totale</th>
+                <th>Personalizzazione</th>
               </tr>
             </thead>
             <tbody>
@@ -184,11 +184,21 @@ export default function AdminOrderDetailPage() {
                   <td>
                     {item.customization ? (
                       <div className="admin-customization">
+                        {item.customization.method && (
+                          <strong>
+                            {{
+                              embroidery_chest: 'Ricamo — lato cuore/petto',
+                              embroidery_large: 'Ricamo grande',
+                              dtf_chest: 'DTF — lato cuore/petto',
+                              dtf_large: 'DTF grande (formato A4)',
+                            }[item.customization.method] || item.customization.method}
+                          </strong>
+                        )}
                         {item.customization.preview && (
-                          <img src={item.customization.preview} alt="Design preview" />
+                          <img src={item.customization.preview} alt="Anteprima design" />
                         )}
                         {item.customization.logo && (
-                          <a href={item.customization.logo} target="_blank" rel="noreferrer">Download logo</a>
+                          <a href={item.customization.logo} target="_blank" rel="noreferrer">Scarica logo</a>
                         )}
                       </div>
                     ) : '—'}
@@ -200,15 +210,15 @@ export default function AdminOrderDetailPage() {
         </div>
 
         <div className="admin-order-totals">
-          <div><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
-          <div><span>Shipping</span><span>{formatPrice(order.shipping_cost)}</span></div>
+          <div><span>Subtotale</span><span>{formatPrice(order.subtotal)}</span></div>
+          <div><span>Spedizione</span><span>{formatPrice(order.shipping_cost)}</span></div>
           {parseFloat(order.tax_amount) > 0 && (
-            <div><span>Tax</span><span>{formatPrice(order.tax_amount)}</span></div>
+            <div><span>Tasse</span><span>{formatPrice(order.tax_amount)}</span></div>
           )}
           {parseFloat(order.discount_amount) > 0 && (
-            <div><span>Discount</span><span>-{formatPrice(order.discount_amount)}</span></div>
+            <div><span>Sconto</span><span>-{formatPrice(order.discount_amount)}</span></div>
           )}
-          <div className="admin-order-total-row"><span>Total</span><span>{formatPrice(order.total)}</span></div>
+          <div className="admin-order-total-row"><span>Totale</span><span>{formatPrice(order.total)}</span></div>
         </div>
       </div>
     </div>

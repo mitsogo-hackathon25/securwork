@@ -37,7 +37,13 @@ class ProductAdmin(TranslatableAdmin):
     fieldsets = (
         (None, {"fields": ("name", "slug", "sku", "brand", "categories")}),
         ("Content", {"fields": ("short_description", "description")}),
-        ("Customization", {"fields": ("allows_customization", "mockup_front", "customization_fee")}),
+        ("Customization", {"fields": (
+            "allows_customization", "mockup_front", "customization_fee",
+            "embroidery_chest_enabled", "embroidery_chest_fee",
+            "embroidery_large_enabled", "embroidery_large_fee",
+            "dtf_chest_enabled", "dtf_chest_fee",
+            "dtf_large_enabled", "dtf_large_fee",
+        )}),
         ("SEO", {"fields": ("meta_title", "meta_description"), "classes": ("collapse",)}),
         ("Flags", {"fields": ("is_active", "is_featured", "is_new_arrival", "is_bestseller")}),
     )
