@@ -139,6 +139,8 @@ class PaymentConfigView(APIView):
 
 
 class CheckoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -149,7 +151,7 @@ class CheckoutView(APIView):
             order = create_order_from_cart(
                 cart,
                 data,
-                user=request.user if request.user.is_authenticated else None,
+                user=request.user,
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

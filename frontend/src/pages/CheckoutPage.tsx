@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { checkout, fetchCart, fetchPaymentConfig } from '../api/store'
+import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
+import { formatApiError } from '../utils/formatApiError'
 import { formatPrice } from '../utils/format'
 import './CheckoutPage.css'
 
@@ -18,14 +20,29 @@ export default function CheckoutPage() {
   const [sameAsBilling, setSameAsBilling] = useState(true)
 
   const cancelled = searchParams.get('cancelled')
+  const loggedIn = isLoggedIn()
 
-  const { data: cart } = useQuery({ queryKey: ['cart'], queryFn: fetchCart })
-  const { data: paymentConfig } = useQuery({ queryKey: ['paymentConfig'], queryFn: fetchPaymentConfig })
+  useEffect(() => {
+    if (!loggedIn) {
+      navigate(accountUrlWithNext('/checkout', 'login'), { replace: true })
+    }
+  }, [loggedIn, navigate])
+
+  const { data: cart } = useQuery({ queryKey: ['cart'], queryFn: fetchCart, enabled: loggedIn })
+  const { data: paymentConfig } = useQuery({
+    queryKey: ['paymentConfig'],
+    queryFn: fetchPaymentConfig,
+    enabled: loggedIn,
+  })
 
   const stripeAvailable = paymentConfig?.stripe_enabled ?? false
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!isLoggedIn()) {
+      navigate(accountUrlWithNext('/checkout', 'login'))
+      return
+    }
     setLoading(true)
     setError('')
     const form = new FormData(e.currentTarget)
@@ -51,11 +68,26 @@ export default function CheckoutPage() {
         return
       }
       navigate(`/order-confirmation/${result.order.order_number}`)
-    } catch {
-      setError(t('common.error'))
+    } catch (err: unknown) {
+      const status = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { status?: number } }).response?.status
+        : undefined
+      if (status === 401) {
+        navigate(accountUrlWithNext('/checkout', 'login'))
+        return
+      }
+      setError(formatApiError(err, t('common.error')))
     } finally {
       setLoading(false)
     }
+  }
+
+  if (!loggedIn) {
+    return (
+      <div className="container checkout-page">
+        <p>{t('common.loading')}</p>
+      </div>
+    )
   }
 
   return (

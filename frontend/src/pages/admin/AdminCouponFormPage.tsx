@@ -114,13 +114,13 @@ export default function AdminCouponFormPage() {
                 required
               />
             </label>
-            <label>
+            <label className="admin-checkbox-inline full-width">
               <input
                 type="checkbox"
                 checked={form.is_active}
                 onChange={(e) => updateField('is_active', e.target.checked)}
               />
-              Active (customers can use this code)
+              <span>Active (customers can use this code)</span>
             </label>
           </div>
         </section>

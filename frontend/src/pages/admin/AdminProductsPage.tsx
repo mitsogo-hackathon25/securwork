@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteAdminProduct,
   downloadProductCsvTemplate,
+  exportProductsCsv,
   fetchAdminProducts,
   importProductsCsv,
   type CsvImportError,
@@ -19,6 +20,7 @@ export default function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [importSuccess, setImportSuccess] = useState('')
   const [importErrors, setImportErrors] = useState<CsvImportError[]>([])
   const [importDetail, setImportDetail] = useState('')
@@ -54,6 +56,20 @@ export default function AdminProductsPage() {
       await downloadProductCsvTemplate()
     } catch (err: unknown) {
       setImportDetail(formatApiError(err, 'Could not download CSV template.'))
+    }
+  }
+
+  const handleExportCsv = async () => {
+    setImportDetail('')
+    setImportErrors([])
+    setImportSuccess('')
+    setExporting(true)
+    try {
+      await exportProductsCsv()
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Could not export products CSV.'))
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -99,6 +115,14 @@ export default function AdminProductsPage() {
           <button
             type="button"
             className="btn btn-secondary"
+            disabled={exporting}
+            onClick={handleExportCsv}
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -116,10 +140,11 @@ export default function AdminProductsPage() {
       </div>
 
       <section className="admin-card admin-import-panel">
-        <h2>Bulk import</h2>
+        <h2>Bulk import / export</h2>
         <p className="admin-hint">
-          Download the template, fill one row per size/color, then import. Brands and colors must match
-          Catalog exactly. Allowed sizes: XS, S, M, L, XL, XXL, XXXL, 4XL. Images can be uploaded after import.
+          Export downloads all current products (one row per size/color). Download the template to start
+          fresh, or edit an export and re-import new SKUs only. Brands and colors must match Catalog
+          exactly. Allowed sizes: XS, S, M, L, XL, XXL, XXXL, 4XL. Images are not included in CSV.
         </p>
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
         {importDetail && !importSuccess && (

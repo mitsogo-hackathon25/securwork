@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import { fetchCart, removeCartItem, updateCartItem } from '../api/store'
+import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
 import './CartPage.css'
 
 export default function CartPage() {
@@ -96,7 +97,19 @@ export default function CartPage() {
               <p className="cart-total">
                 <strong>{t('cart.total')}:</strong> {formatPrice(cart.total)}
               </p>
-              <Link to="/checkout" className="btn btn-primary">{t('cta.checkout')}</Link>
+              {isLoggedIn() ? (
+                <Link to="/checkout" className="btn btn-primary">{t('cta.checkout')}</Link>
+              ) : (
+                <div className="cart-checkout-gate">
+                  <p className="cart-login-hint">{t('account.loginRequiredCheckout')}</p>
+                  <Link to={accountUrlWithNext('/checkout', 'login')} className="btn btn-primary">
+                    {t('account.loginToCheckout')}
+                  </Link>
+                  <Link to={accountUrlWithNext('/checkout', 'register')} className="btn btn-secondary">
+                    {t('account.register')}
+                  </Link>
+                </div>
+              )}
             </div>
           </>
         )}

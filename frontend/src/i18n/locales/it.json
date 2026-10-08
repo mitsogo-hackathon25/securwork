@@ -155,7 +155,21 @@
     "register": "Registrati",
     "logout": "Esci",
     "orders": "I miei ordini",
-    "profile": "Profilo"
+    "profile": "Profilo",
+    "welcome": "Hai effettuato l'accesso.",
+    "noOrders": "Nessun ordine ancora.",
+    "username": "Nome utente",
+    "password": "Password",
+    "passwordConfirm": "Conferma password",
+    "firstName": "Nome",
+    "lastName": "Cognome",
+    "noAccount": "Non hai un account?",
+    "hasAccount": "Hai già un account?",
+    "loginError": "Nome utente o password non validi.",
+    "registerError": "Impossibile creare l'account. Controlla i dati.",
+    "registerSuccess": "Account creato. Hai effettuato l'accesso.",
+    "loginRequiredCheckout": "Accedi o crea un account per completare l'acquisto. Puoi continuare a navigare e aggiungere prodotti al carrello senza account.",
+    "loginToCheckout": "Accedi per il checkout"
   },
   "footer": {
     "rights": "Tutti i diritti riservati.",

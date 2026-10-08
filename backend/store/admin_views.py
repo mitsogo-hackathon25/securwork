@@ -19,7 +19,12 @@ from .admin_serializers import (
     AdminProductListSerializer,
     AdminProductSerializer,
 )
-from .csv_import import build_csv_template, import_parsed_rows, parse_and_validate_csv
+from .csv_import import (
+    build_csv_template,
+    export_products_csv,
+    import_parsed_rows,
+    parse_and_validate_csv,
+)
 from .image_utils import download_image_with_reason, is_direct_image_url
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
@@ -94,6 +99,13 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         content = build_csv_template()
         response = HttpResponse(content, content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="securwork-products-template.csv"'
+        return response
+
+    @action(detail=False, methods=["get"], url_path="export_csv")
+    def export_csv(self, request):
+        content = export_products_csv()
+        response = HttpResponse(content, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="securwork-products-export.csv"'
         return response
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")

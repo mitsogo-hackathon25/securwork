@@ -84,6 +84,58 @@ def build_csv_template() -> str:
     return buffer.getvalue()
 
 
+def _translation(product: Product, field: str, lang: str) -> str:
+    return product.safe_translation_getter(field, language_code=lang, any_language=True) or ""
+
+
+def export_products_csv() -> str:
+    """Export all products as CSV (one row per variant), matching import columns."""
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CSV_HEADERS, lineterminator="\n")
+    writer.writeheader()
+
+    products = (
+        Product.objects.prefetch_related("variants", "categories")
+        .order_by("sku")
+    )
+    for product in products:
+        category_slugs = ",".join(
+            product.categories.order_by("slug").values_list("slug", flat=True)
+        )
+        base = {
+            "product_sku": product.sku,
+            "brand": product.brand or "",
+            "name_it": _translation(product, "name", "it"),
+            "name_en": _translation(product, "name", "en"),
+            "description_it": _translation(product, "description", "it"),
+            "description_en": _translation(product, "description", "en"),
+            "category_slugs": category_slugs,
+        }
+        variants = list(product.variants.all())
+        if not variants:
+            writer.writerow({
+                **base,
+                "size": "",
+                "color": "",
+                "price": "",
+                "stock": "",
+                "variant_sku": "",
+                "sale_price": "",
+            })
+            continue
+        for variant in variants:
+            writer.writerow({
+                **base,
+                "size": variant.size or "",
+                "color": variant.color or "",
+                "price": f"{variant.price:.2f}",
+                "stock": str(variant.stock_quantity),
+                "variant_sku": variant.sku,
+                "sale_price": f"{variant.sale_price:.2f}" if variant.sale_price is not None else "",
+            })
+    return buffer.getvalue()
+
+
 def _normalize_header(value: str) -> str:
     return (value or "").strip().lower().replace(" ", "_")
 

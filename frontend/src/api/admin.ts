@@ -46,17 +46,24 @@ export type CsvImportResult = {
   created_variants: number
 }
 
+const downloadCsvBlob = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
 export const downloadProductCsvTemplate = () =>
   api
     .get('/admin/products/csv_template/', { responseType: 'blob' })
-    .then((r) => {
-      const url = window.URL.createObjectURL(r.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'securwork-products-template.csv'
-      a.click()
-      window.URL.revokeObjectURL(url)
-    })
+    .then((r) => downloadCsvBlob(r.data, 'securwork-products-template.csv'))
+
+export const exportProductsCsv = () =>
+  api
+    .get('/admin/products/export_csv/', { responseType: 'blob' })
+    .then((r) => downloadCsvBlob(r.data, 'securwork-products-export.csv'))
 
 export const importProductsCsv = (file: File) => {
   const form = new FormData()

@@ -73,8 +73,6 @@ export default function AdminCatalogPage() {
     queryFn: fetchAdminColors,
   })
 
-  const parentOptions = categories.filter((c) => !c.parent_id)
-
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-category-list'] })
     queryClient.invalidateQueries({ queryKey: ['admin-categories'] })
@@ -163,19 +161,19 @@ export default function AdminCatalogPage() {
   const handleCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!categoryForm) return
-    saveCategory.mutate(categoryForm)
+    saveCategory.mutate({ ...categoryForm, is_active: true })
   }
 
   const handleBrandSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!brandForm) return
-    saveBrand.mutate(brandForm)
+    saveBrand.mutate({ ...brandForm, is_active: true })
   }
 
   const handleColorSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!colorForm) return
-    saveColor.mutate(colorForm)
+    saveColor.mutate({ ...colorForm, is_active: true })
   }
 
   return (
@@ -247,52 +245,11 @@ export default function AdminCatalogPage() {
                   onChange={(e) => setCategoryForm({
                     ...categoryForm,
                     section: e.target.value as AdminCategory['section'],
-                    parent_id: null,
                   })}
-                  disabled={!!categoryForm.parent_id}
                 >
                   <option value="workwear">Workwear</option>
                   <option value="professional">Professional</option>
                 </select>
-              </label>
-              <label>
-                Parent (optional)
-                <select
-                  value={categoryForm.parent_id ?? ''}
-                  onChange={(e) => {
-                    const parentId = e.target.value ? Number(e.target.value) : null
-                    const parent = parentOptions.find((p) => p.id === parentId)
-                    setCategoryForm({
-                      ...categoryForm,
-                      parent_id: parentId,
-                      section: parent?.section ?? categoryForm.section,
-                    })
-                  }}
-                >
-                  <option value="">— Top level —</option>
-                  {parentOptions
-                    .filter((p) => p.section === categoryForm.section && p.id !== categoryForm.id)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>{p.name_it || p.slug}</option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                Sort order
-                <input
-                  type="number"
-                  min="0"
-                  value={categoryForm.sort_order}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, sort_order: Number(e.target.value) })}
-                />
-              </label>
-              <label className="admin-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={categoryForm.is_active}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, is_active: e.target.checked })}
-                />
-                Active
               </label>
             </div>
             <div className="admin-inline-form-actions">
@@ -315,7 +272,6 @@ export default function AdminCatalogPage() {
                   <th>Section</th>
                   <th>Parent</th>
                   <th>Products</th>
-                  <th>Status</th>
                   <th />
                 </tr>
               </thead>
@@ -326,11 +282,6 @@ export default function AdminCatalogPage() {
                     <td>{cat.section === 'workwear' ? 'Workwear' : 'Professional'}</td>
                     <td>{cat.parent_name || '—'}</td>
                     <td>{cat.product_count ?? 0}</td>
-                    <td>
-                      <span className={`admin-badge ${cat.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                        {cat.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
                     <td className="admin-actions">
                       <button type="button" className="admin-link" onClick={() => setCategoryForm(cat)}>Edit</button>
                       <button
@@ -373,23 +324,6 @@ export default function AdminCatalogPage() {
                   required
                 />
               </label>
-              <label>
-                Sort order
-                <input
-                  type="number"
-                  min="0"
-                  value={brandForm.sort_order}
-                  onChange={(e) => setBrandForm({ ...brandForm, sort_order: Number(e.target.value) })}
-                />
-              </label>
-              <label className="admin-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={brandForm.is_active}
-                  onChange={(e) => setBrandForm({ ...brandForm, is_active: e.target.checked })}
-                />
-                Active (shown in shop filter)
-              </label>
             </div>
             <div className="admin-inline-form-actions">
               <button type="submit" className="btn btn-primary" disabled={saveBrand.isPending}>
@@ -409,22 +343,16 @@ export default function AdminCatalogPage() {
                 <tr>
                   <th>Name</th>
                   <th>Products</th>
-                  <th>Status</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {brands.length === 0 ? (
-                  <tr><td colSpan={4} className="admin-empty">No brands yet.</td></tr>
+                  <tr><td colSpan={3} className="admin-empty">No brands yet.</td></tr>
                 ) : brands.map((brand) => (
                   <tr key={brand.id}>
                     <td><strong>{brand.name}</strong></td>
                     <td>{brand.product_count ?? 0}</td>
-                    <td>
-                      <span className={`admin-badge ${brand.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                        {brand.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
                     <td className="admin-actions">
                       <button type="button" className="admin-link" onClick={() => setBrandForm(brand)}>Edit</button>
                       <button
@@ -460,29 +388,12 @@ export default function AdminCatalogPage() {
           <form className="admin-inline-form" onSubmit={handleColorSubmit}>
             <div className="admin-form-grid">
               <label>
-                Color name *
+                  Color name *
                 <input
                   value={colorForm.name}
                   onChange={(e) => setColorForm({ ...colorForm, name: e.target.value })}
                   required
                 />
-              </label>
-              <label>
-                Sort order
-                <input
-                  type="number"
-                  min="0"
-                  value={colorForm.sort_order}
-                  onChange={(e) => setColorForm({ ...colorForm, sort_order: Number(e.target.value) })}
-                />
-              </label>
-              <label className="admin-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={colorForm.is_active}
-                  onChange={(e) => setColorForm({ ...colorForm, is_active: e.target.checked })}
-                />
-                Active (shown in shop filter and product variants)
               </label>
             </div>
             <div className="admin-inline-form-actions">
@@ -503,22 +414,16 @@ export default function AdminCatalogPage() {
                 <tr>
                   <th>Name</th>
                   <th>Variants</th>
-                  <th>Status</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {colors.length === 0 ? (
-                  <tr><td colSpan={4} className="admin-empty">No colors yet.</td></tr>
+                  <tr><td colSpan={3} className="admin-empty">No colors yet.</td></tr>
                 ) : colors.map((color) => (
                   <tr key={color.id}>
                     <td><strong>{color.name}</strong></td>
                     <td>{color.variant_count ?? 0}</td>
-                    <td>
-                      <span className={`admin-badge ${color.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                        {color.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
                     <td className="admin-actions">
                       <button type="button" className="admin-link" onClick={() => setColorForm(color)}>Edit</button>
                       <button

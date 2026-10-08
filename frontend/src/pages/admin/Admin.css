@@ -613,9 +613,17 @@
 
 .admin-checkbox-inline {
   display: flex;
+  flex-direction: row !important;
   align-items: center;
   gap: 0.5rem;
   align-self: end;
+  font-weight: 500;
+}
+
+.admin-form label.admin-checkbox-inline input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .admin-muted {

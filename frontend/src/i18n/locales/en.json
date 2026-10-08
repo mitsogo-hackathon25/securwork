@@ -155,7 +155,21 @@
     "register": "Register",
     "logout": "Log out",
     "orders": "My orders",
-    "profile": "Profile"
+    "profile": "Profile",
+    "welcome": "You are signed in.",
+    "noOrders": "No orders yet.",
+    "username": "Username",
+    "password": "Password",
+    "passwordConfirm": "Confirm password",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "loginError": "Invalid username or password.",
+    "registerError": "Could not create account. Check your details.",
+    "registerSuccess": "Account created. You are now signed in.",
+    "loginRequiredCheckout": "Please log in or create an account to complete your purchase. You can keep browsing and add items to the cart without an account.",
+    "loginToCheckout": "Log in to checkout"
   },
   "footer": {
     "rights": "All rights reserved.",
