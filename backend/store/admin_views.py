@@ -1,6 +1,3 @@
-import os
-from urllib.parse import urlparse
-
 from django.db.models import Count, Prefetch
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
@@ -25,41 +22,9 @@ from .csv_import import (
     import_parsed_rows,
     parse_and_validate_csv,
 )
-from .image_utils import download_image_with_reason, is_direct_image_url
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
-
-
-def _filename_from_url(url: str, product_sku: str) -> str:
-    path = urlparse(url).path
-    name = os.path.basename(path) or f"{product_sku.lower()}-image"
-    if "." not in name:
-        name = f"{name}.jpg"
-    return name
-
-
-def _create_product_image(
-    product,
-    image_file=None,
-    external_url="",
-    alt_text="",
-    is_primary=False,
-    sort_order=None,
-):
-    if not image_file and not external_url:
-        raise ValueError("Either image_file or external_url is required.")
-    if sort_order is None:
-        sort_order = product.images.count()
-    if is_primary:
-        product.images.update(is_primary=False)
-    return ProductImage.objects.create(
-        product=product,
-        image=image_file,
-        external_url=external_url,
-        alt_text=alt_text,
-        sort_order=sort_order,
-        is_primary=is_primary or not product.images.exists(),
-    )
+from .product_images import attach_image_from_url, create_product_image
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
@@ -135,7 +100,18 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        result = import_parsed_rows(parsed_rows)
+        try:
+            result = import_parsed_rows(parsed_rows)
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc),
+                    "errors": [{"row": 0, "field": "url_immagini", "message": str(exc)}],
+                    "created_products": 0,
+                    "created_variants": 0,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         products = result["created_products"]
         variants = result["created_variants"]
         return Response(
@@ -184,7 +160,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         sort_order = request.data.get("sort_order")
         sort_order = int(sort_order) if sort_order is not None else None
 
-        product_image = _create_product_image(
+        product_image = create_product_image(
             product,
             image_file,
             alt_text=alt_text,
@@ -200,14 +176,6 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     def add_image_url(self, request, pk=None):
         product = self.get_object()
         image_url = (request.data.get("image_url") or "").strip()
-        if not image_url:
-            return Response({"image_url": ["Image URL is required."]}, status=status.HTTP_400_BAD_REQUEST)
-        if not image_url.startswith(("http://", "https://")):
-            return Response(
-                {"image_url": ["Enter a valid http(s) image URL."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         is_primary = request.data.get("is_primary", False)
         if isinstance(is_primary, str):
             is_primary = is_primary.lower() in ("true", "1", "yes")
@@ -215,35 +183,21 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         sort_order = request.data.get("sort_order")
         sort_order = int(sort_order) if sort_order is not None else None
 
-        content, reason = download_image_with_reason(
-            image_url, _filename_from_url(image_url, product.sku)
+        product_image, reason = attach_image_from_url(
+            product,
+            image_url,
+            is_primary=is_primary,
+            alt_text=alt_text,
+            sort_order=sort_order,
         )
-        if content:
-            product_image = _create_product_image(
-                product,
-                image_file=content,
-                alt_text=alt_text,
-                is_primary=is_primary,
-                sort_order=sort_order,
-            )
-            linked_externally = False
-        elif is_direct_image_url(image_url):
-            product_image = _create_product_image(
-                product,
-                external_url=image_url,
-                alt_text=alt_text,
-                is_primary=is_primary,
-                sort_order=sort_order,
-            )
-            linked_externally = True
-        else:
+        if not product_image:
             return Response(
                 {"image_url": [reason]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         data = AdminProductImageSerializer(product_image, context={"request": request}).data
-        if linked_externally:
+        if product_image.external_url and not product_image.image:
             data["linked_externally"] = True
         return Response(data, status=status.HTTP_201_CREATED)
 

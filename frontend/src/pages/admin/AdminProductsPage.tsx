@@ -147,7 +147,8 @@ export default function AdminProductsPage() {
           devono corrispondere esattamente al Catalogo. Taglie ammesse: XS, S, M, L, XL, XXL, XXXL, 4XL.
           Per la personalizzazione logo usa: ricamo_petto, costo_ricamo_petto, ricamo_grande,
           costo_ricamo_grande, dtf_petto, costo_dtf_petto, dtf_grande, costo_dtf_grande (si/no + prezzo).
-          Le immagini prodotto non sono incluse nel CSV.
+          Per le immagini usa url_immagini (URL pubblici separati da virgola; il primo è principale)
+          e opzionalmente url_mockup.
         </p>
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
         {importDetail && !importSuccess && (

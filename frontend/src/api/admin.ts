@@ -123,6 +123,12 @@ export const uploadProductImage = (productId: number, file: File, isPrimary = fa
   }).then((r) => r.data)
 }
 
+export const addProductImageUrl = (productId: number, imageUrl: string, isPrimary = false) =>
+  api.post(`/admin/products/${productId}/add_image_url/`, {
+    image_url: imageUrl,
+    is_primary: isPrimary,
+  }).then((r) => r.data)
+
 export const deleteProductImage = (productId: number, imageId: number) =>
   api.delete(`/admin/products/${productId}/images/${imageId}/`)
 

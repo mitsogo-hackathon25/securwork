@@ -11,6 +11,13 @@ from django.utils.text import slugify
 
 from .constants import CLOTHING_SIZES
 from .models import Brand, Category, Color, Product, ProductVariant
+from .product_images import (
+    absolute_media_url,
+    attach_image_from_url,
+    attach_mockup_from_url,
+    product_image_export_urls,
+    split_url_list,
+)
 
 # Canonical Italian headers used in template / export.
 CSV_HEADERS = [
@@ -35,6 +42,8 @@ CSV_HEADERS = [
     "costo_dtf_petto",
     "dtf_grande",
     "costo_dtf_grande",
+    "url_immagini",
+    "url_mockup",
 ]
 
 # Accept legacy English / previous Italian headers and map them to Italian keys.
@@ -64,6 +73,10 @@ HEADER_ALIASES = {
     "dtf_chest_fee": "costo_dtf_petto",
     "dtf_large": "dtf_grande",
     "dtf_large_fee": "costo_dtf_grande",
+    "image_urls": "url_immagini",
+    "images": "url_immagini",
+    "mockup_url": "url_mockup",
+    "mockup_front_url": "url_mockup",
 }
 
 METHOD_CSV_FIELDS = (
@@ -109,6 +122,8 @@ TEMPLATE_EXAMPLE_ROWS = [
         "costo_dtf_petto": "4.00",
         "dtf_grande": "no",
         "costo_dtf_grande": "",
+        "url_immagini": "https://example.com/images/polo-blu-1.jpg,https://example.com/images/polo-blu-2.jpg",
+        "url_mockup": "https://example.com/images/polo-blu-mockup.jpg",
     },
     {
         "sku_prodotto": "SW-POLO-01",
@@ -132,6 +147,8 @@ TEMPLATE_EXAMPLE_ROWS = [
         "costo_dtf_petto": "4.00",
         "dtf_grande": "no",
         "costo_dtf_grande": "",
+        "url_immagini": "https://example.com/images/polo-blu-1.jpg,https://example.com/images/polo-blu-2.jpg",
+        "url_mockup": "https://example.com/images/polo-blu-mockup.jpg",
     },
 ]
 
@@ -160,13 +177,15 @@ def export_products_csv() -> str:
     writer.writeheader()
 
     products = (
-        Product.objects.prefetch_related("variants", "categories")
+        Product.objects.prefetch_related("variants", "categories", "images")
         .order_by("sku")
     )
     for product in products:
         category_slugs = ",".join(
             product.categories.order_by("slug").values_list("slug", flat=True)
         )
+        image_urls = product_image_export_urls(product)
+        mockup_url = absolute_media_url(product.mockup_front.url) if product.mockup_front else ""
         base = {
             "sku_prodotto": product.sku,
             "marca": product.brand or "",
@@ -183,6 +202,8 @@ def export_products_csv() -> str:
             "costo_dtf_petto": f"{product.dtf_chest_fee:.2f}",
             "dtf_grande": _bool_to_csv(bool(product.dtf_large_enabled)),
             "costo_dtf_grande": f"{product.dtf_large_fee:.2f}",
+            "url_immagini": ",".join(image_urls),
+            "url_mockup": mockup_url,
         }
         variants = list(product.variants.all())
         if not variants:
@@ -216,6 +237,21 @@ def _normalize_header(value: str) -> str:
 
 def _cell(row: dict, key: str) -> str:
     return (row.get(key) or "").strip()
+
+
+def _parse_http_urls(raw: str, field: str, row_num: int, errors: list[dict]) -> list[str]:
+    urls = split_url_list(raw)
+    valid: list[str] = []
+    for url in urls:
+        if not url.startswith(("http://", "https://")):
+            errors.append({
+                "row": row_num,
+                "field": field,
+                "message": f"URL non valido in {field}: '{url}'. Usa http:// o https://.",
+            })
+        else:
+            valid.append(url)
+    return valid
 
 
 def _suggest_variant_sku(product_sku: str, size: str, color: str) -> str:
@@ -459,6 +495,16 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             else:
                 product_size_colors[product_sku.lower()][pair] = row_num
 
+        image_urls = _parse_http_urls(_cell(row, "url_immagini"), "url_immagini", row_num, errors)
+        mockup_urls = _parse_http_urls(_cell(row, "url_mockup"), "url_mockup", row_num, errors)
+        mockup_url = mockup_urls[0] if mockup_urls else ""
+        if len(mockup_urls) > 1:
+            errors.append({
+                "row": row_num,
+                "field": "url_mockup",
+                "message": "url_mockup accetta un solo URL.",
+            })
+
         if product_sku:
             meta_key = product_sku.lower()
             current = {
@@ -470,6 +516,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                 "category_ids": category_ids,
                 "allows_customization": allows_customization,
                 "customization_fee": customization_fee,
+                "image_urls": image_urls,
+                "mockup_url": mockup_url,
                 **method_values,
             }
             if meta_key in product_meta:
@@ -503,6 +551,22 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                             "field": fee_csv,
                             "message": f"{fee_csv} per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
                         })
+                if prev.get("image_urls") and image_urls and prev["image_urls"] != image_urls:
+                    errors.append({
+                        "row": row_num,
+                        "field": "url_immagini",
+                        "message": f"url_immagini per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
+                    })
+                if prev.get("mockup_url") and mockup_url and prev["mockup_url"] != mockup_url:
+                    errors.append({
+                        "row": row_num,
+                        "field": "url_mockup",
+                        "message": f"url_mockup per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
+                    })
+                if not prev.get("image_urls") and image_urls:
+                    prev["image_urls"] = image_urls
+                if not prev.get("mockup_url") and mockup_url:
+                    prev["mockup_url"] = mockup_url
             else:
                 product_meta[meta_key] = current
 
@@ -516,6 +580,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         ):
             continue
 
+        meta = product_meta.get(product_sku.lower(), {})
         parsed_rows.append({
             "row": row_num,
             "product_sku": product_sku,
@@ -533,6 +598,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "category_ids": category_ids,
             "allows_customization": allows_customization,
             "customization_fee": customization_fee,
+            "image_urls": meta.get("image_urls") or image_urls,
+            "mockup_url": meta.get("mockup_url") or mockup_url,
             **method_values,
         })
 
@@ -594,6 +661,28 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
             category_ids = first.get("category_ids") or []
             if category_ids:
                 product.categories.set(category_ids)
+
+            image_urls = first.get("image_urls") or []
+            for index, image_url in enumerate(image_urls):
+                image, reason = attach_image_from_url(
+                    product,
+                    image_url,
+                    is_primary=(index == 0),
+                )
+                if not image:
+                    raise ValueError(
+                        f"Prodotto '{product.sku}': impossibile importare url_immagini "
+                        f"('{image_url}'): {reason}"
+                    )
+
+            mockup_url = first.get("mockup_url") or ""
+            if mockup_url:
+                ok, reason = attach_mockup_from_url(product, mockup_url)
+                if not ok:
+                    raise ValueError(
+                        f"Prodotto '{product.sku}': impossibile importare url_mockup "
+                        f"('{mockup_url}'): {reason}"
+                    )
 
             created_products += 1
 

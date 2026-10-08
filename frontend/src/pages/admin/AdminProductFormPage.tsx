@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addProductImageUrl,
   createAdminProduct,
   deleteProductImage,
   fetchAdminBrands,
@@ -102,7 +103,10 @@ export default function AdminProductFormPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [imageError, setImageError] = useState('')
+  const [imageUrlInput, setImageUrlInput] = useState('')
+  const [addingImageUrl, setAddingImageUrl] = useState(false)
   const [pendingImages, setPendingImages] = useState<{ file: File; preview: string }[]>([])
+  const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['admin-categories'],
@@ -258,16 +262,21 @@ export default function AdminProductFormPage() {
         })),
       }
       const saved = await saveMutation.mutateAsync(payload)
-      if (isNew && pendingImages.length > 0 && saved.id) {
+      if (isNew && saved.id) {
         let hasImages = false
         for (const item of pendingImages) {
           await uploadProductImage(saved.id, item.file, !hasImages)
           hasImages = true
         }
+        for (const url of pendingImageUrls) {
+          await addProductImageUrl(saved.id, url, !hasImages)
+          hasImages = true
+        }
         pendingImages.forEach((item) => URL.revokeObjectURL(item.preview))
         setPendingImages([])
+        setPendingImageUrls([])
+        navigate(`/admin/products/${saved.id}`)
       }
-      if (isNew && saved.id) navigate(`/admin/products/${saved.id}`)
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
@@ -310,6 +319,36 @@ export default function AdminProductFormPage() {
       if (target) URL.revokeObjectURL(target.preview)
       return prev.filter((_, i) => i !== index)
     })
+  }
+
+  const handleAddImageUrl = async () => {
+    const url = imageUrlInput.trim()
+    if (!url) return
+    setImageError('')
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setImageError('L\'URL deve iniziare con http:// o https://.')
+      return
+    }
+
+    if (!productId) {
+      if (!pendingImageUrls.includes(url)) {
+        setPendingImageUrls((prev) => [...prev, url])
+      }
+      setImageUrlInput('')
+      return
+    }
+
+    setAddingImageUrl(true)
+    try {
+      const hasImages = (form.images?.length ?? 0) > 0
+      await addProductImageUrl(productId, url, !hasImages)
+      setImageUrlInput('')
+      queryClient.invalidateQueries({ queryKey: ['admin-product', productId] })
+    } catch (err: unknown) {
+      setImageError(formatApiError(err, 'Impossibile aggiungere l\'immagine dall\'URL.'))
+    } finally {
+      setAddingImageUrl(false)
+    }
   }
 
   const handleDeleteImage = async (imageId: number) => {
@@ -677,8 +716,8 @@ export default function AdminProductFormPage() {
           <h2>Immagini</h2>
           <p className="admin-hint">
             {isNew
-              ? 'Seleziona le immagini ora: verranno caricate dopo la creazione del prodotto. La prima diventa principale.'
-              : 'Carica tutte le immagini necessarie. La prima diventa l\'immagine principale.'}
+              ? 'Carica file o incolla URL pubblici ora: verranno applicati dopo la creazione. La prima immagine diventa principale.'
+              : 'Carica file dal computer oppure aggiungi un URL pubblico. La prima immagine diventa principale.'}
           </p>
           <div className="admin-images">
             {(form.images ?? []).map((img) => (
@@ -704,11 +743,47 @@ export default function AdminProductFormPage() {
                 </div>
               </div>
             ))}
+            {pendingImageUrls.map((url, index) => (
+              <div key={`${url}-${index}`} className="admin-image-card">
+                <img src={url} alt={url} />
+                <span className="admin-badge admin-badge-muted">URL in attesa</span>
+                <div className="admin-image-actions">
+                  <button
+                    type="button"
+                    className="admin-link-danger"
+                    onClick={() => setPendingImageUrls((prev) => prev.filter((_, i) => i !== index))}
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-          <label className="admin-upload">
-            <span className="btn btn-secondary">Carica immagini</span>
-            <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
-          </label>
+          <div className="admin-image-actions-bar">
+            <label className="admin-upload">
+              <span className="btn btn-secondary">Carica immagini</span>
+              <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
+            </label>
+          </div>
+          <div className="admin-image-url-row">
+            <label className="full-width">
+              Oppure URL immagine (http/https)
+              <input
+                type="url"
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                placeholder="https://esempio.com/foto-prodotto.jpg"
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!imageUrlInput.trim() || addingImageUrl}
+              onClick={handleAddImageUrl}
+            >
+              {addingImageUrl ? 'Aggiunta…' : 'Aggiungi da URL'}
+            </button>
+          </div>
           {imageError && <p className="admin-hint admin-hint-error">{imageError}</p>}
         </section>
 
