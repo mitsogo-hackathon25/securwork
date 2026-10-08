@@ -94,6 +94,18 @@
   margin-bottom: 1.5rem;
 }
 
+.admin-price-direction {
+  margin-bottom: 1rem;
+}
+
+.admin-price-direction-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
 .admin-import-errors {
   margin-top: 0.75rem;
   padding: 0.875rem 1rem;

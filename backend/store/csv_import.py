@@ -11,6 +11,57 @@ from django.utils.text import slugify
 
 from .constants import CLOTHING_SIZES
 from .models import Brand, Category, Color, Product, ProductVariant
+
+
+def _existing_product_names_it() -> set[str]:
+    names: set[str] = set()
+    for product in Product.objects.all():
+        name = product.safe_translation_getter("name", language_code="it", any_language=True) or ""
+        if name.strip():
+            names.add(name.strip().lower())
+    return names
+
+
+def ensure_brand(name: str) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return ""
+    existing = Brand.objects.filter(name__iexact=cleaned).first()
+    if existing:
+        return existing.name
+    created = Brand.objects.create(name=cleaned, is_active=True)
+    return created.name
+
+
+def ensure_color(name: str) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return ""
+    existing = Color.objects.filter(name__iexact=cleaned).first()
+    if existing:
+        return existing.name
+    created = Color.objects.create(name=cleaned, is_active=True)
+    return created.name
+
+
+def _unique_product_sku(base_sku: str) -> str:
+    sku = base_sku.strip()
+    if not Product.objects.filter(sku__iexact=sku).exists():
+        return sku
+    counter = 2
+    while Product.objects.filter(sku__iexact=f"{sku}-{counter}").exists():
+        counter += 1
+    return f"{sku}-{counter}"
+
+
+def _unique_variant_sku(base_sku: str) -> str:
+    sku = base_sku.strip()
+    if not ProductVariant.objects.filter(sku__iexact=sku).exists():
+        return sku
+    counter = 2
+    while ProductVariant.objects.filter(sku__iexact=f"{sku}-{counter}").exists():
+        counter += 1
+    return f"{sku}-{counter}"
 from .product_images import (
     absolute_media_url,
     attach_image_from_url,
@@ -330,20 +381,9 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "message": f"Colonne obbligatorie mancanti: {', '.join(missing_headers)}.",
         }]
 
-    brands = {b.name.lower(): b.name for b in Brand.objects.filter(is_active=True)}
-    colors = {c.name.lower(): c.name for c in Color.objects.filter(is_active=True)}
     categories = {c.slug.lower(): c for c in Category.objects.filter(is_active=True)}
-    allowed_sizes = set(CLOTHING_SIZES)
-    existing_product_skus = {
-        sku.lower(): sku for sku in Product.objects.values_list("sku", flat=True)
-    }
-    existing_variant_skus = {
-        sku.lower(): sku for sku in ProductVariant.objects.values_list("sku", flat=True)
-    }
-
-    brand_names = sorted(brands.values())
-    color_names = sorted(colors.values())
-    size_list = ", ".join(CLOTHING_SIZES)
+    existing_names_it = _existing_product_names_it()
+    csv_name_to_sku: dict[str, str] = {}
 
     parsed_rows: list[dict] = []
     seen_variant_skus: dict[str, int] = {}
@@ -364,7 +404,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         name_en = _cell(row, "nome_en")
         description_it = _cell(row, "descrizione_it")
         description_en = _cell(row, "descrizione_en")
-        size = _cell(row, "taglia").upper()
+        size_raw = _cell(row, "taglia")
+        size = size_raw.upper() if size_raw.upper() in CLOTHING_SIZES else size_raw
         color_raw = _cell(row, "colore")
         price_raw = _cell(row, "prezzo")
         stock_raw = _cell(row, "scorte")
@@ -372,34 +413,27 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         category_slugs_raw = _cell(row, "slug_categorie")
         sale_price_raw = _cell(row, "prezzo_scontato")
 
-        brand = None
-        if brand_raw:
-            brand = brands.get(brand_raw.lower())
-            if not brand:
-                hint = f" Marche ammesse: {', '.join(brand_names)}." if brand_names else " Nessuna marca attiva nel catalogo."
+        if name_it and product_sku:
+            name_key = name_it.strip().lower()
+            if name_key in existing_names_it:
                 errors.append({
                     "row": row_num,
-                    "field": "marca",
-                    "message": f"Marca '{brand_raw}' non trovata.{hint}",
+                    "field": "nome_it",
+                    "message": f"Il nome prodotto '{name_it}' esiste già nel catalogo.",
                 })
-
-        color = None
-        if color_raw:
-            color = colors.get(color_raw.lower())
-            if not color:
-                hint = f" Colori ammessi: {', '.join(color_names)}." if color_names else " Nessun colore attivo nel catalogo."
+            sku_key = product_sku.lower()
+            prev_sku = csv_name_to_sku.get(name_key)
+            if prev_sku and prev_sku != sku_key:
                 errors.append({
                     "row": row_num,
-                    "field": "colore",
-                    "message": f"Colore '{color_raw}' non trovato.{hint}",
+                    "field": "nome_it",
+                    "message": (
+                        f"Il nome prodotto '{name_it}' è usato da più SKU nel CSV "
+                        f"('{prev_sku}' e '{product_sku}')."
+                    ),
                 })
-
-        if size and size not in allowed_sizes:
-            errors.append({
-                "row": row_num,
-                "field": "taglia",
-                "message": f"Taglia '{_cell(row, 'taglia')}' non valida. Taglie ammesse: {size_list}.",
-            })
+            elif name_key:
+                csv_name_to_sku[name_key] = sku_key
 
         price = _parse_price(price_raw, "prezzo", row_num, errors) if price_raw else None
         stock = _parse_stock(stock_raw, row_num, errors) if stock_raw != "" else None
@@ -441,33 +475,14 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         if category_slugs_raw:
             for slug in [s.strip() for s in category_slugs_raw.replace(";", ",").split(",") if s.strip()]:
                 cat = categories.get(slug.lower())
-                if not cat:
-                    errors.append({
-                        "row": row_num,
-                        "field": "slug_categorie",
-                        "message": f"Slug categoria '{slug}' non trovato.",
-                    })
-                else:
+                if cat:
                     category_ids.append(cat.id)
 
-        if product_sku and product_sku.lower() in existing_product_skus:
-            errors.append({
-                "row": row_num,
-                "field": "sku_prodotto",
-                "message": f"Lo SKU prodotto '{product_sku}' esiste già.",
-            })
-
-        if not variant_sku and product_sku and size and color:
-            variant_sku = _suggest_variant_sku(product_sku, size, color)
+        if not variant_sku and product_sku and size and color_raw:
+            variant_sku = _suggest_variant_sku(product_sku, size, color_raw)
 
         if variant_sku:
             key = variant_sku.lower()
-            if key in existing_variant_skus:
-                errors.append({
-                    "row": row_num,
-                    "field": "sku_variante",
-                    "message": f"Lo SKU variante '{variant_sku}' esiste già.",
-                })
             if key in seen_variant_skus:
                 errors.append({
                     "row": row_num,
@@ -480,15 +495,15 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             else:
                 seen_variant_skus[key] = row_num
 
-        if product_sku and size and color:
-            pair = (size, color.lower() if color else color_raw.lower())
+        if product_sku and size and color_raw:
+            pair = (size, color_raw.lower())
             prev = product_size_colors[product_sku.lower()].get(pair)
             if prev:
                 errors.append({
                     "row": row_num,
                     "field": "taglia",
                     "message": (
-                        f"Taglia '{size}' + colore '{color or color_raw}' è duplicata "
+                        f"Taglia '{size}' + colore '{color_raw}' è duplicata "
                         f"per il prodotto '{product_sku}' (anche alla riga {prev})."
                     ),
                 })
@@ -508,7 +523,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         if product_sku:
             meta_key = product_sku.lower()
             current = {
-                "marca": brand or brand_raw,
+                "marca": brand_raw,
                 "nome_it": name_it,
                 "nome_en": name_en,
                 "descrizione_it": description_it,
@@ -575,7 +590,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             or price is None
             or stock is None
             or not size
-            or not (color or color_raw)
+            or not color_raw
             or not method_parse_ok
         ):
             continue
@@ -584,13 +599,13 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         parsed_rows.append({
             "row": row_num,
             "product_sku": product_sku,
-            "brand": brand or "",
+            "brand": brand_raw,
             "name_it": name_it,
             "name_en": name_en,
             "description_it": description_it,
             "description_en": description_en,
             "size": size,
-            "color": color or "",
+            "color": color_raw,
             "price": price,
             "stock": stock,
             "sale_price": sale_price,
@@ -624,6 +639,7 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
     with transaction.atomic():
         for rows in grouped.values():
             first = rows[0]
+            brand_name = ensure_brand(first["brand"])
             base_slug = slugify(first["name_it"])[:240] or slugify(first["product_sku"])[:240] or "product"
             slug = base_slug
             counter = 1
@@ -631,9 +647,11 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
                 slug = f"{base_slug}-{counter}"
                 counter += 1
 
+            product_sku = _unique_product_sku(first["product_sku"])
+
             product = Product.objects.create(
-                sku=first["product_sku"],
-                brand=first["brand"],
+                sku=product_sku,
+                brand=brand_name,
                 slug=slug,
                 is_active=True,
                 allows_customization=bool(first.get("allows_customization")),
@@ -687,11 +705,13 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
             created_products += 1
 
             for row in rows:
+                color_name = ensure_color(row["color"])
+                variant_sku = _unique_variant_sku(row["variant_sku"])
                 ProductVariant.objects.create(
                     product=product,
-                    sku=row["variant_sku"],
+                    sku=variant_sku,
                     size=row["size"],
-                    color=row["color"],
+                    color=color_name,
                     price=row["price"],
                     sale_price=row["sale_price"],
                     stock_quantity=row["stock"],

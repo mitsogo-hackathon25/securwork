@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from django.db.models import Count, Prefetch
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
@@ -16,6 +18,7 @@ from .admin_serializers import (
     AdminProductListSerializer,
     AdminProductSerializer,
 )
+from .filters import BilingualProductSearchFilter
 from .csv_import import (
     build_csv_template,
     export_products_csv,
@@ -29,8 +32,7 @@ from .product_images import attach_image_from_url, create_product_image
 
 class AdminProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaffUser]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    search_fields = ["translations__name", "sku", "slug"]
+    filter_backends = [DjangoFilterBackend, BilingualProductSearchFilter, OrderingFilter]
     filterset_fields = ["is_active", "is_featured", "is_new_arrival", "is_bestseller"]
     ordering_fields = ["created_at", "updated_at", "sku", "slug"]
     ordering = ["-updated_at"]
@@ -72,6 +74,52 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         response = HttpResponse(content, content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="securwork-products-export.csv"'
         return response
+
+    @action(detail=False, methods=["post"], url_path="adjust_prices")
+    def adjust_prices(self, request):
+        percent_raw = request.data.get("percent")
+        if percent_raw in (None, ""):
+            return Response(
+                {"detail": "Indica una percentuale (es. 10 o -5)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            percent = Decimal(str(percent_raw).replace(",", "."))
+        except (InvalidOperation, ValueError):
+            return Response(
+                {"detail": "Percentuale non valida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if percent <= -100:
+            return Response(
+                {"detail": "La riduzione non può essere del 100% o superiore."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if percent == 0:
+            return Response(
+                {"detail": "La percentuale deve essere diversa da zero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        factor = (Decimal("100") + percent) / Decimal("100")
+        updated_variants = 0
+        for variant in ProductVariant.objects.all().iterator():
+            new_price = (variant.price * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            variant.price = max(Decimal("0.01"), new_price)
+            if variant.sale_price is not None:
+                new_sale = (variant.sale_price * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                variant.sale_price = max(Decimal("0.01"), new_sale)
+            variant.save(update_fields=["price", "sale_price"])
+            updated_variants += 1
+
+        direction = "aumentati" if percent > 0 else "ridotti"
+        return Response({
+            "detail": (
+                f"Prezzi {direction} del {abs(percent)}% su {updated_variants} varianti."
+            ),
+            "updated_variants": updated_variants,
+            "percent": str(percent),
+        })
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")
     def import_csv(self, request):

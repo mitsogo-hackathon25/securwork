@@ -22,6 +22,7 @@ export default function AdminLayout() {
           <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Ordini</NavLink>
           <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Coupon</NavLink>
           <NavLink to="/admin/catalog" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Catalogo</NavLink>
+          <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Impostazioni globali</NavLink>
           <a href="/" className="admin-nav-link admin-nav-link-muted" target="_blank" rel="noreferrer">
             Vai al negozio
           </a>

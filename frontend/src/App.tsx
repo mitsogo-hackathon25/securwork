@@ -21,6 +21,7 @@ import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage'
 import AdminCouponsPage from './pages/admin/AdminCouponsPage'
 import AdminCouponFormPage from './pages/admin/AdminCouponFormPage'
 import AdminCatalogPage from './pages/admin/AdminCatalogPage'
+import AdminGlobalSettingsPage from './pages/admin/AdminGlobalSettingsPage'
 
 export default function App() {
   return (
@@ -39,6 +40,8 @@ export default function App() {
             <Route path="coupons/new" element={<AdminCouponFormPage />} />
             <Route path="coupons/:id" element={<AdminCouponFormPage />} />
             <Route path="catalog" element={<AdminCatalogPage />} />
+            <Route path="settings" element={<AdminGlobalSettingsPage />} />
+            <Route path="pricing" element={<Navigate to="/admin/settings" replace />} />
           </Route>
         </Route>
 

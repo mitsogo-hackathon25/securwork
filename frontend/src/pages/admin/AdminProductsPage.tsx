@@ -143,8 +143,9 @@ export default function AdminProductsPage() {
         <h2>Import / export massivo</h2>
         <p className="admin-hint">
           L&apos;export scarica tutti i prodotti attuali (una riga per taglia/colore). Scarica il modello
-          per iniziare da zero, oppure modifica un export e reimporta solo nuovi SKU. Marche e colori
-          devono corrispondere esattamente al Catalogo. Taglie ammesse: XS, S, M, L, XL, XXL, XXXL, 4XL.
+          per iniziare da zero, oppure modifica un export e reimporta nuovi prodotti. Marche, colori e
+          taglie non presenti nel catalogo vengono creati o accettati automaticamente. L&apos;unico controllo
+          bloccante è il nome prodotto italiano (nome_it), che deve essere univoco.
           Per la personalizzazione logo usa: ricamo_petto, costo_ricamo_petto, ricamo_grande,
           costo_ricamo_grande, dtf_petto, costo_dtf_petto, dtf_grande, costo_dtf_grande (si/no + prezzo).
           Per le immagini usa url_immagini (URL pubblici separati da virgola; il primo è principale)

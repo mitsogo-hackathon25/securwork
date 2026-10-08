@@ -36,6 +36,12 @@ if (-not (Test-Path '.\venv\Scripts\Activate.ps1')) {
 `$env:FRONTEND_URL = 'http://127.0.0.1:5180'
 `$env:CORS_ALLOWED_ORIGINS = 'http://127.0.0.1:5180,http://localhost:5180'
 `$env:CSRF_TRUSTED_ORIGINS = 'http://127.0.0.1:5180,http://localhost:5180'
+python manage.py migrate --noinput
+if (`$LASTEXITCODE -ne 0) {
+  Write-Host 'Database migrate failed — fix errors above, then restart dev.ps1' -ForegroundColor Red
+  pause
+  exit `$LASTEXITCODE
+}
 python manage.py runserver 127.0.0.1:8000
 "@
 

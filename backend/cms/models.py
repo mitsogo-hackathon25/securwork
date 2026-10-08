@@ -1,5 +1,51 @@
+import re
+
+from django.core.validators import validate_email
 from django.db import models
 from parler.models import TranslatableModel, TranslatedFields
+
+
+def parse_email_list(raw: str) -> list[str]:
+    if not raw:
+        return []
+    parts = re.split(r"[,;\n]+", raw)
+    emails: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        email = part.strip()
+        if not email:
+            continue
+        validate_email(email)
+        key = email.lower()
+        if key not in seen:
+            seen.add(key)
+            emails.append(email)
+    return emails
+
+
+class GlobalSettings(models.Model):
+    """One row (pk=1) for store-wide admin options."""
+
+    order_notification_emails = models.TextField(
+        blank=True,
+        help_text="Comma- or line-separated addresses for new-order alerts only.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Global settings"
+        verbose_name_plural = "Global settings"
+
+    def __str__(self):
+        return "Global settings"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def recipient_list(self) -> list[str]:
+        return parse_email_list(self.order_notification_emails)
 
 
 class Page(TranslatableModel):

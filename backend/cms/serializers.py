@@ -1,6 +1,7 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from .models import ContactSubmission, FAQItem, Page
+from .models import ContactSubmission, FAQItem, GlobalSettings, Page, parse_email_list
 
 
 class PageSerializer(serializers.ModelSerializer):
@@ -53,3 +54,19 @@ class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactSubmission
         fields = ["name", "email", "phone", "subject", "message", "website"]
+
+
+class AdminGlobalSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalSettings
+        fields = ["order_notification_emails", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+    def validate_order_notification_emails(self, value):
+        if not value or not value.strip():
+            return ""
+        try:
+            parse_email_list(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+        return value

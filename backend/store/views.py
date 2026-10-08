@@ -1,9 +1,12 @@
 from django.db.models import F
 from django_filters import rest_framework as filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
+from .filters import BilingualProductSearchFilter
 from .models import Brand, Category, Color, Product, ProductVariant
 from .serializers import CategorySerializer, ProductDetailSerializer, ProductListSerializer
 
@@ -66,8 +69,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         "images", "variants", "categories", "translations"
     )
     lookup_field = "slug"
+    filter_backends = [DjangoFilterBackend, BilingualProductSearchFilter, OrderingFilter]
     filterset_class = ProductFilter
-    search_fields = ["translations__name", "sku"]
     ordering_fields = ["created_at", "translations__name"]
     ordering = ["-created_at"]
 

@@ -38,8 +38,25 @@ def _django_admin_order_url(order) -> str:
     return f"{base}{path}" if base else path
 
 
+def _order_admin_recipients() -> list[str]:
+    from django.db.utils import OperationalError
+
+    from cms.models import GlobalSettings
+
+    try:
+        recipients = GlobalSettings.get_solo().recipient_list()
+    except OperationalError:
+        recipients = []
+    if recipients:
+        return recipients
+    fallback = getattr(settings, "ORDER_ADMIN_EMAIL", None) or getattr(settings, "CONTACT_EMAIL", None)
+    return [fallback] if fallback else []
+
+
 def send_order_admin_notification(order) -> None:
-    admin_email = getattr(settings, "ORDER_ADMIN_EMAIL", settings.CONTACT_EMAIL)
+    recipients = _order_admin_recipients()
+    if not recipients:
+        return
     subject = f"[SecurWork] Nuovo ordine {order.order_number} — €{order.total}"
     context = {
         "order": order,
@@ -53,7 +70,7 @@ def send_order_admin_notification(order) -> None:
         subject=subject,
         body=text,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[admin_email],
+        to=recipients,
     )
     msg.attach_alternative(html, "text/html")
     msg.send(fail_silently=True)

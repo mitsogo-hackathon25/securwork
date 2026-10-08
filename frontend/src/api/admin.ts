@@ -75,6 +75,28 @@ export const importProductsCsv = (file: File) => {
     .then((r) => r.data)
 }
 
+export type PriceAdjustResult = {
+  detail: string
+  updated_variants: number
+  percent: string
+}
+
+export const adjustAllProductPrices = (percent: number) =>
+  api
+    .post<PriceAdjustResult>('/admin/products/adjust_prices/', { percent })
+    .then((r) => r.data)
+
+export type AdminGlobalSettings = {
+  order_notification_emails: string
+  updated_at: string
+}
+
+export const fetchAdminGlobalSettings = () =>
+  api.get<AdminGlobalSettings>('/admin/global-settings/').then((r) => r.data)
+
+export const updateAdminGlobalSettings = (data: Pick<AdminGlobalSettings, 'order_notification_emails'>) =>
+  api.patch<AdminGlobalSettings>('/admin/global-settings/', data).then((r) => r.data)
+
 export const fetchAdminCategories = () =>
   api.get<AdminCategoryOption[]>('/admin/categories/', { params: { options: 'true' } }).then((r) => r.data)
 
