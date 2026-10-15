@@ -113,6 +113,7 @@ class Order(models.Model):
 
     class PaymentMethod(models.TextChoices):
         STRIPE = "stripe", "Carta (Stripe)"
+        PAYPAL = "paypal", "PayPal"
         BANK_TRANSFER = "bank_transfer", "Bonifico bancario"
         MANUAL = "manual", "Manuale"
 
@@ -164,6 +165,7 @@ class Order(models.Model):
     )
     stripe_session_id = models.CharField(max_length=255, blank=True)
     stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
+    paypal_order_id = models.CharField(max_length=255, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

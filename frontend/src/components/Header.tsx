@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import LanguageSwitcher from './LanguageSwitcher'
 import MegaMenu from './MegaMenu'
 import { fetchCart, fetchCategories } from '../api/store'
+import { SITE_LOGO_URL } from '../constants/branding'
 import './Header.css'
 
 export default function Header() {
@@ -51,8 +52,7 @@ export default function Header() {
       <div className="header-wrapper">
         <div className="container header-inner">
           <Link to="/" className="logo" aria-label="SecurWork Home" onClick={closeAll}>
-            <span className="logo-mark" aria-hidden="true">SW</span>
-            <span className="logo-text">SecurWork</span>
+            <img src={SITE_LOGO_URL} alt="" className="site-logo-img" width={160} height={48} />
           </Link>
 
           <nav className={`main-nav ${mobileOpen ? 'open' : ''}`} aria-label="Main navigation">
@@ -116,11 +116,15 @@ export default function Header() {
             </Link>
 
             <Link to="/cart" className="header-icon cart-link" aria-label={t('nav.cart')}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.2 11.4a2 2 0 0 0 2 1.7h9.7a2 2 0 0 0 2-1.7L23 6H6" />
               </svg>
               {cart && cart.item_count > 0 && (
-                <span className="cart-count">{cart.item_count}</span>
+                <span className="cart-count" aria-hidden="true">
+                  {cart.item_count > 99 ? '99+' : cart.item_count}
+                </span>
               )}
             </Link>
 

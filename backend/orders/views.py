@@ -10,6 +10,13 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .emails import send_order_admin_notification, send_order_confirmation
 from .models import Cart, CartItem, Order
+from .paypal_payments import (
+    PayPalError,
+    capture_paypal_payment,
+    create_paypal_checkout,
+    paypal_capture_completed,
+    paypal_enabled,
+)
 from .payments import (
     cancel_order,
     confirm_order_payment,
@@ -128,6 +135,8 @@ class PaymentConfigView(APIView):
         return Response({
             "stripe_enabled": stripe_enabled(),
             "stripe_publishable_key": getattr(settings, "STRIPE_PUBLISHABLE_KEY", ""),
+            "paypal_enabled": paypal_enabled(),
+            "paypal_client_id": getattr(settings, "PAYPAL_CLIENT_ID", ""),
             "currency": settings.SECURWORK_CURRENCY,
             "bank_transfer_enabled": True,
             "bank_details": {
@@ -165,6 +174,18 @@ class CheckoutView(APIView):
             except stripe.error.StripeError as e:
                 cancel_order(order)
                 return Response({"detail": str(e.user_message if hasattr(e, "user_message") else e)}, status=status.HTTP_502_BAD_GATEWAY)
+        elif payment_method == "paypal" and paypal_enabled():
+            try:
+                checkout_url = create_paypal_checkout(order)
+            except PayPalError as e:
+                cancel_order(order)
+                return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+        elif payment_method in ("stripe", "paypal"):
+            cancel_order(order)
+            return Response(
+                {"detail": "Selected payment method is not available."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         elif payment_method == "bank_transfer":
             send_order_confirmation(order)
             send_order_admin_notification(order)
@@ -183,6 +204,7 @@ class OrderVerifyView(APIView):
 
     def get(self, request, order_number):
         session_id = request.query_params.get("session_id")
+        paypal_token = request.query_params.get("token")
         try:
             order = Order.objects.prefetch_related("items__customization").get(order_number=order_number)
         except Order.DoesNotExist:
@@ -195,6 +217,20 @@ class OrderVerifyView(APIView):
                 if session.payment_status == "paid" and session.metadata.get("order_number") == order_number:
                     confirm_order_payment(order, payment_intent_id=session.payment_intent or "")
             except stripe.error.StripeError:
+                pass
+
+        if (
+            paypal_token
+            and paypal_enabled()
+            and order.payment_status != Order.PaymentStatus.PAID
+            and order.payment_method == Order.PaymentMethod.PAYPAL
+            and order.paypal_order_id == paypal_token
+        ):
+            try:
+                capture_result = capture_paypal_payment(paypal_token)
+                if paypal_capture_completed(capture_result):
+                    confirm_order_payment(order)
+            except PayPalError:
                 pass
 
         return Response(OrderSerializer(order).data)

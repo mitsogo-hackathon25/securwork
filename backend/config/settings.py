@@ -194,6 +194,11 @@ STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
 
+# PayPal (https://developer.paypal.com/dashboard/)
+PAYPAL_CLIENT_ID = config("PAYPAL_CLIENT_ID", default="")
+PAYPAL_CLIENT_SECRET = config("PAYPAL_CLIENT_SECRET", default="")
+PAYPAL_MODE = config("PAYPAL_MODE", default="sandbox")  # sandbox | live
+
 # Bank transfer (displayed at checkout)
 SECURWORK_BANK_IBAN = config("SECURWORK_BANK_IBAN", default="[PLACEHOLDER-IBAN]")
 SECURWORK_BANK_BIC = config("SECURWORK_BANK_BIC", default="[PLACEHOLDER-BIC]")

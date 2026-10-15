@@ -16,7 +16,7 @@ export default function CheckoutPage() {
   const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'bank_transfer'>('stripe')
+  const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'stripe' | 'bank_transfer'>('paypal')
   const [sameAsBilling, setSameAsBilling] = useState(true)
 
   const cancelled = searchParams.get('cancelled')
@@ -36,6 +36,18 @@ export default function CheckoutPage() {
   })
 
   const stripeAvailable = paymentConfig?.stripe_enabled ?? false
+  const paypalAvailable = paymentConfig?.paypal_enabled ?? false
+
+  useEffect(() => {
+    if (!paymentConfig) return
+    if (paymentConfig.paypal_enabled) {
+      setPaymentMethod('paypal')
+    } else if (paymentConfig.stripe_enabled) {
+      setPaymentMethod('stripe')
+    } else {
+      setPaymentMethod('bank_transfer')
+    }
+  }, [paymentConfig])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -144,6 +156,18 @@ export default function CheckoutPage() {
             <section>
               <h2>{t('checkout.paymentMethod')}</h2>
               <div className="payment-methods">
+                {paypalAvailable && (
+                  <label className={`payment-option ${paymentMethod === 'paypal' ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="payment_method_ui"
+                      value="paypal"
+                      checked={paymentMethod === 'paypal'}
+                      onChange={() => setPaymentMethod('paypal')}
+                    />
+                    <span>{t('checkout.payPayPal')}</span>
+                  </label>
+                )}
                 {stripeAvailable && (
                   <label className={`payment-option ${paymentMethod === 'stripe' ? 'active' : ''}`}>
                     <input
@@ -193,7 +217,8 @@ export default function CheckoutPage() {
             </label>
 
             <button type="submit" className="btn btn-primary checkout-submit" disabled={loading}>
-              {loading ? t('common.loading') : paymentMethod === 'stripe' && stripeAvailable
+              {loading ? t('common.loading') : (paymentMethod === 'stripe' && stripeAvailable)
+                  || (paymentMethod === 'paypal' && paypalAvailable)
                 ? t('checkout.payNow')
                 : t('checkout.placeOrder')}
             </button>

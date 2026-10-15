@@ -16,6 +16,7 @@ const PAYMENT_STATUS: Record<string, string> = {
 
 const PAYMENT_METHOD: Record<string, string> = {
   stripe: 'Carta (Stripe)',
+  paypal: 'PayPal',
   bank_transfer: 'Bonifico bancario',
   manual: 'Manuale',
 }

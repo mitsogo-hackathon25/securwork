@@ -18,6 +18,11 @@
   margin-bottom: 1rem;
 }
 
+.site-logo-img--footer {
+  max-width: 140px;
+  max-height: 42px;
+}
+
 .footer-logo .logo-mark {
   display: flex;
   align-items: center;

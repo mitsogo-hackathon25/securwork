@@ -95,4 +95,16 @@
   font-weight: 700;
   color: var(--color-accent);
   margin: 0;
+  white-space: nowrap;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .product-card-price {
+    font-size: clamp(0.75rem, 3.5vw, 1rem);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

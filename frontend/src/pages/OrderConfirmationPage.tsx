@@ -17,7 +17,8 @@ export default function OrderConfirmationPage() {
   useEffect(() => {
     if (!orderNumber) return
     const sessionId = searchParams.get('session_id') || undefined
-    verifyOrder(orderNumber, sessionId)
+    const paypalToken = searchParams.get('token') || undefined
+    verifyOrder(orderNumber, { sessionId, paypalToken })
       .then(setOrder)
       .catch(() => setOrder(null))
       .finally(() => setLoading(false))

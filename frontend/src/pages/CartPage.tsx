@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import { fetchCart, removeCartItem, updateCartItem } from '../api/store'
 import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
+import { formatPrice } from '../utils/format'
 import './CartPage.css'
 
 export default function CartPage() {
@@ -14,8 +15,6 @@ export default function CartPage() {
     queryKey: ['cart'],
     queryFn: fetchCart,
   })
-
-  const formatPrice = (p: string) => `€ ${parseFloat(p).toFixed(2).replace('.', ',')}`
 
   const handleUpdate = async (itemId: number, quantity: number) => {
     await updateCartItem(itemId, quantity)

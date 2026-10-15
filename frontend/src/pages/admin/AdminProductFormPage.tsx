@@ -18,6 +18,7 @@ import {
 import type { AdminProduct, AdminProductVariant } from '../../api/types'
 import { CLOTHING_SIZES } from '../../constants/clothingSizes'
 import { PRODUCT_COLORS } from '../../constants/productColors'
+import { useToast } from '../../components/toast/ToastProvider'
 import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
 
@@ -98,6 +99,7 @@ export default function AdminProductFormPage() {
   const productId = isNew ? null : Number(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const [form, setForm] = useState<AdminProduct>(emptyProduct())
   const [langTab, setLangTab] = useState<'it' | 'en'>('it')
   const [error, setError] = useState('')
@@ -275,7 +277,13 @@ export default function AdminProductFormPage() {
         pendingImages.forEach((item) => URL.revokeObjectURL(item.preview))
         setPendingImages([])
         setPendingImageUrls([])
+        showToast('Prodotto creato con successo.')
         navigate(`/admin/products/${saved.id}`)
+      } else {
+        showToast('Prodotto aggiornato con successo.')
+        if (saved.id) {
+          queryClient.invalidateQueries({ queryKey: ['admin-product', saved.id] })
+        }
       }
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err

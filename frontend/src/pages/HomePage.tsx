@@ -9,12 +9,12 @@ import Newsletter from '../components/Newsletter'
 import TrustBadges from '../components/TrustBadges'
 import { OrganizationSchema } from '../components/SeoSchema'
 import { IconQuality, IconService, IconShield, IconTruck } from '../components/Icons'
+import { SITE_LOGO_URL } from '../constants/branding'
 import {
   fetchBestsellers,
   fetchCategories,
   fetchFeatured,
   fetchNewArrivals,
-  fetchProducts,
 } from '../api/store'
 import './HomePage.css'
 
@@ -26,6 +26,9 @@ const industryKeys = ['industryConstruction', 'industryManufacturing', 'industry
 const WORKWEAR_HOME_SLUGS = ['t-shirt', 'polo', 'pantaloni-da-lavoro', 'scarpe-da-lavoro']
 const PROFESSIONAL_HOME_SLUGS = ['linea-chef', 'divise-professionali']
 
+const heroHighlightKeys = ['heroHighlight1', 'heroHighlight2', 'heroHighlight3'] as const
+const heroStatKeys = ['heroStat1', 'heroStat2', 'heroStat3'] as const
+
 export default function HomePage() {
   const { t, i18n } = useTranslation()
 
@@ -33,20 +36,14 @@ export default function HomePage() {
   const { data: newArrivals = [] } = useQuery({ queryKey: ['newArrivals'], queryFn: fetchNewArrivals })
   const { data: bestsellers = [] } = useQuery({ queryKey: ['bestsellers'], queryFn: fetchBestsellers })
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: fetchCategories })
-  const { data: workwearProducts } = useQuery({
-    queryKey: ['products', 'workwear'],
-    queryFn: () => fetchProducts({ section: 'workwear' }),
-  })
-  const { data: professionalProducts } = useQuery({
-    queryKey: ['products', 'professional'],
-    queryFn: () => fetchProducts({ section: 'professional' }),
-  })
 
   const workwear = categories.find((c) => c.section === 'workwear')
   const professional = categories.find((c) => c.section === 'professional')
 
   const workwearHomeCards = workwear?.children?.filter((c) => WORKWEAR_HOME_SLUGS.includes(c.slug)) ?? []
   const professionalHomeCards = professional?.children?.filter((c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug)) ?? []
+
+  const hasProductShowcase = featured.length > 0 || newArrivals.length > 0 || bestsellers.length > 0
 
   return (
     <>
@@ -60,139 +57,174 @@ export default function HomePage() {
       </Helmet>
       <OrganizationSchema />
 
-      {/* Hero */}
-      <section className="hero animate-in">
-        <div className="hero-pattern" aria-hidden="true" />
-        <div className="container hero-content">
-          <span className="hero-eyebrow">{t('home.heroEyebrow')}</span>
-          <h1>{t('home.heroTitle')}</h1>
-          <p>{t('home.heroSubtitle')}</p>
-          <div className="hero-cta">
-            <Link to="/shop" className="btn btn-primary">{t('cta.shopNow')}</Link>
-            <Link to="/shop?section=workwear" className="btn btn-outline">{t('cta.discover')}</Link>
+      <div className="home-page">
+      <section className="hero">
+        <div className="hero-backdrop" aria-hidden="true">
+          <div className="hero-grid-lines" />
+          <div className="hero-glow" />
+        </div>
+        <div className="container hero-layout">
+          <div className="hero-copy animate-in">
+            <span className="hero-eyebrow">{t('home.heroEyebrow')}</span>
+            <h1>{t('home.heroTitle')}</h1>
+            <p className="hero-lead">{t('home.heroSubtitle')}</p>
+            <div className="hero-cta">
+              <Link to="/shop" className="btn btn-primary btn-lg">{t('cta.shopNow')}</Link>
+              <Link to="/contact" className="btn btn-hero-secondary">{t('home.heroContactCta')}</Link>
+            </div>
+          </div>
+          <aside className="hero-panel animate-in" aria-label={t('home.heroPanelLabel')}>
+            <div className="hero-panel-inner">
+              <img src={SITE_LOGO_URL} alt="" className="hero-panel-logo" width={140} height={48} />
+              <p className="hero-panel-tagline">{t('home.heroPanelTagline')}</p>
+              <ul className="hero-panel-list">
+                {heroHighlightKeys.map((key) => (
+                  <li key={key}>{t(`home.${key}`)}</li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+        </div>
+        <div className="hero-stats">
+          <div className="container hero-stats-grid">
+            {heroStatKeys.map((key) => (
+              <div key={key} className="hero-stat">
+                <span className="hero-stat-value">{t(`home.${key}Value`)}</span>
+                <span className="hero-stat-label">{t(`home.${key}Label`)}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       <TrustBadges />
 
-      {/* Main categories */}
-      <section className="section">
+      <section className="section home-why">
         <div className="container">
-          <SectionHeader title={t('home.categoriesTitle')} subtitle={t('home.categoriesSubtitle')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
-          <div className="hero-categories">
-            {workwear && <CategoryCard category={workwear} variant="hero" />}
-            {professional && <CategoryCard category={professional} variant="hero" />}
+          <div className="home-section-intro">
+            <span className="home-section-eyebrow">{t('home.whyEyebrow')}</span>
+            <h2>{t('home.whyTitle')}</h2>
+            <p>{t('home.whySubtitle')}</p>
           </div>
-          {workwearHomeCards.length > 0 && (
-            <div className="home-category-block">
-              <h3 className="home-category-block-title">{t('nav.workwear')}</h3>
-              <div className="subcategory-grid subcategory-grid--workwear">
-                {workwearHomeCards.map((cat) => (
-                  <CategoryCard key={cat.id} category={cat} variant="compact" />
-                ))}
-              </div>
-            </div>
-          )}
-          {professionalHomeCards.length > 0 && (
-            <div className="home-category-block">
-              <h3 className="home-category-block-title">{t('nav.professional')}</h3>
-              <div className="subcategory-grid subcategory-grid--professional">
-                {professionalHomeCards.map((cat) => (
-                  <CategoryCard key={cat.id} category={cat} variant="compact" />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Featured */}
-      {featured.length > 0 && (
-        <section className="section section-alt">
-          <div className="container">
-            <SectionHeader title={t('home.featured')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
-            <div className="grid-products">
-              {featured.map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Workwear section */}
-      {workwearProducts && workwearProducts.results.length > 0 && (
-        <section className="section">
-          <div className="container">
-            <SectionHeader title={t('nav.workwear')} subtitle={t('home.workwearSubtitle')} linkTo="/shop?section=workwear" linkLabel={t('cta.discover')} />
-            <div className="grid-products">
-              {workwearProducts.results.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Professional section */}
-      {professionalProducts && professionalProducts.results.length > 0 && (
-        <section className="section section-alt">
-          <div className="container">
-            <SectionHeader title={t('nav.professional')} subtitle={t('home.professionalSubtitle')} linkTo="/shop?section=professional" linkLabel={t('cta.discover')} />
-            <div className="grid-products">
-              {professionalProducts.results.slice(0, 2).map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* New arrivals */}
-      {newArrivals.length > 0 && (
-        <section className="section">
-          <div className="container">
-            <SectionHeader title={t('home.newArrivals')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
-            <div className="grid-products">
-              {newArrivals.map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Bestsellers */}
-      {bestsellers.length > 0 && (
-        <section className="section section-alt">
-          <div className="container">
-            <SectionHeader title={t('home.bestsellers')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
-            <div className="grid-products">
-              {bestsellers.map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Why choose */}
-      <section className="section why-section">
-        <div className="container">
-          <SectionHeader title={t('home.whyTitle')} subtitle={t('home.whySubtitle')} />
           <div className="why-grid">
             {whyKeys.map((key, i) => {
               const Icon = whyIcons[i]
               return (
-                <div key={key} className="why-card">
-                  <div className="why-icon"><Icon size={32} /></div>
+                <article key={key} className="why-card">
+                  <div className="why-icon"><Icon size={28} /></div>
                   <h3>{t(`home.${key}`)}</h3>
                   <p>{t(`home.${key}Desc`)}</p>
-                </div>
+                </article>
               )
             })}
           </div>
         </div>
       </section>
 
-      {/* Industry use cases */}
-      <section className="section section-alt">
+      <section className="section section-alt home-categories">
         <div className="container">
-          <SectionHeader title={t('home.industryTitle')} subtitle={t('home.industrySubtitle')} />
+          <SectionHeader
+            title={t('home.categoriesTitle')}
+            subtitle={t('home.categoriesSubtitle')}
+            linkTo="/shop"
+            linkLabel={t('cta.viewProducts')}
+          />
+          <div className="hero-categories">
+            {workwear && <CategoryCard category={workwear} variant="hero" />}
+            {professional && <CategoryCard category={professional} variant="hero" />}
+          </div>
+          {(workwearHomeCards.length > 0 || professionalHomeCards.length > 0) && (
+            <div className="home-subcategories">
+              {workwearHomeCards.length > 0 && (
+                <div className="home-category-block">
+                  <h3 className="home-category-block-title">{t('nav.workwear')}</h3>
+                  <div className="subcategory-grid">
+                    {workwearHomeCards.map((cat) => (
+                      <CategoryCard key={cat.id} category={cat} variant="compact" />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {professionalHomeCards.length > 0 && (
+                <div className="home-category-block">
+                  <h3 className="home-category-block-title">{t('nav.professional')}</h3>
+                  <div className="subcategory-grid">
+                    {professionalHomeCards.map((cat) => (
+                      <CategoryCard key={cat.id} category={cat} variant="compact" />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {hasProductShowcase && (
+        <section className="section home-catalog">
+          <div className="container">
+            <SectionHeader
+              title={t('home.catalogTitle')}
+              subtitle={t('home.catalogSubtitle')}
+              linkTo="/shop"
+              linkLabel={t('cta.viewProducts')}
+            />
+
+            {featured.length > 0 && (
+              <div className="home-catalog-block">
+                <SectionHeader title={t('home.featured')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
+                <div className="grid-products grid-products--home">
+                  {featured.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}
+                </div>
+              </div>
+            )}
+
+            {(newArrivals.length > 0 || bestsellers.length > 0) && (
+              <div className="home-catalog-duo">
+                {newArrivals.length > 0 && (
+                  <div className="home-catalog-column">
+                    <SectionHeader title={t('home.newArrivals')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
+                    <div className="grid-products grid-products--stack">
+                      {newArrivals.slice(0, 3).map((p) => <ProductCard key={p.id} product={p} />)}
+                    </div>
+                  </div>
+                )}
+                {bestsellers.length > 0 && (
+                  <div className="home-catalog-column">
+                    <SectionHeader title={t('home.bestsellers')} linkTo="/shop" linkLabel={t('cta.viewProducts')} />
+                    <div className="grid-products grid-products--stack">
+                      {bestsellers.slice(0, 3).map((p) => <ProductCard key={p.id} product={p} />)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className="home-custom-cta">
+        <div className="container home-custom-cta-inner">
+          <div>
+            <span className="home-section-eyebrow home-section-eyebrow--light">{t('home.customEyebrow')}</span>
+            <h2>{t('home.customCtaTitle')}</h2>
+            <p>{t('home.customCtaSubtitle')}</p>
+          </div>
+          <Link to="/shop" className="btn btn-primary btn-lg">{t('home.customCtaButton')}</Link>
+        </div>
+      </section>
+
+      <section className="section section-alt home-industries">
+        <div className="container">
+          <div className="home-section-intro">
+            <span className="home-section-eyebrow">{t('home.industryEyebrow')}</span>
+            <h2>{t('home.industryTitle')}</h2>
+            <p>{t('home.industrySubtitle')}</p>
+          </div>
           <div className="industry-grid">
-            {industryKeys.map((key) => (
+            {industryKeys.map((key, index) => (
               <Link key={key} to="/shop" className="industry-card">
+                <span className="industry-card-index">{String(index + 1).padStart(2, '0')}</span>
                 <h3>{t(`home.${key}`)}</h3>
                 <p>{t(`home.${key}Desc`)}</p>
               </Link>
@@ -201,18 +233,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Promo banner */}
       <section className="promo-banner">
         <div className="container promo-banner-inner">
           <div>
             <h2>{t('home.promoTitle')}</h2>
             <p>{t('home.promoSubtitle')}</p>
           </div>
-          <Link to="/shop?on_sale=true" className="btn btn-primary">{t('nav.promotions')}</Link>
+          <Link to="/shop?on_sale=true" className="btn btn-promo">{t('nav.promotions')}</Link>
         </div>
       </section>
 
       <Newsletter />
+      </div>
     </>
   )
 }

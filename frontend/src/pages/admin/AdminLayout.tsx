@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { SITE_LOGO_URL } from '../../constants/branding'
 import './Admin.css'
 
 export default function AdminLayout() {
@@ -14,8 +15,8 @@ export default function AdminLayout() {
     <div className="admin-shell">
       <aside className="admin-sidebar">
         <Link to="/admin/products" className="admin-brand">
-          <span className="admin-brand-mark">sw</span>
-          <span>SecurWork Admin</span>
+          <img src={SITE_LOGO_URL} alt="" className="site-logo-img site-logo-img--admin" width={120} height={36} />
+          <span>Admin</span>
         </Link>
         <nav className="admin-nav">
           <NavLink to="/admin/products" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>Prodotti</NavLink>

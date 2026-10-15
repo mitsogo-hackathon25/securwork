@@ -2,10 +2,15 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  overflow-x: clip;
+}
 
 body {
   margin: 0;
+  overflow-x: clip;
+  width: 100%;
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.6;
@@ -20,9 +25,17 @@ a { color: var(--color-accent); text-decoration: none; transition: color var(--d
 a:hover { color: var(--color-accent-hover); }
 
 .container {
+  width: 100%;
   max-width: var(--container);
   margin: 0 auto;
   padding: 0 1.25rem;
+  min-width: 0;
+}
+
+#main-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .btn {
@@ -82,8 +95,10 @@ a:hover { color: var(--color-accent-hover); }
 
 .grid-products {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .placeholder-notice {

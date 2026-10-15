@@ -90,4 +90,9 @@
 @media (max-width: 768px) {
   .cart-table { font-size: 0.875rem; }
   .cart-table th:nth-child(2), .cart-table td:nth-child(2) { display: none; }
+  .cart-table td {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .cart-total { font-size: 1.125rem; }
 }

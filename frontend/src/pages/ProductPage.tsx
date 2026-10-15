@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,7 +10,8 @@ import ProductCustomizer, { type ProductCustomizerHandle } from '../components/P
 import { addToCart, fetchProduct, fetchRelated } from '../api/store'
 import type { ProductVariant } from '../api/types'
 import { sortClothingSizes } from '../constants/clothingSizes'
-import { formatPrice } from '../utils/format'
+import { useToast } from '../components/toast/ToastProvider'
+import { formatPrice, variantHasDiscount } from '../utils/format'
 import './ProductPage.css'
 
 export default function ProductPage() {
@@ -21,8 +22,8 @@ export default function ProductPage() {
   const [activeImage, setActiveImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
-  const [added, setAdded] = useState(false)
   const [customize, setCustomize] = useState(false)
+  const { showToast } = useToast()
   const [hasLogo, setHasLogo] = useState(false)
   const customizerRef = useRef<ProductCustomizerHandle>(null)
 
@@ -38,11 +39,27 @@ export default function ProductPage() {
     enabled: !!slug,
   })
 
+  useEffect(() => {
+    setSelectedVariant(null)
+    setActiveImage(0)
+    setQuantity(1)
+    setCustomize(false)
+    setHasLogo(false)
+  }, [slug])
+
+  const variant = useMemo(() => {
+    const list = product?.variants
+    if (!list?.length) return null
+    if (selectedVariant && list.some((v) => v.id === selectedVariant.id)) {
+      return selectedVariant
+    }
+    return list.find((v) => v.in_stock) || list[0] || null
+  }, [product?.variants, selectedVariant])
+
   if (isLoading) return <div className="container section"><p>{t('common.loading')}</p></div>
   if (!product) return <div className="container section"><p>{t('common.error')}</p></div>
 
   const variants = product.variants || []
-  const variant = selectedVariant || variants.find((v) => v.in_stock) || variants[0]
   const maxQty = variant?.stock_quantity ?? 1
   const images = product.images?.length ? product.images : []
   const mainImage = images[activeImage]?.image || product.primary_image
@@ -59,9 +76,8 @@ export default function ProductPage() {
         customizationId = await customizerRef.current.upload()
       }
       await addToCart(variant.id, quantity, customizationId)
-      queryClient.invalidateQueries({ queryKey: ['cart'] })
-      setAdded(true)
-      setTimeout(() => setAdded(false), 2500)
+      await queryClient.invalidateQueries({ queryKey: ['cart'] })
+      showToast(t('product.addedToCart'))
     } finally {
       setAdding(false)
     }
@@ -116,7 +132,7 @@ export default function ProductPage() {
           ]} />
 
           <div className="product-layout">
-            <div className="product-gallery">
+            <div className={`product-gallery${images.length > 1 ? ' product-gallery--multi' : ''}`}>
               <div className="product-gallery-main">
                 {mainImage ? (
                   <img src={mainImage} alt={product.name} />
@@ -125,14 +141,17 @@ export default function ProductPage() {
                 )}
               </div>
               {images.length > 1 && (
-                <div className="product-gallery-thumbs">
+                <div className="product-gallery-thumbs" role="tablist" aria-label={t('product.galleryThumbs')}>
+                  <p className="product-gallery-thumbs-label">{t('product.galleryThumbs')}</p>
                   {images.map((img, i) => (
                     <button
                       key={img.id}
                       type="button"
+                      role="tab"
+                      aria-selected={i === activeImage}
                       className={`thumb ${i === activeImage ? 'active' : ''}`}
                       onClick={() => setActiveImage(i)}
-                      aria-label={`Image ${i + 1}`}
+                      aria-label={`${t('product.galleryImage')} ${i + 1}`}
                     >
                       <img src={img.image} alt="" />
                     </button>
@@ -150,13 +169,13 @@ export default function ProductPage() {
 
               {variant && (
                 <p className="product-price">
-                  {variant.sale_price && parseFloat(variant.sale_price) < parseFloat(variant.price) ? (
+                  {variantHasDiscount(variant) ? (
                     <>
                       <span className="sale-price">{formatPrice(variant.effective_price)}</span>
                       <span className="original-price">{formatPrice(variant.price)}</span>
                     </>
                   ) : (
-                    formatPrice(variant.effective_price)
+                    <span className="product-price-current">{formatPrice(variant.effective_price)}</span>
                   )}
                 </p>
               )}
@@ -257,7 +276,7 @@ export default function ProductPage() {
                 onClick={handleAddToCart}
                 disabled={!variant?.in_stock || adding || (customize && !hasLogo)}
               >
-                {adding ? t('common.loading') : added ? t('product.addedToCart') : t('cta.addToCart')}
+                {adding ? t('common.loading') : t('cta.addToCart')}
               </button>
 
               <div className="product-shipping-info">

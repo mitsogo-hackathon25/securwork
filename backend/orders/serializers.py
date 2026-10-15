@@ -147,8 +147,8 @@ class CheckoutSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
     language = serializers.ChoiceField(choices=["it", "en"], default="it")
     payment_method = serializers.ChoiceField(
-        choices=["stripe", "bank_transfer"],
-        default="stripe",
+        choices=["stripe", "paypal", "bank_transfer"],
+        default="paypal",
     )
     accept_terms = serializers.BooleanField()
 

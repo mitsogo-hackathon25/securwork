@@ -4,11 +4,21 @@
   left: 0;
   right: 0;
   z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--color-primary-dark);
   color: rgba(255, 255, 255, 0.9);
   padding: 1rem 0;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   animation: slideUp 0.3s ease;
+  overflow-x: hidden;
+}
+
+.cookie-banner .container {
+  width: 100%;
+  max-width: var(--container);
+  min-width: 0;
 }
 
 @keyframes slideUp {
@@ -20,28 +30,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 1rem 1.25rem;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
 }
 
 .cookie-banner-text {
-  flex: 1;
-  min-width: 200px;
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.875rem;
   line-height: 1.5;
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cookie-banner-text a {
   color: #fff;
   text-decoration: underline;
   text-underline-offset: 2px;
+  white-space: nowrap;
 }
 
 .cookie-banner-actions {
   display: flex;
-  gap: 0.75rem;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  gap: 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cookie-banner .btn {
+  white-space: nowrap;
 }
 
 .cookie-banner .btn-accept {
@@ -64,17 +86,60 @@
   color: #fff;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+  .cookie-banner {
+    padding: 1rem 0 1.25rem;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .cookie-banner-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .cookie-banner-text {
+    flex: none;
+    width: 100%;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+
+  .cookie-banner-text a {
+    white-space: normal;
+    display: inline;
+  }
+
+  .cookie-banner-actions {
+    width: 100%;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .cookie-banner-actions .btn {
+    width: 100%;
+    flex: none;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 960px) {
   .cookie-banner-inner {
     flex-direction: column;
     align-items: stretch;
   }
 
   .cookie-banner-actions {
-    justify-content: stretch;
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .cookie-banner-actions .btn {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 12rem;
   }
 }

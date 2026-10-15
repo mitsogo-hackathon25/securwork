@@ -204,6 +204,8 @@ export interface AdminOrder extends Order {
 export interface PaymentConfig {
   stripe_enabled: boolean
   stripe_publishable_key: string
+  paypal_enabled: boolean
+  paypal_client_id: string
   currency: string
   bank_transfer_enabled: boolean
   bank_details: {

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { fetchSiteConfig } from '../api/store'
+import { SITE_LOGO_URL } from '../constants/branding'
 import './Footer.css'
 
 export default function Footer() {
@@ -15,8 +16,7 @@ export default function Footer() {
         <div className="footer-grid">
           <div className="footer-brand">
             <div className="footer-logo">
-              <span className="logo-mark">SW</span>
-              <span className="logo-text">SecurWork</span>
+              <img src={SITE_LOGO_URL} alt="SecurWork" className="site-logo-img site-logo-img--footer" width={140} height={42} />
             </div>
             <p className="footer-tagline">{t('home.heroSubtitle')}</p>
             {site ? (

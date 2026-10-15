@@ -74,9 +74,15 @@ export const fetchPaymentConfig = () =>
 export const checkout = (data: Record<string, unknown>) =>
   api.post<CheckoutResponse>('/checkout/', data).then((r) => r.data)
 
-export const verifyOrder = (orderNumber: string, sessionId?: string) =>
+export const verifyOrder = (
+  orderNumber: string,
+  options?: { sessionId?: string; paypalToken?: string },
+) =>
   api.get<Order>(`/orders/${orderNumber}/verify/`, {
-    params: sessionId ? { session_id: sessionId } : {},
+    params: {
+      ...(options?.sessionId ? { session_id: options.sessionId } : {}),
+      ...(options?.paypalToken ? { token: options.paypalToken } : {}),
+    },
   }).then((r) => r.data)
 
 export const fetchSiteConfig = () =>

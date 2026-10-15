@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import ScrollToTop from './components/ScrollToTop'
 import AdminRoute from './components/admin/AdminRoute'
 import HomePage from './pages/HomePage'
 import ShopPage from './pages/ShopPage'
@@ -26,6 +27,7 @@ import AdminGlobalSettingsPage from './pages/admin/AdminGlobalSettingsPage'
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<AdminRoute />}>

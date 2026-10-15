@@ -38,7 +38,6 @@ export default function Newsletter() {
             <button type="submit" className="btn btn-primary">{t('home.newsletterCta')}</button>
           </form>
         )}
-        <p className="newsletter-placeholder">{t('home.newsletterPlaceholderNote')}</p>
       </div>
     </section>
   )
