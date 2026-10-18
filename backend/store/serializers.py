@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from .category_ordering import sort_categories
 from .models import Category, Product, ProductImage, ProductVariant
 
 
@@ -31,7 +32,10 @@ class CategorySerializer(serializers.ModelSerializer):
         return obj.safe_translation_getter("description", language_code=self._lang(), any_language=True)
 
     def get_children(self, obj):
-        children = obj.children.filter(is_active=True)
+        children = sort_categories(
+            obj.children.filter(is_active=True),
+            self._lang(),
+        )
         return CategorySerializer(children, many=True, context=self.context).data
 
 

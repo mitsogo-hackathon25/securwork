@@ -25,6 +25,7 @@ from .csv_import import (
     import_parsed_rows,
     parse_and_validate_csv,
 )
+from .category_ordering import sort_categories
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
@@ -78,11 +79,18 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="adjust_prices")
     def adjust_prices(self, request):
         percent_raw = request.data.get("percent")
+        brand_raw = request.data.get("brand")
         if percent_raw in (None, ""):
             return Response(
                 {"detail": "Indica una percentuale (es. 10 o -5)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if brand_raw is None or (isinstance(brand_raw, str) and not brand_raw.strip()):
+            return Response(
+                {"detail": "Seleziona una marca."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        brand_key = str(brand_raw).strip()
         try:
             percent = Decimal(str(percent_raw).replace(",", "."))
         except (InvalidOperation, ValueError):
@@ -101,9 +109,16 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if brand_key == "__none__":
+            variants_qs = ProductVariant.objects.filter(product__brand="")
+            brand_label = "Senza marca"
+        else:
+            variants_qs = ProductVariant.objects.filter(product__brand__iexact=brand_key)
+            brand_label = brand_key
+
         factor = (Decimal("100") + percent) / Decimal("100")
         updated_variants = 0
-        for variant in ProductVariant.objects.all().iterator():
+        for variant in variants_qs.select_related("product").iterator():
             new_price = (variant.price * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             variant.price = max(Decimal("0.01"), new_price)
             if variant.sale_price is not None:
@@ -115,10 +130,12 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         direction = "aumentati" if percent > 0 else "ridotti"
         return Response({
             "detail": (
-                f"Prezzi {direction} del {abs(percent)}% su {updated_variants} varianti."
+                f"Prezzi {direction} del {abs(percent)}% su {updated_variants} varianti "
+                f"({brand_label})."
             ),
             "updated_variants": updated_variants,
             "percent": str(percent),
+            "brand": brand_label,
         })
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")
@@ -289,12 +306,18 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ["translations__name", "slug"]
     filterset_fields = ["section", "is_active", "parent"]
-    ordering_fields = ["sort_order", "slug", "created_at"]
-    ordering = ["section", "sort_order", "slug"]
+    ordering_fields = ["slug", "created_at"]
+    ordering = ["slug"]
     pagination_class = None
 
     def get_queryset(self):
         return Category.objects.select_related("parent").prefetch_related("translations")
+
+    def list(self, request, *args, **kwargs):
+        queryset = sort_categories(self.filter_queryset(self.get_queryset()), "it")
+        serializer_class = self.get_serializer_class()
+        serializer = serializer_class(queryset, many=True, context=self.get_serializer_context())
+        return Response(serializer.data)
 
     def get_serializer_class(self):
         if self.action == "list" and self.request.query_params.get("options") == "true":

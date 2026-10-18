@@ -9,7 +9,7 @@ import { SITE_LOGO_URL } from '../constants/branding'
 import './Header.css'
 
 export default function Header() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [megaOpen, setMegaOpen] = useState(false)
@@ -23,7 +23,7 @@ export default function Header() {
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: ['categories', i18n.language],
     queryFn: fetchCategories,
   })
 

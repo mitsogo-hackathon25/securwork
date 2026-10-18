@@ -36,13 +36,15 @@ export default function ShopFilters({
   mobileOpen,
   onCloseMobile,
 }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language.startsWith('en') ? 'en' : 'it'
 
   const filteredParents = filters.section
     ? categories.filter((parent) => parent.section === filters.section)
     : categories
 
-  const categoryOptions = filteredParents.flatMap((parent) => parent.children ?? [])
+  const categoryOptions = [...filteredParents.flatMap((parent) => parent.children ?? [])]
+    .sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: 'base' }))
 
   const content = (
     <>

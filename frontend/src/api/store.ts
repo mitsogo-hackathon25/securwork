@@ -3,12 +3,21 @@ import type {
   Cart, Category, CheckoutResponse, CustomizationDesign, FAQ, LineItemCustomization,
   Order, Page, PaginatedResponse, PaymentConfig, Product, SiteConfig,
 } from './types'
+import { sortCategoryTree } from '../utils/sortCategories'
 
-export const fetchCategories = () =>
-  api.get<PaginatedResponse<Category> | Category[]>('/categories/').then((r) => {
-    const data = r.data
-    return Array.isArray(data) ? data : data.results
-  })
+export const fetchCategories = () => {
+  const lang = typeof localStorage !== 'undefined'
+    ? (localStorage.getItem('securwork_lang') || 'it')
+    : 'it'
+  const locale = lang.startsWith('en') ? 'en' : 'it'
+  return api
+    .get<PaginatedResponse<Category> | Category[]>('/categories/', { params: { lang: locale } })
+    .then((r) => {
+      const data = r.data
+      const list = Array.isArray(data) ? data : data.results
+      return sortCategoryTree(list, locale)
+    })
+}
 
 export const fetchProducts = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<Product>>('/products/', { params }).then((r) => r.data)

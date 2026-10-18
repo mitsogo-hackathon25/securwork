@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
+from .category_ordering import sort_categories
 from .filters import BilingualProductSearchFilter
 from .models import Brand, Category, Color, Product, ProductVariant
 from .serializers import CategorySerializer, ProductDetailSerializer, ProductListSerializer
@@ -22,11 +23,19 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         ctx["lang"] = self.request.query_params.get("lang", "it")
         return ctx
 
+    def _lang(self) -> str:
+        return self.request.query_params.get("lang", "it")
+
+    def list(self, request, *args, **kwargs):
+        queryset = sort_categories(self.filter_queryset(self.get_queryset()), self._lang())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=["get"])
     def all(self, request):
         """Flat list of all active categories."""
         lang = request.query_params.get("lang", "it")
-        qs = Category.objects.filter(is_active=True)
+        qs = sort_categories(Category.objects.filter(is_active=True), lang)
         serializer = CategorySerializer(qs, many=True, context={"request": request, "lang": lang})
         return Response(serializer.data)
 

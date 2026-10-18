@@ -1,4 +1,5 @@
 import api from './client'
+import { sortByName } from '../utils/sortCategories'
 import type {
   AdminBrand,
   AdminColor,
@@ -80,11 +81,12 @@ export type PriceAdjustResult = {
   detail: string
   updated_variants: number
   percent: string
+  brand: string
 }
 
-export const adjustAllProductPrices = (percent: number) =>
+export const adjustProductPricesByBrand = (payload: { percent: number; brand: string }) =>
   api
-    .post<PriceAdjustResult>('/admin/products/adjust_prices/', { percent })
+    .post<PriceAdjustResult>('/admin/products/adjust_prices/', payload)
     .then((r) => r.data)
 
 export type AdminGlobalSettings = {
@@ -99,10 +101,15 @@ export const updateAdminGlobalSettings = (data: Pick<AdminGlobalSettings, 'order
   api.patch<AdminGlobalSettings>('/admin/global-settings/', data).then((r) => r.data)
 
 export const fetchAdminCategories = () =>
-  api.get<AdminCategoryOption[]>('/admin/categories/', { params: { options: 'true' } }).then((r) => r.data)
+  api.get<AdminCategoryOption[]>('/admin/categories/', { params: { options: 'true' } })
+    .then((r) => sortByName(r.data, 'it'))
 
 export const fetchAdminCategoryList = () =>
-  api.get<AdminCategory[]>('/admin/categories/').then((r) => r.data)
+  api.get<AdminCategory[]>('/admin/categories/').then((r) =>
+    [...r.data].sort((a, b) =>
+      (a.name_it || a.slug).localeCompare(b.name_it || b.slug, 'it', { sensitivity: 'base' }),
+    ),
+  )
 
 export const createAdminCategory = (data: Partial<AdminCategory>) =>
   api.post<AdminCategory>('/admin/categories/', data).then((r) => r.data)

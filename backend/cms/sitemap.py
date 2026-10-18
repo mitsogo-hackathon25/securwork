@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.http import HttpResponse
 
+from store.category_ordering import sort_categories
 from store.models import Category, Product
 
 
@@ -24,7 +25,7 @@ def sitemap_xml(request):
     for path, changefreq, priority in static_pages:
         urls.append(_url_entry(base + path, changefreq, priority))
 
-    for cat in Category.objects.all():
+    for cat in sort_categories(Category.objects.all(), "it"):
         urls.append(_url_entry(f"{base}/shop?category={cat.slug}", "weekly", "0.7"))
 
     for product in Product.objects.filter(is_active=True):

@@ -74,16 +74,20 @@ from .product_images import (
 CSV_HEADERS = [
     "sku_prodotto",
     "marca",
+    "categoria",
     "nome_it",
     "nome_en",
+    "descrizione_breve_it",
+    "descrizione_breve_en",
     "descrizione_it",
     "descrizione_en",
+    "bestseller",
+    "costo_personalizzazione",
     "taglia",
     "colore",
     "prezzo",
     "scorte",
     "sku_variante",
-    "slug_categorie",
     "prezzo_scontato",
     "ricamo_petto",
     "costo_ricamo_petto",
@@ -101,21 +105,31 @@ CSV_HEADERS = [
 HEADER_ALIASES = {
     "product_sku": "sku_prodotto",
     "brand": "marca",
+    "branch": "marca",
     "name_it": "nome_it",
     "name_en": "nome_en",
+    "short_description_it": "descrizione_breve_it",
+    "short_description_en": "descrizione_breve_en",
+    "descrizione_breve_it": "descrizione_breve_it",
+    "descrizione_breve_en": "descrizione_breve_en",
     "description_it": "descrizione_it",
     "description_en": "descrizione_en",
+    "is_bestseller": "bestseller",
+    "bestseller": "bestseller",
+    "best_seller": "bestseller",
+    "customization_fee": "costo_personalizzazione",
     "size": "taglia",
     "color": "colore",
     "price": "prezzo",
     "stock": "scorte",
     "variant_sku": "sku_variante",
-    "category_slugs": "slug_categorie",
+    "slug_categorie": "categoria",
+    "category_slugs": "categoria",
+    "category": "categoria",
+    "categories": "categoria",
     "sale_price": "prezzo_scontato",
     "allows_customization": "ricamo_petto",
-    "customization_fee": "costo_ricamo_petto",
     "personalizzazione": "ricamo_petto",
-    "costo_personalizzazione": "costo_ricamo_petto",
     "embroidery_chest": "ricamo_petto",
     "embroidery_chest_fee": "costo_ricamo_petto",
     "embroidery_large": "ricamo_grande",
@@ -140,6 +154,7 @@ METHOD_CSV_FIELDS = (
 REQUIRED_FIELDS = [
     "sku_prodotto",
     "marca",
+    "categoria",
     "nome_it",
     "nome_en",
     "descrizione_it",
@@ -156,14 +171,18 @@ TEMPLATE_EXAMPLE_ROWS = [
         "marca": "ExampleBrand",
         "nome_it": "Polo da lavoro",
         "nome_en": "Work polo",
+        "descrizione_breve_it": "Polo operativa traspirante.",
+        "descrizione_breve_en": "Breathable work polo.",
         "descrizione_it": "Polo resistente per uso professionale.",
         "descrizione_en": "Durable polo for professional use.",
+        "bestseller": "no",
+        "costo_personalizzazione": "5.00",
         "taglia": "M",
         "colore": "Blu",
         "prezzo": "29.90",
         "scorte": "10",
         "sku_variante": "SW-POLO-01-M-BLU",
-        "slug_categorie": "polo",
+        "categoria": "polo",
         "prezzo_scontato": "",
         "ricamo_petto": "si",
         "costo_ricamo_petto": "5.00",
@@ -181,14 +200,18 @@ TEMPLATE_EXAMPLE_ROWS = [
         "marca": "ExampleBrand",
         "nome_it": "Polo da lavoro",
         "nome_en": "Work polo",
+        "descrizione_breve_it": "Polo operativa traspirante.",
+        "descrizione_breve_en": "Breathable work polo.",
         "descrizione_it": "Polo resistente per uso professionale.",
         "descrizione_en": "Durable polo for professional use.",
+        "bestseller": "no",
+        "costo_personalizzazione": "5.00",
         "taglia": "L",
         "colore": "Blu",
         "prezzo": "29.90",
         "scorte": "8",
         "sku_variante": "SW-POLO-01-L-BLU",
-        "slug_categorie": "polo",
+        "categoria": "polo",
         "prezzo_scontato": "",
         "ricamo_petto": "si",
         "costo_ricamo_petto": "5.00",
@@ -242,9 +265,13 @@ def export_products_csv() -> str:
             "marca": product.brand or "",
             "nome_it": _translation(product, "name", "it"),
             "nome_en": _translation(product, "name", "en"),
+            "descrizione_breve_it": _translation(product, "short_description", "it"),
+            "descrizione_breve_en": _translation(product, "short_description", "en"),
             "descrizione_it": _translation(product, "description", "it"),
             "descrizione_en": _translation(product, "description", "en"),
-            "slug_categorie": category_slugs,
+            "bestseller": _bool_to_csv(bool(product.is_bestseller)),
+            "costo_personalizzazione": f"{product.customization_fee:.2f}",
+            "categoria": category_slugs,
             "ricamo_petto": _bool_to_csv(bool(product.embroidery_chest_enabled)),
             "costo_ricamo_petto": f"{product.embroidery_chest_fee:.2f}",
             "ricamo_grande": _bool_to_csv(bool(product.embroidery_large_enabled)),
@@ -360,6 +387,46 @@ def _parse_bool(value: str, field: str, row_num: int, errors: list[dict], defaul
     return None
 
 
+def _category_lookup_maps() -> tuple[dict[str, Category], dict[str, Category]]:
+    by_slug: dict[str, Category] = {}
+    by_name: dict[str, Category] = {}
+    for cat in Category.objects.filter(is_active=True):
+        by_slug[cat.slug.lower()] = cat
+        for lang in ("it", "en"):
+            name = cat.safe_translation_getter("name", language_code=lang, any_language=True) or ""
+            key = name.strip().lower()
+            if key:
+                by_name[key] = cat
+    return by_slug, by_name
+
+
+def _resolve_category_ids(
+    raw: str,
+    by_slug: dict[str, Category],
+    by_name: dict[str, Category],
+    row_num: int,
+    errors: list[dict],
+) -> list[int]:
+    if not raw:
+        return []
+    ids: list[int] = []
+    for token in [s.strip() for s in raw.replace(";", ",").split(",") if s.strip()]:
+        key = token.lower()
+        cat = by_slug.get(key) or by_name.get(key)
+        if cat:
+            ids.append(cat.id)
+        else:
+            errors.append({
+                "row": row_num,
+                "field": "categoria",
+                "message": (
+                    f"Categoria non trovata: '{token}'. "
+                    "Usa lo slug (es. polo, t-shirt) o il nome IT/EN della categoria."
+                ),
+            })
+    return ids
+
+
 def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
     """Return (parsed_rows, errors). parsed_rows is empty when errors exist."""
     errors: list[dict] = []
@@ -381,7 +448,7 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "message": f"Colonne obbligatorie mancanti: {', '.join(missing_headers)}.",
         }]
 
-    categories = {c.slug.lower(): c for c in Category.objects.filter(is_active=True)}
+    categories_by_slug, categories_by_name = _category_lookup_maps()
     existing_names_it = _existing_product_names_it()
     csv_name_to_sku: dict[str, str] = {}
 
@@ -404,13 +471,16 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
         name_en = _cell(row, "nome_en")
         description_it = _cell(row, "descrizione_it")
         description_en = _cell(row, "descrizione_en")
+        short_description_it = _cell(row, "descrizione_breve_it")
+        short_description_en = _cell(row, "descrizione_breve_en")
+        bestseller_raw = _cell(row, "bestseller")
         size_raw = _cell(row, "taglia")
         size = size_raw.upper() if size_raw.upper() in CLOTHING_SIZES else size_raw
         color_raw = _cell(row, "colore")
         price_raw = _cell(row, "prezzo")
         stock_raw = _cell(row, "scorte")
         variant_sku = _cell(row, "sku_variante")
-        category_slugs_raw = _cell(row, "slug_categorie")
+        category_slugs_raw = _cell(row, "categoria")
         sale_price_raw = _cell(row, "prezzo_scontato")
 
         if name_it and product_sku:
@@ -470,13 +540,26 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             if method_values[enabled_attr]
         ]
         customization_fee = min(enabled_fees) if enabled_fees else Decimal("0.00")
+        customization_fee_raw = _cell(row, "costo_personalizzazione")
+        if customization_fee_raw:
+            parsed_product_fee = _parse_price(
+                customization_fee_raw, "costo_personalizzazione", row_num, errors,
+            )
+            if parsed_product_fee is not None:
+                customization_fee = parsed_product_fee
 
-        category_ids: list[int] = []
-        if category_slugs_raw:
-            for slug in [s.strip() for s in category_slugs_raw.replace(";", ",").split(",") if s.strip()]:
-                cat = categories.get(slug.lower())
-                if cat:
-                    category_ids.append(cat.id)
+        is_bestseller = _parse_bool(bestseller_raw, "bestseller", row_num, errors, default=False)
+        if is_bestseller is None:
+            method_parse_ok = False
+            is_bestseller = False
+
+        category_ids = _resolve_category_ids(
+            category_slugs_raw,
+            categories_by_slug,
+            categories_by_name,
+            row_num,
+            errors,
+        )
 
         if not variant_sku and product_sku and size and color_raw:
             variant_sku = _suggest_variant_sku(product_sku, size, color_raw)
@@ -526,8 +609,11 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                 "marca": brand_raw,
                 "nome_it": name_it,
                 "nome_en": name_en,
+                "descrizione_breve_it": short_description_it,
+                "descrizione_breve_en": short_description_en,
                 "descrizione_it": description_it,
                 "descrizione_en": description_en,
+                "is_bestseller": is_bestseller,
                 "category_ids": category_ids,
                 "allows_customization": allows_customization,
                 "customization_fee": customization_fee,
@@ -537,7 +623,12 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             }
             if meta_key in product_meta:
                 prev = product_meta[meta_key]
-                for field in ("marca", "nome_it", "nome_en", "descrizione_it", "descrizione_en"):
+                for field in (
+                    "marca", "nome_it", "nome_en",
+                    "descrizione_breve_it", "descrizione_breve_en",
+                    "descrizione_it", "descrizione_en",
+                    "is_bestseller",
+                ):
                     if prev.get(field) and current.get(field) and prev[field] != current[field]:
                         errors.append({
                             "row": row_num,
@@ -550,8 +641,8 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                 if prev.get("category_ids") and category_ids and set(prev["category_ids"]) != set(category_ids):
                     errors.append({
                         "row": row_num,
-                        "field": "slug_categorie",
-                        "message": f"slug_categorie per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
+                        "field": "categoria",
+                        "message": f"categoria per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
                     })
                 for enabled_csv, fee_csv, enabled_attr, fee_attr in METHOD_CSV_FIELDS:
                     if prev.get(enabled_attr) != current.get(enabled_attr):
@@ -566,6 +657,15 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
                             "field": fee_csv,
                             "message": f"{fee_csv} per il prodotto '{product_sku}' non corrisponde a una riga precedente.",
                         })
+                if prev.get("customization_fee") != current.get("customization_fee"):
+                    errors.append({
+                        "row": row_num,
+                        "field": "costo_personalizzazione",
+                        "message": (
+                            f"costo_personalizzazione per il prodotto '{product_sku}' "
+                            "non corrisponde a una riga precedente."
+                        ),
+                    })
                 if prev.get("image_urls") and image_urls and prev["image_urls"] != image_urls:
                     errors.append({
                         "row": row_num,
@@ -602,8 +702,11 @@ def parse_and_validate_csv(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "brand": brand_raw,
             "name_it": name_it,
             "name_en": name_en,
+            "short_description_it": short_description_it,
+            "short_description_en": short_description_en,
             "description_it": description_it,
             "description_en": description_en,
+            "is_bestseller": is_bestseller,
             "size": size,
             "color": color_raw,
             "price": price,
@@ -654,6 +757,7 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
                 brand=brand_name,
                 slug=slug,
                 is_active=True,
+                is_bestseller=bool(first.get("is_bestseller")),
                 allows_customization=bool(first.get("allows_customization")),
                 customization_fee=first.get("customization_fee") or Decimal("0.00"),
                 embroidery_chest_enabled=bool(first.get("embroidery_chest_enabled")),
@@ -668,12 +772,12 @@ def import_parsed_rows(parsed_rows: list[dict]) -> dict:
             product.set_current_language("it")
             product.name = first["name_it"]
             product.description = first["description_it"]
-            product.short_description = ""
+            product.short_description = first.get("short_description_it") or ""
             product.save()
             product.set_current_language("en")
             product.name = first["name_en"]
             product.description = first["description_en"]
-            product.short_description = ""
+            product.short_description = first.get("short_description_en") or ""
             product.save()
 
             category_ids = first.get("category_ids") or []

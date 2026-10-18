@@ -25,7 +25,7 @@ class Category(TranslatableModel):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["sort_order", "slug"]
+        ordering = ["slug"]
         verbose_name_plural = "categories"
 
     def __str__(self):

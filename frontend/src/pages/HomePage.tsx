@@ -16,6 +16,7 @@ import {
   fetchFeatured,
   fetchNewArrivals,
 } from '../api/store'
+import { sortByName } from '../utils/sortCategories'
 import './HomePage.css'
 
 const whyIcons = [IconShield, IconQuality, IconService, IconTruck]
@@ -35,13 +36,23 @@ export default function HomePage() {
   const { data: featured = [] } = useQuery({ queryKey: ['featured'], queryFn: fetchFeatured })
   const { data: newArrivals = [] } = useQuery({ queryKey: ['newArrivals'], queryFn: fetchNewArrivals })
   const { data: bestsellers = [] } = useQuery({ queryKey: ['bestsellers'], queryFn: fetchBestsellers })
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: fetchCategories })
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories', i18n.language],
+    queryFn: fetchCategories,
+  })
 
   const workwear = categories.find((c) => c.section === 'workwear')
   const professional = categories.find((c) => c.section === 'professional')
 
-  const workwearHomeCards = workwear?.children?.filter((c) => WORKWEAR_HOME_SLUGS.includes(c.slug)) ?? []
-  const professionalHomeCards = professional?.children?.filter((c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug)) ?? []
+  const locale = i18n.language.startsWith('en') ? 'en' : 'it'
+  const workwearHomeCards = sortByName(
+    workwear?.children?.filter((c) => WORKWEAR_HOME_SLUGS.includes(c.slug)) ?? [],
+    locale,
+  )
+  const professionalHomeCards = sortByName(
+    professional?.children?.filter((c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug)) ?? [],
+    locale,
+  )
 
   const hasProductShowcase = featured.length > 0 || newArrivals.length > 0 || bestsellers.length > 0
 

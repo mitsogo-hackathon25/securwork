@@ -11,7 +11,7 @@ import { fetchCategories, fetchProductBrands, fetchProductColors, fetchProducts 
 import './ShopPage.css'
 
 export default function ShopPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [params, setParams] = useSearchParams()
   const [mobileFilters, setMobileFilters] = useState(false)
 
@@ -41,7 +41,10 @@ export default function ShopPage() {
   if (minPrice) queryParams.min_price = minPrice
   if (maxPrice) queryParams.max_price = maxPrice
 
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: fetchCategories })
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories', i18n.language],
+    queryFn: fetchCategories,
+  })
 
   const brandQueryParams: Record<string, string> = {}
   if (section) brandQueryParams.section = section
