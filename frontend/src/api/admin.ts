@@ -5,6 +5,7 @@ import type {
   AdminCategory,
   AdminCategoryOption,
   AdminCoupon,
+  AdminMonthlySales,
   AdminOrder,
   AdminOrderListItem,
   AdminProduct,
@@ -170,6 +171,9 @@ export const removeProductMockup = (productId: number) =>
 
 export const fetchAdminOrders = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<AdminOrderListItem>>('/admin/orders/', { params }).then((r) => r.data)
+
+export const fetchAdminMonthlySales = (year: number) =>
+  api.get<AdminMonthlySales>('/admin/orders/monthly-sales/', { params: { year } }).then((r) => r.data)
 
 export const fetchAdminOrder = (id: number) =>
   api.get<AdminOrder>(`/admin/orders/${id}/`).then((r) => r.data)

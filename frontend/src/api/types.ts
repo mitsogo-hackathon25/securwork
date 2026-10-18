@@ -151,6 +151,24 @@ export interface Order {
   paid_at?: string | null
 }
 
+export interface AdminMonthlySalesMonth {
+  month: number
+  order_count: number
+  paid_order_count: number
+  revenue: string
+}
+
+export interface AdminMonthlySales {
+  year: number
+  currency: string
+  months: AdminMonthlySalesMonth[]
+  summary: {
+    order_count: number
+    paid_order_count: number
+    revenue: string
+  }
+}
+
 export interface AdminOrderListItem {
   id: number
   order_number: string
