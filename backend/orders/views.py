@@ -1,3 +1,5 @@
+import logging
+
 import stripe
 from django.conf import settings
 from django.http import HttpResponse
@@ -12,18 +14,21 @@ from .emails import send_order_admin_notification, send_order_confirmation
 from .models import Cart, CartItem, Order
 from .paypal_payments import (
     PayPalError,
-    capture_paypal_payment,
+    PayPalVerificationError,
     create_paypal_checkout,
-    paypal_capture_completed,
     paypal_enabled,
 )
 from .payments import (
+    StripeVerificationError,
     cancel_order,
-    confirm_order_payment,
     create_stripe_checkout_session,
     handle_stripe_webhook,
     stripe_enabled,
+    verify_and_confirm_paypal_order,
+    verify_stripe_checkout_for_order,
 )
+
+logger = logging.getLogger(__name__)
 from .serializers import (
     AddToCartSerializer,
     CartItemSerializer,
@@ -190,7 +195,11 @@ class CheckoutView(APIView):
             send_order_confirmation(order)
             send_order_admin_notification(order)
         else:
-            confirm_order_payment(order)
+            cancel_order(order)
+            return Response(
+                {"detail": "Unsupported payment method."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response({
             "order": OrderSerializer(order).data,
@@ -210,14 +219,20 @@ class OrderVerifyView(APIView):
         except Order.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if session_id and stripe_enabled() and order.payment_status != Order.PaymentStatus.PAID:
+        if (
+            session_id
+            and stripe_enabled()
+            and order.payment_status != Order.PaymentStatus.PAID
+            and order.payment_method == Order.PaymentMethod.STRIPE
+        ):
             try:
-                stripe.api_key = settings.STRIPE_SECRET_KEY
-                session = stripe.checkout.Session.retrieve(session_id)
-                if session.payment_status == "paid" and session.metadata.get("order_number") == order_number:
-                    confirm_order_payment(order, payment_intent_id=session.payment_intent or "")
-            except stripe.error.StripeError:
-                pass
+                order = verify_stripe_checkout_for_order(order, session_id)
+            except (StripeVerificationError, stripe.error.StripeError) as exc:
+                logger.warning(
+                    "Stripe payment verification failed for order %s: %s",
+                    order_number,
+                    exc,
+                )
 
         if (
             paypal_token
@@ -227,12 +242,21 @@ class OrderVerifyView(APIView):
             and order.paypal_order_id == paypal_token
         ):
             try:
-                capture_result = capture_paypal_payment(paypal_token)
-                if paypal_capture_completed(capture_result):
-                    confirm_order_payment(order)
-            except PayPalError:
-                pass
+                order = verify_and_confirm_paypal_order(order, paypal_token)
+            except PayPalVerificationError as exc:
+                logger.warning(
+                    "PayPal payment verification failed for order %s: %s",
+                    order_number,
+                    exc,
+                )
+            except PayPalError as exc:
+                logger.warning(
+                    "PayPal API error during verification for order %s: %s",
+                    order_number,
+                    exc,
+                )
 
+        order.refresh_from_db()
         return Response(OrderSerializer(order).data)
 
 

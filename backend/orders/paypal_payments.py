@@ -1,6 +1,7 @@
 """PayPal Checkout (Orders API v2) — redirect flow."""
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from decimal import Decimal
@@ -8,6 +9,8 @@ from decimal import Decimal
 from django.conf import settings
 
 from .models import Order
+
+logger = logging.getLogger(__name__)
 
 
 def paypal_enabled() -> bool:
@@ -47,11 +50,17 @@ def _paypal_request(method: str, path: str, access_token: str, payload: dict | N
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
-        raise PayPalError(detail or str(e)) from e
+        raise PayPalError(detail or str(e), status_code=e.code) from e
 
 
 class PayPalError(Exception):
-    pass
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class PayPalVerificationError(Exception):
+    """PayPal payment could not be verified against the order."""
 
 
 def get_paypal_access_token() -> str:
@@ -76,7 +85,7 @@ def get_paypal_access_token() -> str:
             return payload["access_token"]
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
-        raise PayPalError(detail or str(e)) from e
+        raise PayPalError(detail or str(e), status_code=e.code) from e
 
 
 def _basic_auth(client_id: str, secret: str) -> str:
@@ -155,17 +164,110 @@ def create_paypal_checkout(order: Order) -> str:
     return approve_url
 
 
-def capture_paypal_payment(paypal_order_id: str) -> dict:
+def get_paypal_order(paypal_order_id: str, access_token: str | None = None) -> dict:
+    token = access_token or get_paypal_access_token()
+    return _paypal_request("GET", f"/v2/checkout/orders/{paypal_order_id}", token)
+
+
+def _is_already_captured_error(err: PayPalError) -> bool:
+    text = str(err)
+    if "ORDER_ALREADY_CAPTURED" in text:
+        return True
+    if err.status_code == 422:
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return False
+        for detail in payload.get("details", []):
+            if detail.get("issue") == "ORDER_ALREADY_CAPTURED":
+                return True
+    return False
+
+
+def capture_or_retrieve_paypal_order(paypal_order_id: str) -> dict:
+    """Capture payment, or retrieve order details if already captured."""
     access_token = get_paypal_access_token()
-    return _paypal_request(
-        "POST",
-        f"/v2/checkout/orders/{paypal_order_id}/capture",
-        access_token,
-        {},
-    )
+    try:
+        return _paypal_request(
+            "POST",
+            f"/v2/checkout/orders/{paypal_order_id}/capture",
+            access_token,
+            {},
+        )
+    except PayPalError as e:
+        if _is_already_captured_error(e):
+            logger.info(
+                "PayPal order %s already captured; retrieving order details.",
+                paypal_order_id,
+            )
+            return get_paypal_order(paypal_order_id, access_token)
+        raise
+
+
+def capture_paypal_payment(paypal_order_id: str) -> dict:
+    """Backward-compatible capture helper (prefer capture_or_retrieve_paypal_order)."""
+    return capture_or_retrieve_paypal_order(paypal_order_id)
+
+
+def _amounts_match(paypal_value: str | None, order_total: Decimal) -> bool:
+    if paypal_value is None:
+        return False
+    try:
+        captured = Decimal(str(paypal_value)).quantize(Decimal("0.01"))
+    except Exception:
+        return False
+    return captured == order_total.quantize(Decimal("0.01"))
+
+
+def _completed_capture_for_reference(paypal_response: dict, order_number: str) -> dict | None:
+    for unit in paypal_response.get("purchase_units", []):
+        if unit.get("reference_id") != order_number:
+            continue
+        for capture in unit.get("payments", {}).get("captures", []):
+            if capture.get("status") == "COMPLETED":
+                return capture
+    return None
+
+
+def verify_paypal_payment_for_order(order: Order, paypal_order_id: str) -> str:
+    """
+    Capture (or retrieve) the PayPal order and validate it against the SecurWork order.
+    Returns the PayPal capture id on success.
+    """
+    if order.payment_method != Order.PaymentMethod.PAYPAL:
+        raise PayPalVerificationError("Order payment method is not PayPal.")
+    if not order.paypal_order_id or order.paypal_order_id != paypal_order_id:
+        raise PayPalVerificationError("PayPal order id does not match this order.")
+
+    paypal_response = capture_or_retrieve_paypal_order(paypal_order_id)
+    response_id = paypal_response.get("id")
+    if response_id != paypal_order_id:
+        raise PayPalVerificationError("PayPal response order id mismatch.")
+
+    capture = _completed_capture_for_reference(paypal_response, order.order_number)
+    if not capture:
+        raise PayPalVerificationError("No completed PayPal capture for this order.")
+
+    if capture.get("status") != "COMPLETED":
+        raise PayPalVerificationError("PayPal capture is not completed.")
+
+    amount = capture.get("amount") or {}
+    currency = amount.get("currency_code")
+    if currency != settings.SECURWORK_CURRENCY:
+        raise PayPalVerificationError("PayPal capture currency does not match.")
+
+    if not _amounts_match(amount.get("value"), order.total):
+        raise PayPalVerificationError("PayPal capture amount does not match order total.")
+
+    capture_id = capture.get("id") or ""
+    if not capture_id:
+        raise PayPalVerificationError("PayPal capture id missing.")
+
+    return capture_id
 
 
 def paypal_capture_completed(capture_result: dict) -> bool:
+    """Legacy helper — prefer verify_paypal_payment_for_order."""
     status = capture_result.get("status")
     if status == "COMPLETED":
         return True
