@@ -45,7 +45,12 @@ export default function AdminProductsPage() {
 
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Eliminare "${name}"? L'operazione non può essere annullata.`)) return
-    await deleteMutation.mutateAsync(id)
+    setImportDetail('')
+    try {
+      await deleteMutation.mutateAsync(id)
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile eliminare il prodotto.'))
+    }
   }
 
   const handleDownloadTemplate = async () => {

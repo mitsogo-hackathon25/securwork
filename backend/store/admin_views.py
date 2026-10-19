@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, ProtectedError
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -29,6 +29,11 @@ from .category_ordering import sort_categories
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
+
+_PRODUCT_DELETE_BLOCKED_DETAIL = (
+    "Impossibile eliminare questo prodotto perché è presente in uno o più ordini. "
+    "Disattivalo (is_active) per nasconderlo dal negozio."
+)
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
@@ -61,6 +66,23 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             return AdminProductListSerializer
         return AdminProductSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        product = self.get_object()
+        from orders.models import OrderItem
+
+        if OrderItem.objects.filter(variant__product=product).exists():
+            return Response(
+                {"detail": _PRODUCT_DELETE_BLOCKED_DETAIL},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": _PRODUCT_DELETE_BLOCKED_DETAIL},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=False, methods=["get"], url_path="csv_template")
     def csv_template(self, request):
