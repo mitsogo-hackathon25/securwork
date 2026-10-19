@@ -7,6 +7,7 @@ import {
   exportProductsCsv,
   fetchAdminProducts,
   importProductsCsv,
+  updateAdminProduct,
   type CsvImportError,
 } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
@@ -40,15 +41,53 @@ export default function AdminProductsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   })
 
+  const deactivateMutation = useMutation({
+    mutationFn: (id: number) => updateAdminProduct(id, { is_active: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
+  })
+
   const products = data?.results ?? []
   const totalPages = data ? Math.ceil(data.count / 12) : 1
+
+  const deactivateProduct = async (id: number, name: string) => {
+    setImportDetail('')
+    setImportSuccess('')
+    await deactivateMutation.mutateAsync(id)
+    setImportSuccess(`"${name}" disattivato.`)
+  }
+
+  const handleDeactivate = async (id: number, name: string) => {
+    if (!window.confirm(`Disattivare "${name}"? Non sarà più visibile nel negozio.`)) return
+    try {
+      await deactivateProduct(id, name)
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile disattivare il prodotto.'))
+    }
+  }
 
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Eliminare "${name}"? L'operazione non può essere annullata.`)) return
     setImportDetail('')
+    setImportSuccess('')
     try {
       await deleteMutation.mutateAsync(id)
     } catch (err: unknown) {
+      const responseData = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { detail?: string; code?: string } } }).response?.data
+        : undefined
+      if (responseData?.code === 'product_has_orders') {
+        const deactivate = window.confirm(
+          `${responseData.detail || 'Prodotto collegato a ordini.'}\n\nVuoi disattivarlo ora?`,
+        )
+        if (deactivate) {
+          try {
+            await deactivateProduct(id, name)
+          } catch (deactivateErr: unknown) {
+            setImportDetail(formatApiError(deactivateErr, 'Impossibile disattivare il prodotto.'))
+          }
+        }
+        return
+      }
       setImportDetail(formatApiError(err, 'Impossibile eliminare il prodotto.'))
     }
   }
@@ -256,6 +295,15 @@ export default function AdminProductsPage() {
                   </td>
                   <td className="admin-actions">
                     <Link to={`/admin/products/${product.id}`} className="admin-link">Modifica</Link>
+                    {product.is_active && (
+                      <button
+                        type="button"
+                        className="admin-link"
+                        onClick={() => handleDeactivate(product.id, product.name)}
+                      >
+                        Disattiva
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="admin-link admin-link-danger"

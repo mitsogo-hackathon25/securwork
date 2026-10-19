@@ -30,9 +30,11 @@ from .models import Brand, Category, Color, Product, ProductImage, ProductVarian
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
 
+_PRODUCT_DELETE_BLOCKED_CODE = "product_has_orders"
 _PRODUCT_DELETE_BLOCKED_DETAIL = (
-    "Impossibile eliminare questo prodotto perché è presente in uno o più ordini. "
-    "Disattivalo (is_active) per nasconderlo dal negozio."
+    "Questo prodotto compare in uno o più ordini e non può essere eliminato "
+    "(i dati degli ordini devono essere conservati). "
+    "Disattivalo per rimuoverlo dal negozio: resterà solo in amministrazione."
 )
 
 
@@ -73,14 +75,20 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
         if OrderItem.objects.filter(variant__product=product).exists():
             return Response(
-                {"detail": _PRODUCT_DELETE_BLOCKED_DETAIL},
+                {
+                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
+                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             return super().destroy(request, *args, **kwargs)
         except ProtectedError:
             return Response(
-                {"detail": _PRODUCT_DELETE_BLOCKED_DETAIL},
+                {
+                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
+                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
