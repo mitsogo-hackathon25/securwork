@@ -201,7 +201,19 @@
     "registerError": "Impossibile creare l'account. Controlla i dati.",
     "registerSuccess": "Account creato. Hai effettuato l'accesso.",
     "loginRequiredCheckout": "Accedi o crea un account per completare l'acquisto. Puoi continuare a navigare e aggiungere prodotti al carrello senza account.",
-    "loginToCheckout": "Accedi per il checkout"
+    "loginToCheckout": "Accedi per il checkout",
+    "forgotPassword": "Password dimenticata?",
+    "forgotTitle": "Reimposta password",
+    "forgotHint": "Inserisci l'email registrata sul tuo account. Ti invieremo un codice di verifica.",
+    "sendCode": "Invia codice",
+    "resetTitle": "Inserisci il codice",
+    "resetHint": "Controlla la tua email per il codice a 6 cifre, poi scegli una nuova password.",
+    "otp": "Codice di verifica",
+    "resetPassword": "Imposta nuova password",
+    "resetRequestSuccess": "Se esiste un account con questa email, riceverai un codice a breve.",
+    "resetConfirmSuccess": "Password aggiornata. Ora puoi accedere.",
+    "resetError": "Impossibile reimpostare la password. Controlla il codice e riprova.",
+    "backToLogin": "Torna al login"
   },
   "footer": {
     "rights": "Tutti i diritti riservati.",

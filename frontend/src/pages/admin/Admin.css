@@ -770,6 +770,21 @@
 
 .admin-login-btn { width: 100%; }
 
+.admin-login-forgot {
+  margin: 1rem 0 0;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.admin-login-forgot a {
+  color: var(--color-primary, #1d4ed8);
+  text-decoration: none;
+}
+
+.admin-login-forgot a:hover {
+  text-decoration: underline;
+}
+
 .admin-loading {
   min-height: 100vh;
   display: flex;

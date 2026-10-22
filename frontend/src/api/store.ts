@@ -112,5 +112,16 @@ export const login = (username: string, password: string) =>
 export const register = (data: Record<string, string>) =>
   api.post('/auth/register/', data).then((r) => r.data)
 
+export const requestPasswordReset = (email: string) =>
+  api.post<{ detail: string }>('/auth/password-reset/request/', { email }).then((r) => r.data)
+
+export const confirmPasswordReset = (data: {
+  email: string
+  otp: string
+  password: string
+  password_confirm: string
+}) =>
+  api.post<{ detail: string }>('/auth/password-reset/confirm/', data).then((r) => r.data)
+
 export const fetchOrders = () =>
   api.get<Order[]>('/orders/').then((r) => r.data)

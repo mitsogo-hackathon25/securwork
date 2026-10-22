@@ -38,8 +38,8 @@
 .site-logo-img {
   display: block;
   width: auto;
-  max-width: min(160px, 38vw);
-  max-height: 44px;
+  max-width: min(196px, 42vw);
+  max-height: 52px;
   height: auto;
   object-fit: contain;
 }

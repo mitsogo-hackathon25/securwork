@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import UserProfile
+from .password_reset import confirm_password_reset, request_password_reset
 
 User = get_user_model()
 
@@ -64,3 +66,33 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        return request_password_reset(self.validated_data["email"])
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(min_length=4, max_length=12)
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        if data["password"] != data["password_confirm"]:
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+        return data
+
+    def save(self, **kwargs):
+        try:
+            confirm_password_reset(
+                self.validated_data["email"],
+                self.validated_data["otp"],
+                self.validated_data["password"],
+            )
+        except DjangoValidationError as exc:
+            message = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+            raise serializers.ValidationError({"otp": message}) from exc

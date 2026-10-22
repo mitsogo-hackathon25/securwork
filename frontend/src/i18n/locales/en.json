@@ -201,7 +201,19 @@
     "registerError": "Could not create account. Check your details.",
     "registerSuccess": "Account created. You are now signed in.",
     "loginRequiredCheckout": "Please log in or create an account to complete your purchase. You can keep browsing and add items to the cart without an account.",
-    "loginToCheckout": "Log in to checkout"
+    "loginToCheckout": "Log in to checkout",
+    "forgotPassword": "Forgot password?",
+    "forgotTitle": "Reset password",
+    "forgotHint": "Enter the email address registered on your account. We will send you a verification code.",
+    "sendCode": "Send code",
+    "resetTitle": "Enter verification code",
+    "resetHint": "Check your email for the 6-digit code, then choose a new password.",
+    "otp": "Verification code",
+    "resetPassword": "Set new password",
+    "resetRequestSuccess": "If an account exists for this email, you will receive a code shortly.",
+    "resetConfirmSuccess": "Password updated. You can log in now.",
+    "resetError": "Could not reset password. Check the code and try again.",
+    "backToLogin": "Back to log in"
   },
   "footer": {
     "rights": "All rights reserved.",

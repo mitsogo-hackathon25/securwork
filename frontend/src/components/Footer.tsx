@@ -16,7 +16,7 @@ export default function Footer() {
         <div className="footer-grid">
           <div className="footer-brand">
             <div className="footer-logo">
-              <img src={SITE_LOGO_URL} alt="SecurWork" className="site-logo-img site-logo-img--footer" width={140} height={42} />
+              <img src={SITE_LOGO_URL} alt="SecurWork" className="site-logo-img site-logo-img--footer" width={168} height={50} />
             </div>
             <p className="footer-tagline">{t('home.heroSubtitle')}</p>
             {site ? (

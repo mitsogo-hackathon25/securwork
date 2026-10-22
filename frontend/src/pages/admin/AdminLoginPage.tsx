@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { adminLogin, fetchMe } from '../../api/admin'
 import './Admin.css'
 
@@ -52,6 +52,9 @@ export default function AdminLoginPage() {
         <button type="submit" className="btn btn-primary admin-login-btn" disabled={loading}>
           {loading ? 'Accesso in corso…' : 'Accedi'}
         </button>
+        <p className="admin-login-forgot">
+          <Link to="/account?mode=forgot&next=/admin/login">Password dimenticata?</Link>
+        </p>
       </form>
     </div>
   )

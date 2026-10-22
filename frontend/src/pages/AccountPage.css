@@ -24,6 +24,17 @@
   font-size: 0.875rem;
 }
 
+.account-subtitle {
+  font-size: 1.125rem;
+  margin: 0 0 0.5rem;
+}
+
+.account-hint {
+  color: var(--color-muted, #64748b);
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+}
+
 .account-notice {
   background: #eff6ff;
   border: 1px solid #bfdbfe;

@@ -52,7 +52,7 @@ export default function Header() {
       <div className="header-wrapper">
         <div className="container header-inner">
           <Link to="/" className="logo" aria-label="SecurWork Home" onClick={closeAll}>
-            <img src={SITE_LOGO_URL} alt="" className="site-logo-img" width={160} height={48} />
+            <img src={SITE_LOGO_URL} alt="" className="site-logo-img" width={196} height={56} />
           </Link>
 
           <nav className={`main-nav ${mobileOpen ? 'open' : ''}`} aria-label="Main navigation">
