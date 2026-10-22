@@ -2,9 +2,19 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
+from config.email_utils import deliver_email
 
-def send_password_reset_otp_email(user, code: str) -> None:
-    lang = getattr(settings, "PASSWORD_RESET_EMAIL_LANG", "it")
+
+def send_password_reset_otp_email(
+    user,
+    code: str,
+    lang: str = "it",
+    to_email: str | None = None,
+) -> None:
+    lang = (lang or "it").split("-")[0].lower()
+    if lang not in ("it", "en"):
+        lang = getattr(settings, "PASSWORD_RESET_EMAIL_LANG", "it")
+
     subject = (
         "Codice per reimpostare la password — SecurWork"
         if lang == "it"
@@ -24,7 +34,7 @@ def send_password_reset_otp_email(user, code: str) -> None:
         subject=subject,
         body=text,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[user.email],
+        to=[to_email or user.email],
     )
     msg.attach_alternative(html, "text/html")
-    msg.send(fail_silently=False)
+    deliver_email(msg)

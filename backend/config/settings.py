@@ -171,12 +171,17 @@ SECURWORK_CURRENCY = "EUR"
 SECURWORK_VAT_RATE = config("VAT_RATE", default="22.00", cast=str)
 SECURWORK_LOW_STOCK_THRESHOLD = config("LOW_STOCK_THRESHOLD", default=5, cast=int)
 
-# Email (contact form)
+# Email (contact form, password reset, orders)
+_email_host = config("EMAIL_HOST", default="")
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
-    default="django.core.mail.backends.console.EmailBackend",
+    default=(
+        "django.core.mail.backends.smtp.EmailBackend"
+        if _email_host
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
 )
-EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_HOST = _email_host
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")

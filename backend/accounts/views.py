@@ -46,7 +46,11 @@ class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data)
+        lang = request.query_params.get("lang") or request.data.get("lang") or "it"
+        serializer = PasswordResetRequestSerializer(
+            data=request.data,
+            context={"lang": lang},
+        )
         serializer.is_valid(raise_exception=True)
         detail = serializer.save()
         return Response({"detail": detail})

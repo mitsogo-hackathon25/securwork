@@ -213,6 +213,7 @@
     "resetRequestSuccess": "Se esiste un account con questa email, riceverai un codice a breve.",
     "resetConfirmSuccess": "Password aggiornata. Ora puoi accedere.",
     "resetError": "Impossibile reimpostare la password. Controlla il codice e riprova.",
+    "resetEmailError": "Impossibile inviare l'email con il codice. Riprova più tardi o contatta l'assistenza.",
     "backToLogin": "Torna al login"
   },
   "footer": {

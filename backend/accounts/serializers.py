@@ -4,6 +4,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import UserProfile
+from config.email_utils import EmailDeliveryError
+
 from .password_reset import confirm_password_reset, request_password_reset
 
 User = get_user_model()
@@ -32,6 +34,9 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["username", "email", "first_name", "last_name", "password", "password_confirm"]
+
+    def validate_email(self, value):
+        return (value or "").strip().lower()
 
     def validate(self, data):
         if data["password"] != data["password_confirm"]:
@@ -71,8 +76,15 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
+    def validate_email(self, value):
+        return (value or "").strip().lower()
+
     def save(self, **kwargs):
-        return request_password_reset(self.validated_data["email"])
+        lang = self.context.get("lang", "it")
+        try:
+            return request_password_reset(self.validated_data["email"], lang=lang)
+        except EmailDeliveryError as exc:
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

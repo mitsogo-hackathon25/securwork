@@ -108,7 +108,7 @@ export default function AccountPage() {
       setSuccess(t('account.resetRequestSuccess'))
       setMode('reset')
     } catch (err: unknown) {
-      setError(formatApiError(err, t('account.resetError')))
+      setError(formatApiError(err, t('account.resetEmailError')))
     } finally {
       setSubmitting(false)
     }

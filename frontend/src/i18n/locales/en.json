@@ -213,6 +213,7 @@
     "resetRequestSuccess": "If an account exists for this email, you will receive a code shortly.",
     "resetConfirmSuccess": "Password updated. You can log in now.",
     "resetError": "Could not reset password. Check the code and try again.",
+    "resetEmailError": "We could not send the verification email. Try again later or contact support.",
     "backToLogin": "Back to log in"
   },
   "footer": {

@@ -9,7 +9,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.utils import timezone
+
+from config.email_utils import EmailDeliveryError
 
 from .emails import send_password_reset_otp_email
 from .models import PasswordResetOTP
@@ -35,17 +38,42 @@ def _max_verify_attempts() -> int:
     return int(getattr(settings, "PASSWORD_RESET_MAX_VERIFY_ATTEMPTS", 5))
 
 
-def request_password_reset(email: str) -> str:
+def _user_email_recipient(user) -> str:
+    if not user:
+        return ""
+    email = (user.email or "").strip()
+    if email:
+        return email
+    username = (user.username or "").strip()
+    if "@" in username:
+        return username
+    return ""
+
+
+def _find_user_by_email(email: str):
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return None
+    user = User.objects.filter(email__iexact=normalized).first()
+    if user:
+        return user
+    # Legacy accounts: login username may match the address they type.
+    return User.objects.filter(username__iexact=normalized).first()
+
+
+def request_password_reset(email: str, lang: str = "it") -> str:
     """
     Create and email an OTP for the user with this registered email.
-    Always returns the same user-facing message (no email enumeration).
+    Returns a generic message when no account is found.
+    Raises EmailDeliveryError when the account exists but mail could not be sent.
     """
     normalized = (email or "").strip().lower()
     if not normalized:
         return GENERIC_REQUEST_MESSAGE
 
-    user = User.objects.filter(email__iexact=normalized).first()
-    if not user or not (user.email or "").strip():
+    user = _find_user_by_email(normalized)
+    recipient = _user_email_recipient(user)
+    if not user or not recipient:
         logger.info("Password reset requested for unknown or empty-email account.")
         return GENERIC_REQUEST_MESSAGE
 
@@ -55,20 +83,20 @@ def request_password_reset(email: str) -> str:
         logger.warning("Password reset rate limit for user id=%s", user.pk)
         return GENERIC_REQUEST_MESSAGE
 
-    PasswordResetOTP.objects.filter(user=user, used=False).update(used=True)
-
     code = f"{secrets.randbelow(10**6):06d}"
-    PasswordResetOTP.objects.create(
-        user=user,
-        email_snapshot=user.email,
-        code_hash=make_password(code),
-        expires_at=timezone.now() + timedelta(minutes=_otp_expiry_minutes()),
-    )
 
-    try:
-        send_password_reset_otp_email(user, code)
-    except Exception:
-        logger.exception("Failed to send password reset email for user id=%s", user.pk)
+    send_password_reset_otp_email(user, code, lang=lang, to_email=recipient)
+
+    with transaction.atomic():
+        PasswordResetOTP.objects.filter(user=user, used=False).update(used=True)
+        PasswordResetOTP.objects.create(
+            user=user,
+            email_snapshot=recipient,
+            code_hash=make_password(code),
+            expires_at=timezone.now() + timedelta(minutes=_otp_expiry_minutes()),
+        )
+
+    logger.info("Password reset OTP emailed for user id=%s", user.pk)
     return GENERIC_REQUEST_MESSAGE
 
 
@@ -78,7 +106,7 @@ def confirm_password_reset(email: str, otp: str, new_password: str) -> None:
     if not normalized or not code:
         raise ValidationError(GENERIC_CONFIRM_FAILURE)
 
-    user = User.objects.filter(email__iexact=normalized).first()
+    user = _find_user_by_email(normalized)
     if not user:
         raise ValidationError(GENERIC_CONFIRM_FAILURE)
 
