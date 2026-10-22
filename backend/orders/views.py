@@ -184,7 +184,15 @@ class CheckoutView(APIView):
                 checkout_url = create_paypal_checkout(order)
             except PayPalError as e:
                 cancel_order(order)
-                return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+                logger.warning(
+                    "PayPal checkout failed for order %s: issues=%s",
+                    order.order_number,
+                    e.issue_codes() or "unknown",
+                )
+                return Response(
+                    {"detail": e.user_message()},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
         elif payment_method in ("stripe", "paypal"):
             cancel_order(order)
             return Response(

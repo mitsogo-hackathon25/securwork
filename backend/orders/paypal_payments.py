@@ -58,6 +58,31 @@ class PayPalError(Exception):
         super().__init__(message)
         self.status_code = status_code
 
+    def issue_codes(self) -> list[str]:
+        try:
+            payload = json.loads(str(self))
+        except json.JSONDecodeError:
+            return []
+        codes = []
+        for detail in payload.get("details", []):
+            issue = detail.get("issue")
+            if issue:
+                codes.append(str(issue))
+        return codes
+
+    def user_message(self) -> str:
+        codes = set(self.issue_codes())
+        if "PAYEE_ACCOUNT_RESTRICTED" in codes:
+            return (
+                "PayPal payments are temporarily unavailable because the merchant "
+                "account is restricted. Please choose another payment method or try again later."
+            )
+        if "PAYEE_ACCOUNT_LOCKED_OR_CLOSED" in codes:
+            return "PayPal payments are unavailable for this store. Please use another payment method."
+        if codes:
+            return "PayPal could not start this payment. Please try another payment method."
+        return "PayPal payment could not be started. Please try again or use another payment method."
+
 
 class PayPalVerificationError(Exception):
     """PayPal payment could not be verified against the order."""
