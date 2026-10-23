@@ -148,8 +148,10 @@ export default function AccountPage() {
     <>
       <Helmet><title>{t('nav.account')} — SecurWork</title></Helmet>
 
-      <div className="container section account-page">
-        <h1 className="section-title">{t('nav.account')}</h1>
+      <div className={`container section account-page${loggedIn ? '' : ' account-page--auth'}`}>
+        {loggedIn ? (
+          <h1 className="section-title">{t('nav.account')}</h1>
+        ) : null}
 
         {loggedIn ? (
           <div className="account-logged-in">
@@ -181,12 +183,25 @@ export default function AccountPage() {
           </div>
         ) : (
           <div className="account-auth">
+            <div className="account-auth-shell">
+            <div className="account-auth-card">
             {nextPath === '/checkout' && mode === 'login' && (
               <p className="account-notice">{t('account.loginRequiredCheckout')}</p>
             )}
 
             {showAuthTabs && (
-              <div className="account-tabs">
+              <>
+                <h1 className="account-auth-heading">
+                  {mode === 'register' ? t('account.register') : t('account.login')}
+                </h1>
+                <p className="account-auth-sub">
+                  {mode === 'register' ? t('account.registerSubtitle') : t('account.loginSubtitle')}
+                </p>
+              </>
+            )}
+
+            {showAuthTabs && (
+              <div className="account-tabs" role="tablist" aria-label={t('nav.account')}>
                 <button
                   type="button"
                   className={`btn ${mode === 'login' ? 'btn-primary' : 'btn-secondary'}`}
@@ -208,7 +223,7 @@ export default function AccountPage() {
             {success && <p className="account-success">{success}</p>}
 
             {mode === 'login' && (
-              <form onSubmit={handleLogin} className="checkout-form account-form">
+              <form onSubmit={handleLogin} className="account-form">
                 <div className="form-grid">
                   <label className="full-width">
                     {t('account.username')}
@@ -231,17 +246,11 @@ export default function AccountPage() {
                     {t('account.forgotPassword')}
                   </button>
                 </p>
-                <p className="account-switch">
-                  {t('account.noAccount')}{' '}
-                  <button type="button" className="account-link-btn" onClick={() => setMode('register')}>
-                    {t('account.register')}
-                  </button>
-                </p>
               </form>
             )}
 
             {mode === 'register' && (
-              <form onSubmit={handleRegister} className="checkout-form account-form">
+              <form onSubmit={handleRegister} className="account-form">
                 <div className="form-grid">
                   <label className="full-width">
                     {t('account.username')}
@@ -271,12 +280,6 @@ export default function AccountPage() {
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
                   {submitting ? t('common.loading') : t('account.register')}
                 </button>
-                <p className="account-switch">
-                  {t('account.hasAccount')}{' '}
-                  <button type="button" className="account-link-btn" onClick={() => setMode('login')}>
-                    {t('account.login')}
-                  </button>
-                </p>
               </form>
             )}
 
@@ -284,7 +287,7 @@ export default function AccountPage() {
               <>
                 <h2 className="account-subtitle">{t('account.forgotTitle')}</h2>
                 <p className="account-hint">{t('account.forgotHint')}</p>
-                <form onSubmit={handleForgotRequest} className="checkout-form account-form">
+                <form onSubmit={handleForgotRequest} className="account-form">
                   <div className="form-grid">
                     <label className="full-width">
                       {t('contact.email')}
@@ -313,7 +316,7 @@ export default function AccountPage() {
               <>
                 <h2 className="account-subtitle">{t('account.resetTitle')}</h2>
                 <p className="account-hint">{t('account.resetHint')}</p>
-                <form onSubmit={handleResetConfirm} className="checkout-form account-form">
+                <form onSubmit={handleResetConfirm} className="account-form">
                   <div className="form-grid">
                     <label className="full-width">
                       {t('contact.email')}
@@ -360,6 +363,8 @@ export default function AccountPage() {
                 </form>
               </>
             )}
+            </div>
+            </div>
           </div>
         )}
       </div>

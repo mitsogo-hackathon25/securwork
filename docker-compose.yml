@@ -35,6 +35,14 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-SecurWork_Admin_2026!}
       SEED_DATA: ${SEED_DATA:-true}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@securwork.it}
     volumes:
       - ./backend:/app
       - media_data:/app/media

@@ -35,6 +35,23 @@ export const updateAdminProduct = (id: number, data: Partial<AdminProduct>) =>
 export const deleteAdminProduct = (id: number) =>
   api.delete(`/admin/products/${id}/`)
 
+export type BulkDeleteBlockedProduct = {
+  id: number
+  name: string
+  detail: string
+  code: string
+}
+
+export type BulkDeleteResult = {
+  detail: string
+  deleted: number[]
+  blocked: BulkDeleteBlockedProduct[]
+  not_found: number[]
+}
+
+export const bulkDeleteAdminProducts = (ids: number[]) =>
+  api.post<BulkDeleteResult>('/admin/products/bulk_delete/', { ids }).then((r) => r.data)
+
 export type CsvImportError = {
   row: number
   field: string
@@ -75,6 +92,108 @@ export const importProductsCsv = (file: File) => {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     .then((r) => r.data)
+}
+
+export type CsvImportProgressEvent = {
+  phase: 'uploading' | 'validating' | 'validated' | 'importing' | 'done' | 'failed'
+  current?: number
+  total?: number
+  message?: string
+  product_sku?: string
+  detail?: string
+  errors?: CsvImportError[]
+  error_count?: number
+  created_products?: number
+  created_variants?: number
+}
+
+export function importProductsCsvWithProgress(
+  file: File,
+  onEvent: (event: CsvImportProgressEvent) => void,
+  onUploadProgress?: (percent: number) => void,
+): Promise<CsvImportResult> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append('file', file)
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/admin/products/import_csv_stream/')
+    xhr.withCredentials = true
+
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    }
+
+    let lastParsedIndex = 0
+    let buffer = ''
+    let settled = false
+
+    const consumeBuffer = () => {
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        try {
+          const event = JSON.parse(trimmed) as CsvImportProgressEvent
+          onEvent(event)
+          if (event.phase === 'done' && !settled) {
+            settled = true
+            resolve({
+              detail: event.detail || 'Import completato.',
+              errors: event.errors || [],
+              created_products: event.created_products ?? 0,
+              created_variants: event.created_variants ?? 0,
+            })
+          } else if (event.phase === 'failed' && !settled) {
+            settled = true
+            const err = new Error(event.detail || 'Import non riuscito.') as Error & {
+              response?: { data: CsvImportResult & { error_count?: number } }
+            }
+            err.response = {
+              data: {
+                detail: event.detail || 'Import non riuscito.',
+                errors: event.errors || [],
+                created_products: 0,
+                created_variants: 0,
+                error_count: event.error_count,
+              },
+            }
+            reject(err)
+          }
+        } catch {
+          // ignore malformed partial chunks
+        }
+      }
+    }
+
+    xhr.upload.onprogress = (e) => {
+      if (!onUploadProgress || !e.lengthComputable) return
+      onUploadProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+    }
+
+    xhr.onprogress = () => {
+      const chunk = xhr.responseText.slice(lastParsedIndex)
+      lastParsedIndex = xhr.responseText.length
+      buffer += chunk
+      consumeBuffer()
+    }
+
+    xhr.onload = () => {
+      buffer += xhr.responseText.slice(lastParsedIndex)
+      lastParsedIndex = xhr.responseText.length
+      consumeBuffer()
+      if (settled) return
+      if (xhr.status >= 200 && xhr.status < 300) {
+        reject(new Error('Import terminato senza conferma dal server.'))
+        return
+      }
+      reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
+    }
+
+    xhr.onerror = () => reject(new Error('Errore di rete durante l\'import CSV.'))
+    xhr.send(form)
+  })
 }
 
 export type PriceAdjustResult = {

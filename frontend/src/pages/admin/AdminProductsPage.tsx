@@ -2,13 +2,15 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  bulkDeleteAdminProducts,
   deleteAdminProduct,
   downloadProductCsvTemplate,
   exportProductsCsv,
   fetchAdminProducts,
-  importProductsCsv,
+  importProductsCsvWithProgress,
   updateAdminProduct,
   type CsvImportError,
+  type CsvImportProgressEvent,
 } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
 import { formatApiError } from '../../utils/formatApiError'
@@ -25,6 +27,9 @@ export default function AdminProductsPage() {
   const [importSuccess, setImportSuccess] = useState('')
   const [importErrors, setImportErrors] = useState<CsvImportError[]>([])
   const [importDetail, setImportDetail] = useState('')
+  const [importProgress, setImportProgress] = useState<CsvImportProgressEvent | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const params: Record<string, string | number | boolean> = { page, ordering: '-updated_at' }
   if (search) params.search = search
@@ -48,6 +53,28 @@ export default function AdminProductsPage() {
 
   const products = data?.results ?? []
   const totalPages = data ? Math.ceil(data.count / 12) : 1
+  const pageIds = products.map((p) => p.id)
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
+
+  const toggleSelectAllOnPage = () => {
+    if (allOnPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)))
+      return
+    }
+    setSelectedIds((prev) => [...new Set([...prev, ...pageIds])])
+  }
+
+  const toggleSelectProduct = (id: number) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    ))
+  }
+
+  const importProgressPercent = (() => {
+    if (!importProgress?.total || importProgress.total <= 0) return 0
+    const current = importProgress.current ?? 0
+    return Math.min(100, Math.round((current / importProgress.total) * 100))
+  })()
 
   const deactivateProduct = async (id: number, name: string) => {
     setImportDetail('')
@@ -126,9 +153,20 @@ export default function AdminProductsPage() {
     setImportSuccess('')
     setImportErrors([])
     setImportDetail('')
+    setImportProgress({ phase: 'uploading', current: 0, total: 100, message: 'Caricamento file…' })
     try {
-      const result = await importProductsCsv(file)
+      const result = await importProductsCsvWithProgress(
+        file,
+        (event) => setImportProgress(event),
+        (percent) => setImportProgress({
+          phase: 'uploading',
+          current: percent,
+          total: 100,
+          message: `Caricamento file… ${percent}%`,
+        }),
+      )
       setImportSuccess(result.detail)
+      setImportProgress({ phase: 'done', current: 100, total: 100, message: result.detail })
       queryClient.invalidateQueries({ queryKey: ['admin-products'] })
     } catch (err: unknown) {
       const responseData = err && typeof err === 'object' && 'response' in err
@@ -142,6 +180,39 @@ export default function AdminProductsPage() {
       }
     } finally {
       setImporting(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    const count = selectedIds.length
+    if (!window.confirm(
+      `Eliminare ${count} prodott${count === 1 ? 'o' : 'i'} selezionat${count === 1 ? 'o' : 'i'}? L'operazione non può essere annullata.`,
+    )) return
+
+    setBulkDeleting(true)
+    setImportDetail('')
+    setImportSuccess('')
+    try {
+      const result = await bulkDeleteAdminProducts(selectedIds)
+      setSelectedIds((prev) => prev.filter((id) => !result.deleted.includes(id)))
+      if (result.blocked.length > 0) {
+        const names = result.blocked.slice(0, 5).map((b) => b.name).join(', ')
+        const more = result.blocked.length > 5 ? ` (+${result.blocked.length - 5} altri)` : ''
+        setImportDetail(
+          `${result.detail} Non eliminati (ordini collegati): ${names}${more}.`,
+        )
+      }
+      if (result.deleted.length > 0) {
+        setImportSuccess(result.detail)
+      } else if (!result.blocked.length) {
+        setImportDetail(result.detail)
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile eliminare i prodotti selezionati.'))
+    } finally {
+      setBulkDeleting(false)
     }
   }
 
@@ -192,13 +263,41 @@ export default function AdminProductsPage() {
           T-shirt; anche <code>slug_categorie</code> nel vecchio modello), <strong>colore</strong>, taglia e
           prezzo. Opzionali: <strong>descrizione_breve_it/en</strong>, <strong>bestseller</strong> (si/no),{' '}
           <strong>costo_personalizzazione</strong> (costo base logo sul prodotto). Marche e colori non presenti
-          nel catalogo vengono creati automaticamente. L&apos;unico controllo bloccante è il nome prodotto
-          italiano (nome_it), che deve essere univoco.
+          nel catalogo vengono creati automaticamente. Nel modello standard il nome italiano (nome_it)
+          deve essere univoco; nel listino fornitore il prodotto è identificato dal{' '}
+          <strong>Codice Padre</strong> (più righe = taglie/colori, descrizioni uguali o diverse).
           Per la personalizzazione logo usa: ricamo_petto, costo_ricamo_petto, ricamo_grande,
           costo_ricamo_grande, dtf_petto, costo_dtf_petto, dtf_grande, costo_dtf_grande (si/no + prezzo).
           Per le immagini usa url_immagini (URL pubblici separati da virgola; il primo è principale)
-          e opzionalmente url_mockup.
+          e opzionalmente url_mockup. È supportato anche il listino fornitore con colonne Codice Padre,
+          Merceologica, Categoria, SCategoria, SKU, Colore, Taglia, Descrizione, Foto, Prezzo Unico
+          (Confezione/Imballo usati solo se manca il prezzo unitario; scorte = In Arrivo se numerico,
+          altrimenti 0). Righe senza prezzo nel listino fornitore vengono saltate. Righe duplicate con lo
+          stesso SKU variante vengono unite (resta l&apos;ultima).
         </p>
+        {(importing || importProgress?.phase === 'done') && importProgress && (
+          <div className="admin-import-progress" aria-live="polite">
+            <div className="admin-import-progress-label">
+              {importProgress.message || 'Import in corso…'}
+              {importProgress.phase === 'importing' && importProgress.product_sku && (
+                <span className="admin-import-progress-sku"> ({importProgress.product_sku})</span>
+              )}
+            </div>
+            <div className="admin-import-progress-track">
+              <div
+                className="admin-import-progress-bar"
+                style={{ width: `${importProgressPercent}%` }}
+              />
+            </div>
+            {importProgress.total ? (
+              <span className="admin-import-progress-meta">
+                {importProgress.current ?? 0} / {importProgress.total}
+                {importProgress.phase === 'validating' ? ' righe' : ''}
+                {importProgress.phase === 'importing' ? ' prodotti' : ''}
+              </span>
+            ) : null}
+          </div>
+        )}
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
         {importDetail && !importSuccess && (
           <p className="admin-alert admin-alert-error">{importDetail}</p>
@@ -238,6 +337,34 @@ export default function AdminProductsPage() {
         </select>
       </div>
 
+      <div className="admin-bulk-bar">
+        <p className="admin-bulk-hint">
+          <strong>Eliminazione multipla:</strong> seleziona i prodotti con le caselle nella prima colonna
+          della tabella (intestazione = tutta la pagina). Se la tabella è larga, scorri leggermente a sinistra.
+        </p>
+        <div className="admin-bulk-actions">
+          <span className="admin-bulk-count">
+            {selectedIds.length} selezionat{selectedIds.length === 1 ? 'o' : 'i'}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={selectedIds.length === 0}
+            onClick={() => setSelectedIds([])}
+          >
+            Deseleziona tutto
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary admin-bulk-delete-btn"
+            disabled={selectedIds.length === 0 || bulkDeleting}
+            onClick={handleBulkDelete}
+          >
+            {bulkDeleting ? 'Eliminazione…' : 'Elimina selezionati'}
+          </button>
+        </div>
+      </div>
+
       {isLoading ? (
         <p>Caricamento prodotti…</p>
       ) : (
@@ -245,6 +372,16 @@ export default function AdminProductsPage() {
           <table className="admin-table">
             <thead>
               <tr>
+                <th className="admin-table-check" scope="col">
+                  <span className="admin-table-check-label">Sel.</span>
+                  <input
+                    type="checkbox"
+                    className="admin-table-checkbox"
+                    aria-label="Seleziona tutti i prodotti in questa pagina"
+                    checked={allOnPageSelected}
+                    onChange={toggleSelectAllOnPage}
+                  />
+                </th>
                 <th>Prodotto</th>
                 <th>SKU</th>
                 <th>Prezzo</th>
@@ -257,10 +394,19 @@ export default function AdminProductsPage() {
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="admin-empty">Nessun prodotto trovato.</td>
+                  <td colSpan={8} className="admin-empty">Nessun prodotto trovato.</td>
                 </tr>
               ) : products.map((product) => (
                 <tr key={product.id}>
+                  <td className="admin-table-check">
+                    <input
+                      type="checkbox"
+                      className="admin-table-checkbox"
+                      aria-label={`Seleziona ${product.name}`}
+                      checked={selectedIds.includes(product.id)}
+                      onChange={() => toggleSelectProduct(product.id)}
+                    />
+                  </td>
                   <td>
                     <div className="admin-product-cell">
                       {product.primary_image ? (

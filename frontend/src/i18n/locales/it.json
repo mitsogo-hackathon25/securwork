@@ -184,7 +184,9 @@
   },
   "account": {
     "login": "Accedi",
+    "loginSubtitle": "Accedi per ordinare e seguire i tuoi acquisti.",
     "register": "Registrati",
+    "registerSubtitle": "Crea un account in pochi secondi.",
     "logout": "Esci",
     "orders": "I miei ordini",
     "profile": "Profilo",

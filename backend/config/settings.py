@@ -1,6 +1,7 @@
 """
 Django settings for SecurWork e-commerce platform.
 """
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,8 +9,31 @@ from decouple import Config, Csv, RepositoryEnv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
-_env_file = ROOT_DIR / ".env"
-config = Config(RepositoryEnv(str(_env_file))) if _env_file.exists() else Config(RepositoryEnv())
+
+
+def _load_env_config() -> Config:
+    """Load .env from project root, backend dir, or DJANGO_ENV_FILE. OS env always wins."""
+    candidates = []
+    explicit = os.environ.get("DJANGO_ENV_FILE") or os.environ.get("ENV_FILE")
+    if explicit:
+        candidates.append(Path(explicit))
+    candidates.extend(
+        [
+            ROOT_DIR / ".env",
+            BASE_DIR / ".env",
+            Path.cwd() / ".env",
+        ]
+    )
+    for path in candidates:
+        try:
+            if path.is_file():
+                return Config(RepositoryEnv(str(path)))
+        except OSError:
+            continue
+    return Config()
+
+
+config = _load_env_config()
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me-in-production")
 DEBUG = config("DEBUG", default=True, cast=bool)
@@ -186,7 +210,12 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=20, cast=int)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@securwork.it")
+if EMAIL_PORT == 465 and not config("EMAIL_USE_TLS", default=False, cast=bool):
+    EMAIL_USE_SSL = True
+    EMAIL_USE_TLS = False
 CONTACT_EMAIL = config("CONTACT_EMAIL", default="info@securwork.it")
 ORDER_ADMIN_EMAIL = config("ORDER_ADMIN_EMAIL", default=CONTACT_EMAIL)
 

@@ -53,6 +53,16 @@ class PasswordResetTests(APITestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("NewPass456!"))
 
+    @override_settings(
+        DEBUG=False,
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+    )
+    def test_production_console_backend_is_rejected(self):
+        url = reverse("password-reset-request")
+        response = self.client.post(url, {"email": "buyer@example.com"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_confirm_wrong_otp_rejected(self):
         self.client.post(reverse("password-reset-request"), {"email": "buyer@example.com"}, format="json")
         response = self.client.post(

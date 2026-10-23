@@ -184,7 +184,9 @@
   },
   "account": {
     "login": "Log in",
+    "loginSubtitle": "Sign in to order and track your purchases.",
     "register": "Register",
+    "registerSubtitle": "Create an account in a few seconds.",
     "logout": "Log out",
     "orders": "My orders",
     "profile": "Profile",

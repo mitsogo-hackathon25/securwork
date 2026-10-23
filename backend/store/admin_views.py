@@ -1,7 +1,10 @@
+import json
+import queue
+import threading
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.db.models import Count, Prefetch, ProtectedError
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -23,6 +26,7 @@ from .csv_import import (
     build_csv_template,
     export_products_csv,
     import_parsed_rows,
+    iter_import_parsed_rows,
     parse_and_validate_csv,
 )
 from .category_ordering import sort_categories
@@ -167,6 +171,204 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             "percent": str(percent),
             "brand": brand_label,
         })
+
+    @action(detail=False, methods=["post"], url_path="bulk_delete")
+    def bulk_delete(self, request):
+        ids = request.data.get("ids")
+        if not isinstance(ids, list) or not ids:
+            return Response(
+                {"detail": "Indica almeno un id prodotto (campo ids)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(ids) > 500:
+            return Response(
+                {"detail": "Puoi eliminare al massimo 500 prodotti per volta."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from orders.models import OrderItem
+
+        deleted_ids: list[int] = []
+        blocked: list[dict] = []
+        not_found: list[int] = []
+
+        for raw_id in ids:
+            try:
+                pk = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            product = Product.objects.filter(pk=pk).first()
+            if not product:
+                not_found.append(pk)
+                continue
+            name = product.safe_translation_getter("name", language_code="it", any_language=True) or product.sku
+            if OrderItem.objects.filter(variant__product=product).exists():
+                blocked.append({
+                    "id": pk,
+                    "name": name,
+                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
+                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
+                })
+                continue
+            try:
+                product.delete()
+                deleted_ids.append(pk)
+            except ProtectedError:
+                blocked.append({
+                    "id": pk,
+                    "name": name,
+                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
+                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
+                })
+
+        deleted_count = len(deleted_ids)
+        blocked_count = len(blocked)
+        if deleted_count and not blocked_count:
+            detail = f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}."
+        elif deleted_count and blocked_count:
+            detail = (
+                f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}. "
+                f"{blocked_count} non eliminabili (ordini collegati)."
+            )
+        elif blocked_count:
+            detail = (
+                f"Nessun prodotto eliminato: {blocked_count} "
+                f"non eliminabili perché collegati a ordini."
+            )
+        else:
+            detail = "Nessun prodotto trovato da eliminare."
+
+        return Response({
+            "detail": detail,
+            "deleted": deleted_ids,
+            "blocked": blocked,
+            "not_found": not_found,
+        })
+
+    def _ndjson_line(self, payload: dict) -> str:
+        return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="import_csv_stream",
+    )
+    def import_csv_stream(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "Carica un file CSV usando il campo file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (upload.name or "").lower()
+        if not name.endswith(".csv"):
+            return Response(
+                {"detail": "Sono accettati solo file .csv."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        file_bytes = upload.read()
+        estimated_rows = max(1, file_bytes.count(b"\n") - 1)
+
+        def event_stream():
+            progress_queue: queue.Queue = queue.Queue()
+            parsed_holder: list[list[dict]] = []
+            errors_holder: list[list[dict]] = []
+
+            def on_validate(current: int, total: int) -> None:
+                progress_queue.put({
+                    "phase": "validating",
+                    "current": current,
+                    "total": total,
+                    "message": "Validazione righe CSV…",
+                })
+
+            def run_parse() -> None:
+                parsed, errors = parse_and_validate_csv(
+                    file_bytes,
+                    progress_callback=on_validate,
+                    progress_total=estimated_rows,
+                )
+                parsed_holder.append(parsed)
+                errors_holder.append(errors)
+                progress_queue.put(None)
+
+            yield self._ndjson_line({
+                "phase": "uploading",
+                "current": 100,
+                "total": 100,
+                "message": "File ricevuto, avvio validazione…",
+            })
+            yield self._ndjson_line({
+                "phase": "validating",
+                "current": 0,
+                "total": estimated_rows,
+                "message": "Validazione righe CSV…",
+            })
+
+            thread = threading.Thread(target=run_parse, daemon=True)
+            thread.start()
+            while True:
+                item = progress_queue.get()
+                if item is None:
+                    break
+                yield self._ndjson_line(item)
+            thread.join()
+
+            parsed_rows = parsed_holder[0] if parsed_holder else []
+            errors = errors_holder[0] if errors_holder else []
+            if errors:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Validazione CSV non riuscita. Correggi gli errori sotto e riprova.",
+                    "errors": errors[:300],
+                    "error_count": len(errors),
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
+
+            yield self._ndjson_line({
+                "phase": "validated",
+                "current": len(parsed_rows),
+                "total": len(parsed_rows),
+                "message": f"{len(parsed_rows)} righe varianti pronte per l'import.",
+            })
+
+            try:
+                for event in iter_import_parsed_rows(parsed_rows):
+                    if event["phase"] == "importing":
+                        yield self._ndjson_line(event)
+                    elif event["phase"] == "complete":
+                        products = event["created_products"]
+                        variants = event["created_variants"]
+                        yield self._ndjson_line({
+                            "phase": "done",
+                            "detail": (
+                                f"Importati {products} prodott{'o' if products == 1 else 'i'} "
+                                f"con {variants} variant{'e' if variants == 1 else 'i'}."
+                            ),
+                            "errors": [],
+                            "created_products": products,
+                            "created_variants": variants,
+                        })
+            except ValueError as exc:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": str(exc),
+                    "errors": [{"row": 0, "field": "url_immagini", "message": str(exc)}],
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+
+        response = StreamingHttpResponse(
+            event_stream(),
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")
     def import_csv(self, request):
