@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import LanguageSwitcher from './LanguageSwitcher'
 import MegaMenu from './MegaMenu'
 import { fetchCart, fetchCategories } from '../api/store'
+import { getShopCategoryGroups } from '../utils/categoryNav'
 import { SITE_LOGO_URL } from '../constants/branding'
 import './Header.css'
 
@@ -24,8 +25,13 @@ export default function Header() {
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', i18n.language],
-    queryFn: fetchCategories,
+    queryFn: () => fetchCategories(i18n.language),
   })
+
+  const { workwear: workwearChildren, professional: professionalChildren } = getShopCategoryGroups(
+    categories,
+    i18n.language,
+  )
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -75,22 +81,39 @@ export default function Header() {
             <Link to="/contact" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.contact')}</Link>
             <Link to="/faq" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.faq')}</Link>
 
-            {mobileOpen && categories.length > 0 && (
+            {mobileOpen && (workwearChildren.length > 0 || professionalChildren.length > 0) && (
               <div className="mobile-categories">
-                {categories.map((parent) => (
-                  <div key={parent.id}>
-                    <p className="mobile-categories-label">{parent.name}</p>
-                    {parent.children?.map((child) => (
+                {workwearChildren.length > 0 && (
+                  <div className="mobile-categories-group">
+                    <p className="mobile-categories-label">{t('nav.workwear')}</p>
+                    {workwearChildren.map((child) => (
                       <Link
                         key={child.id}
-                        to={`/shop?section=${parent.section}&category=${child.slug}`}
+                        to={`/shop?section=workwear&category=${child.slug}`}
                         onClick={closeAll}
                       >
-                        {child.name}
+                        {child.name || child.slug}
                       </Link>
                     ))}
                   </div>
-                ))}
+                )}
+                {professionalChildren.length > 0 && (
+                  <div className="mobile-categories-group">
+                    <p className="mobile-categories-label">{t('nav.professional')}</p>
+                    {professionalChildren.map((child) => (
+                      <Link
+                        key={child.id}
+                        to={`/shop?section=professional&category=${child.slug}`}
+                        onClick={closeAll}
+                      >
+                        {child.name || child.slug}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                <Link to="/shop" className="mobile-categories-all" onClick={closeAll}>
+                  {t('nav.shop')} — {t('cta.shopNow')}
+                </Link>
               </div>
             )}
           </nav>

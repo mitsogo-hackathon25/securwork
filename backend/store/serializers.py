@@ -26,10 +26,14 @@ class CategorySerializer(serializers.ModelSerializer):
         return self.context.get("lang", "it")
 
     def get_name(self, obj):
-        return obj.safe_translation_getter("name", language_code=self._lang(), any_language=True)
+        lang = self._lang()
+        name = obj.safe_translation_getter("name", language_code=lang, any_language=True)
+        return (name or "").strip() or obj.slug
 
     def get_description(self, obj):
-        return obj.safe_translation_getter("description", language_code=self._lang(), any_language=True)
+        lang = self._lang()
+        desc = obj.safe_translation_getter("description", language_code=lang, any_language=True)
+        return (desc or "").strip()
 
     def get_children(self, obj):
         children = sort_categories(

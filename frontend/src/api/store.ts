@@ -5,11 +5,11 @@ import type {
 } from './types'
 import { sortCategoryTree } from '../utils/sortCategories'
 
-export const fetchCategories = () => {
-  const lang = typeof localStorage !== 'undefined'
-    ? (localStorage.getItem('securwork_lang') || 'it')
-    : 'it'
-  const locale = lang.startsWith('en') ? 'en' : 'it'
+export const fetchCategories = (lang?: string) => {
+  const stored = lang
+    ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('securwork_lang') : null)
+    ?? 'it'
+  const locale = stored.startsWith('en') ? 'en' : 'it'
   return api
     .get<PaginatedResponse<Category> | Category[]>('/categories/', { params: { lang: locale } })
     .then((r) => {

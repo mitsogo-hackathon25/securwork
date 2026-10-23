@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Category } from '../api/types'
+import { getShopCategoryGroups } from '../utils/categoryNav'
 import './MegaMenu.css'
 
 interface Props {
@@ -18,10 +19,8 @@ export default function MegaMenu({
   onMouseEnter,
   onMouseLeave,
 }: Props) {
-  const { t } = useTranslation()
-
-  const workwear = categories.find((c) => c.section === 'workwear')
-  const professional = categories.find((c) => c.section === 'professional')
+  const { t, i18n } = useTranslation()
+  const { workwear, professional } = getShopCategoryGroups(categories, i18n.language)
 
   const handleClick = () => onNavigate?.()
 
@@ -34,35 +33,41 @@ export default function MegaMenu({
       onMouseLeave={onMouseLeave}
     >
       <div className="mega-menu-grid">
-        {workwear && (
-          <div className="mega-menu-col">
-            <Link to="/shop?section=workwear" className="mega-menu-heading" onClick={handleClick}>
-              {t('nav.workwear')}
-            </Link>
-            <ul>
-              {workwear.children?.map((child) => (
-                <li key={child.id}>
-                  <Link to={`/shop?section=workwear&category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div className="mega-menu-col">
+          <Link to="/shop?section=workwear" className="mega-menu-heading" onClick={handleClick}>
+            {t('nav.workwear')}
+          </Link>
+          <ul>
+            {workwear.map((child) => (
+              <li key={child.id}>
+                <Link
+                  to={`/shop?section=workwear&category=${child.slug}`}
+                  onClick={handleClick}
+                >
+                  {child.name || child.slug}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
 
-        {professional && (
-          <div className="mega-menu-col">
-            <Link to="/shop?section=professional" className="mega-menu-heading" onClick={handleClick}>
-              {t('nav.professional')}
-            </Link>
-            <ul>
-              {professional.children?.map((child) => (
-                <li key={child.id}>
-                  <Link to={`/shop?section=professional&category=${child.slug}`} onClick={handleClick}>{child.name}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div className="mega-menu-col">
+          <Link to="/shop?section=professional" className="mega-menu-heading" onClick={handleClick}>
+            {t('nav.professional')}
+          </Link>
+          <ul>
+            {professional.map((child) => (
+              <li key={child.id}>
+                <Link
+                  to={`/shop?section=professional&category=${child.slug}`}
+                  onClick={handleClick}
+                >
+                  {child.name || child.slug}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         <div className="mega-menu-col mega-menu-promo">
           <p className="mega-menu-promo-text">{t('home.heroSubtitle')}</p>
