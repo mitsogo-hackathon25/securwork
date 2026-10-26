@@ -185,7 +185,12 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
-    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
     product_name = models.CharField(max_length=255)
     sku = models.CharField(max_length=100)
     size = models.CharField(max_length=50, blank=True)

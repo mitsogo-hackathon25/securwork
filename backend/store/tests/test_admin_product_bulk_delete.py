@@ -20,6 +20,7 @@ class AdminProductBulkDeleteTests(APITestCase):
         )
         self.client.force_authenticate(user=self.staff)
         self.url = reverse("admin-product-bulk-delete")
+        self.delete_all_url = reverse("admin-product-delete-all")
 
     def _create_product(self, sku: str) -> Product:
         product = Product.objects.create(slug=sku.lower(), sku=sku)
@@ -42,7 +43,7 @@ class AdminProductBulkDeleteTests(APITestCase):
         self.assertEqual(response.data["deleted"], [first.pk, second.pk])
         self.assertFalse(Product.objects.filter(pk__in=[first.pk, second.pk]).exists())
 
-    def test_bulk_delete_blocks_products_with_orders(self):
+    def test_bulk_delete_removes_products_with_orders(self):
         product = self._create_product("BULK-ORD")
         variant = product.variants.get()
         order = Order.objects.create(
@@ -77,6 +78,62 @@ class AdminProductBulkDeleteTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["deleted"], [deletable.pk])
-        self.assertEqual(len(response.data["blocked"]), 1)
-        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        self.assertEqual(sorted(response.data["deleted"]), sorted([product.pk, deletable.pk]))
+        self.assertEqual(response.data["blocked"], [])
+        self.assertFalse(Product.objects.filter(pk__in=[product.pk, deletable.pk]).exists())
+
+    def test_delete_all_requires_confirm(self):
+        self._create_product("ALL-1")
+        response = self.client.post(self.delete_all_url, {}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Product.objects.filter(sku="ALL-1").exists())
+
+    def test_delete_all_removes_products_without_orders(self):
+        first = self._create_product("ALL-A")
+        second = self._create_product("ALL-B")
+        response = self.client.post(
+            self.delete_all_url,
+            {"confirm": "Stilpromo@2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sorted(response.data["deleted"]), sorted([first.pk, second.pk]))
+        self.assertEqual(Product.objects.count(), 0)
+
+    def test_delete_all_removes_products_with_orders(self):
+        product = self._create_product("ALL-ORD")
+        variant = product.variants.get()
+        order = Order.objects.create(
+            email="buyer@example.com",
+            billing_first_name="A",
+            billing_last_name="B",
+            billing_address="Via 1",
+            billing_city="Roma",
+            billing_postcode="00100",
+            shipping_first_name="A",
+            shipping_last_name="B",
+            shipping_address="Via 1",
+            shipping_city="Roma",
+            shipping_postcode="00100",
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        OrderItem.objects.create(
+            order=order,
+            variant=variant,
+            product_name="Product",
+            sku=variant.sku,
+            unit_price=Decimal("10.00"),
+            quantity=1,
+            line_total=Decimal("10.00"),
+        )
+        deletable = self._create_product("ALL-OK")
+
+        response = self.client.post(
+            self.delete_all_url,
+            {"confirm": "Stilpromo@2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sorted(response.data["deleted"]), sorted([product.pk, deletable.pk]))
+        self.assertEqual(Product.objects.count(), 0)

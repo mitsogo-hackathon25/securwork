@@ -1,9 +1,12 @@
 import json
 import queue
 import threading
+import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.db import close_old_connections, transaction
 from django.db.models import Count, Prefetch, ProtectedError
+from django.db.utils import DatabaseError, OperationalError
 from django.http import HttpResponse, StreamingHttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -23,23 +26,212 @@ from .admin_serializers import (
 )
 from .filters import BilingualProductSearchFilter
 from .csv_import import (
+    BRAND_FILTER_NONE,
+    canonical_brand_key,
     build_csv_template,
     export_products_csv,
     import_parsed_rows,
     iter_import_parsed_rows,
+    normalize_column_key,
     parse_and_validate_csv,
+    scan_csv_brands,
+    scan_csv_column_values,
+    scan_csv_columns,
 )
 from .category_ordering import sort_categories
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
 
-_PRODUCT_DELETE_BLOCKED_CODE = "product_has_orders"
+_PRODUCT_DELETE_BLOCKED_CODE = "product_delete_blocked"
 _PRODUCT_DELETE_BLOCKED_DETAIL = (
-    "Questo prodotto compare in uno o più ordini e non può essere eliminato "
-    "(i dati degli ordini devono essere conservati). "
-    "Disattivalo per rimuoverlo dal negozio: resterà solo in amministrazione."
+    "Impossibile eliminare il prodotto per vincoli del database."
 )
+_PRODUCT_DELETE_DB_ERROR_DETAIL = (
+    "Eliminazione non riuscita: database occupato o schema non aggiornato. "
+    "Attendi la fine di un import CSV, poi riprova. "
+    "Se il problema persiste, esegui `python manage.py migrate` sul server."
+)
+_PRODUCT_DELETE_DB_ERROR_CODE = "product_delete_database_error"
+
+_DELETE_ALL_CONFIRM = "Stilpromo@2026"
+_DELETE_SQLITE_MAX_ATTEMPTS = 10
+_DELETE_SQLITE_RETRY_BASE_SEC = 0.05
+
+
+def _parse_string_list_field(request, *field_names: str) -> list[str] | None:
+    raw = None
+    for name in field_names:
+        raw = request.data.get(name)
+        if raw is None:
+            raw = request.POST.get(name)
+        if raw is not None and raw != "":
+            break
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+    except json.JSONDecodeError:
+        parsed = [part.strip() for part in str(raw).split(",") if part.strip()]
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    single = str(parsed).strip()
+    return [single] if single else []
+
+
+def _normalize_filter_value_keys(keys: list[str]) -> set[str]:
+    from .csv_import import _header_key
+
+    normalized: set[str] = set()
+    for key in keys:
+        if key == BRAND_FILTER_NONE:
+            normalized.add(BRAND_FILTER_NONE)
+            continue
+        normalized.add(canonical_brand_key(key))
+        normalized.add(key.strip().lower())
+        folded = _header_key(key)
+        if folded:
+            normalized.add(folded)
+    return normalized
+
+
+def _parse_brand_keys_filter(request) -> set[str] | None:
+    """None = import all brands; empty set = invalid (caller should reject)."""
+    keys = _parse_string_list_field(request, "brands")
+    if keys is None:
+        return None
+    return _normalize_filter_value_keys(keys)
+
+
+def _parse_column_value_filter(request) -> tuple[str, set[str]] | None:
+    """None = no column filter. Empty value set = invalid (caller should reject)."""
+    column_raw = request.data.get("filter_column")
+    if column_raw is None:
+        column_raw = request.POST.get("filter_column")
+    value_keys = _parse_string_list_field(request, "filter_values")
+    if not column_raw and value_keys is None:
+        return None
+    if not column_raw or not str(column_raw).strip():
+        return ("", set())
+    if value_keys is None:
+        return (normalize_column_key(str(column_raw)), set())
+    return (normalize_column_key(str(column_raw)), _normalize_filter_value_keys(value_keys))
+
+
+def _product_display_name(product: Product) -> str:
+    return (
+        product.safe_translation_getter("name", language_code="it", any_language=True)
+        or product.sku
+    )
+
+
+def _sqlite_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
+def _delete_one_product(product: Product) -> None:
+    """Remove catalog product; order lines keep name/SKU snapshots (variant unlinked)."""
+    from orders.models import OrderItem
+
+    pk = product.pk
+    last_error: OperationalError | None = None
+
+    for attempt in range(_DELETE_SQLITE_MAX_ATTEMPTS):
+        try:
+            product = Product.objects.get(pk=pk)
+        except Product.DoesNotExist:
+            return
+
+        try:
+            with transaction.atomic():
+                variant_ids = list(
+                    ProductVariant.objects.filter(product_id=product.pk).values_list("pk", flat=True),
+                )
+                if variant_ids:
+                    OrderItem.objects.filter(variant_id__in=variant_ids).update(variant=None)
+                product.delete()
+            return
+        except OperationalError as exc:
+            if not _sqlite_lock_error(exc):
+                raise
+            last_error = exc
+            close_old_connections()
+            time.sleep(_DELETE_SQLITE_RETRY_BASE_SEC * (2 ** attempt))
+
+    if last_error:
+        raise last_error
+
+
+def _iter_products_for_delete(products) -> list[Product]:
+    """Resolve products by id so SQLite is not read via a live iterator while rows are deleted."""
+    if isinstance(products, Product):
+        return [products]
+    if hasattr(products, "values_list"):
+        pk_list = list(products.values_list("pk", flat=True))
+    else:
+        pk_list = [p.pk for p in products]
+    resolved: list[Product] = []
+    for pk in pk_list:
+        product = Product.objects.filter(pk=pk).first()
+        if product:
+            resolved.append(product)
+    return resolved
+
+
+def _delete_catalog_products(products) -> tuple[list[int], list[dict]]:
+    deleted_ids: list[int] = []
+    blocked: list[dict] = []
+    for product in _iter_products_for_delete(products):
+        pk = product.pk
+        name = _product_display_name(product)
+        try:
+            _delete_one_product(product)
+            deleted_ids.append(pk)
+        except ProtectedError:
+            blocked.append({
+                "id": pk,
+                "name": name,
+                "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
+                "code": _PRODUCT_DELETE_BLOCKED_CODE,
+            })
+        except DatabaseError:
+            close_old_connections()
+            blocked.append({
+                "id": pk,
+                "name": name,
+                "detail": _PRODUCT_DELETE_DB_ERROR_DETAIL,
+                "code": _PRODUCT_DELETE_DB_ERROR_CODE,
+            })
+    return deleted_ids, blocked
+
+
+def _bulk_delete_response(deleted_ids: list[int], blocked: list[dict], not_found: list[int]) -> Response:
+    deleted_count = len(deleted_ids)
+    blocked_count = len(blocked)
+    if deleted_count and not blocked_count:
+        detail = f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}."
+    elif deleted_count and blocked_count:
+        detail = (
+            f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}. "
+            f"{blocked_count} non eliminabili."
+        )
+    elif blocked_count:
+        detail = (
+            f"Nessun prodotto eliminato: {blocked_count} "
+            f"non eliminabili."
+        )
+    else:
+        detail = "Nessun prodotto trovato da eliminare."
+
+    return Response({
+        "detail": detail,
+        "deleted": deleted_ids,
+        "blocked": blocked,
+        "not_found": not_found,
+    })
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
@@ -75,18 +267,8 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         product = self.get_object()
-        from orders.models import OrderItem
-
-        if OrderItem.objects.filter(variant__product=product).exists():
-            return Response(
-                {
-                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
-                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         try:
-            return super().destroy(request, *args, **kwargs)
+            _delete_one_product(product)
         except ProtectedError:
             return Response(
                 {
@@ -95,6 +277,15 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except DatabaseError:
+            return Response(
+                {
+                    "detail": _PRODUCT_DELETE_DB_ERROR_DETAIL,
+                    "code": _PRODUCT_DELETE_DB_ERROR_CODE,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="csv_template")
     def csv_template(self, request):
@@ -186,11 +377,8 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from orders.models import OrderItem
-
-        deleted_ids: list[int] = []
-        blocked: list[dict] = []
         not_found: list[int] = []
+        products_to_delete: list[Product] = []
 
         for raw_id in ids:
             try:
@@ -201,52 +389,128 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             if not product:
                 not_found.append(pk)
                 continue
-            name = product.safe_translation_getter("name", language_code="it", any_language=True) or product.sku
-            if OrderItem.objects.filter(variant__product=product).exists():
-                blocked.append({
-                    "id": pk,
-                    "name": name,
-                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
-                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
-                })
-                continue
-            try:
-                product.delete()
-                deleted_ids.append(pk)
-            except ProtectedError:
-                blocked.append({
-                    "id": pk,
-                    "name": name,
-                    "detail": _PRODUCT_DELETE_BLOCKED_DETAIL,
-                    "code": _PRODUCT_DELETE_BLOCKED_CODE,
-                })
+            products_to_delete.append(product)
 
-        deleted_count = len(deleted_ids)
-        blocked_count = len(blocked)
-        if deleted_count and not blocked_count:
-            detail = f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}."
-        elif deleted_count and blocked_count:
-            detail = (
-                f"Eliminati {deleted_count} prodott{'o' if deleted_count == 1 else 'i'}. "
-                f"{blocked_count} non eliminabili (ordini collegati)."
-            )
-        elif blocked_count:
-            detail = (
-                f"Nessun prodotto eliminato: {blocked_count} "
-                f"non eliminabili perché collegati a ordini."
-            )
-        else:
-            detail = "Nessun prodotto trovato da eliminare."
+        deleted_ids, blocked = _delete_catalog_products(products_to_delete)
+        return _bulk_delete_response(deleted_ids, blocked, not_found)
 
-        return Response({
-            "detail": detail,
-            "deleted": deleted_ids,
-            "blocked": blocked,
-            "not_found": not_found,
-        })
+    @action(detail=False, methods=["post"], url_path="delete_all")
+    def delete_all(self, request):
+        if request.data.get("confirm") != _DELETE_ALL_CONFIRM:
+            return Response(
+                {
+                    "detail": (
+                        "Operazione distruttiva: invia confirm='Stilpromo@2026' "
+                        "per eliminare tutti i prodotti del catalogo."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        deleted_ids, blocked = _delete_catalog_products(Product.objects.all())
+        return _bulk_delete_response(deleted_ids, blocked, [])
 
     def _ndjson_line(self, payload: dict) -> str:
         return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="import_csv_brands",
+    )
+    def import_csv_brands(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "Carica un file CSV usando il campo file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (upload.name or "").lower()
+        if not name.endswith(".csv"):
+            return Response(
+                {"detail": "Sono accettati solo file .csv."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        brands, errors = scan_csv_brands(upload.read())
+        if errors:
+            return Response(
+                {
+                    "detail": errors[0].get("message", "Impossibile leggere il CSV."),
+                    "errors": errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"brands": brands})
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="import_csv_columns",
+    )
+    def import_csv_columns(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "Carica un file CSV usando il campo file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (upload.name or "").lower()
+        if not name.endswith(".csv"):
+            return Response(
+                {"detail": "Sono accettati solo file .csv."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        columns, errors = scan_csv_columns(upload.read())
+        if errors:
+            return Response(
+                {
+                    "detail": errors[0].get("message", "Impossibile leggere il CSV."),
+                    "errors": errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"columns": columns})
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="import_csv_column_values",
+    )
+    def import_csv_column_values(self, request):
+        upload = request.FILES.get("file")
+        column = request.data.get("column") or request.POST.get("column")
+        if not upload:
+            return Response(
+                {"detail": "Carica un file CSV usando il campo file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not column or not str(column).strip():
+            return Response(
+                {"detail": "Indica la colonna da analizzare."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (upload.name or "").lower()
+        if not name.endswith(".csv"):
+            return Response(
+                {"detail": "Sono accettati solo file .csv."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        values, errors = scan_csv_column_values(upload.read(), str(column))
+        if errors:
+            return Response(
+                {
+                    "detail": errors[0].get("message", "Impossibile leggere il CSV."),
+                    "errors": errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({
+            "column": normalize_column_key(str(column)),
+            "values": values,
+        })
 
     @action(
         detail=False,
@@ -270,6 +534,26 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
         file_bytes = upload.read()
         estimated_rows = max(1, file_bytes.count(b"\n") - 1)
+        column_value_filter = _parse_column_value_filter(request)
+        brand_keys_filter = _parse_brand_keys_filter(request)
+        if column_value_filter is not None:
+            col_key, value_keys = column_value_filter
+            if not col_key:
+                return Response(
+                    {"detail": "Seleziona una colonna per filtrare l'import."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not value_keys:
+                return Response(
+                    {"detail": "Seleziona almeno un valore da importare."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            brand_keys_filter = None
+        elif brand_keys_filter is not None and not brand_keys_filter:
+            return Response(
+                {"detail": "Seleziona almeno una marca da importare."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         def event_stream():
             progress_queue: queue.Queue = queue.Queue()
@@ -285,14 +569,25 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 })
 
             def run_parse() -> None:
-                parsed, errors = parse_and_validate_csv(
-                    file_bytes,
-                    progress_callback=on_validate,
-                    progress_total=estimated_rows,
-                )
-                parsed_holder.append(parsed)
-                errors_holder.append(errors)
-                progress_queue.put(None)
+                try:
+                    parsed, errors = parse_and_validate_csv(
+                        file_bytes,
+                        progress_callback=on_validate,
+                        progress_total=estimated_rows,
+                        brand_keys_filter=brand_keys_filter,
+                        column_value_filter=column_value_filter,
+                    )
+                    parsed_holder.append(parsed)
+                    errors_holder.append(errors)
+                except Exception as exc:
+                    parsed_holder.append([])
+                    errors_holder.append([{
+                        "row": 0,
+                        "field": "file",
+                        "message": f"Errore durante la lettura del CSV: {exc}",
+                    }])
+                finally:
+                    progress_queue.put(None)
 
             yield self._ndjson_line({
                 "phase": "uploading",
@@ -324,6 +619,20 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                     "detail": "Validazione CSV non riuscita. Correggi gli errori sotto e riprova.",
                     "errors": errors[:300],
                     "error_count": len(errors),
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
+
+            if not parsed_rows:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Nessuna riga da importare. Verifica il filtro colonne/valori e il file CSV.",
+                    "errors": [{
+                        "row": 0,
+                        "field": "file",
+                        "message": "Nessuna riga valida da importare.",
+                    }],
                     "created_products": 0,
                     "created_variants": 0,
                 })
@@ -361,6 +670,14 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                     "created_products": 0,
                     "created_variants": 0,
                 })
+            except Exception as exc:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": f"Import interrotto: {exc}",
+                    "errors": [{"row": 0, "field": "file", "message": str(exc)}],
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
 
         response = StreamingHttpResponse(
             event_stream(),
@@ -385,7 +702,32 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        parsed_rows, errors = parse_and_validate_csv(upload.read())
+        column_value_filter = _parse_column_value_filter(request)
+        brand_keys_filter = _parse_brand_keys_filter(request)
+        if column_value_filter is not None:
+            col_key, value_keys = column_value_filter
+            if not col_key:
+                return Response(
+                    {"detail": "Seleziona una colonna per filtrare l'import."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not value_keys:
+                return Response(
+                    {"detail": "Seleziona almeno un valore da importare."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            brand_keys_filter = None
+        elif brand_keys_filter is not None and not brand_keys_filter:
+            return Response(
+                {"detail": "Seleziona almeno una marca da importare."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parsed_rows, errors = parse_and_validate_csv(
+            upload.read(),
+            brand_keys_filter=brand_keys_filter,
+            column_value_filter=column_value_filter,
+        )
         if errors:
             return Response(
                 {

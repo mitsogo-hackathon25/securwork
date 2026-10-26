@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdminBrand,
@@ -43,6 +44,7 @@ const emptyColor = (): AdminColor => ({
 type CatalogTab = 'categories' | 'brands' | 'colors'
 
 export default function AdminCatalogPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('categories')
   const [categoryForm, setCategoryForm] = useState<AdminCategory | null>(null)
@@ -180,8 +182,8 @@ export default function AdminCatalogPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Catalogo</h1>
-          <p>Gestisci categorie, marche e colori usati nei filtri del negozio e nelle varianti prodotto.</p>
+          <h1>{t('adminCatalog.title')}</h1>
+          <p>{t('adminCatalog.subtitle')}</p>
         </div>
       </div>
 

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import LanguageSwitcher from '../../components/LanguageSwitcher'
 import { fetchAdminMonthlySales, fetchAdminOrders } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
 import { formatOrderStatus, orderStatusBadgeClass, paymentStatusBadgeClass } from '../../utils/orderLabels'
@@ -73,7 +72,6 @@ export default function AdminOrdersPage() {
           <h1>{t('adminOrders.title')}</h1>
           <p>{t('adminOrders.subtitle')}</p>
         </div>
-        <LanguageSwitcher />
       </div>
 
       <section className="admin-sales-panel" aria-labelledby="admin-monthly-sales-title">

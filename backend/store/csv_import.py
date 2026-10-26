@@ -29,6 +29,352 @@ def _existing_product_skus() -> set[str]:
     return {sku.strip().lower() for sku in Product.objects.values_list("sku", flat=True) if sku}
 
 
+BRAND_FILTER_NONE = "__none__"
+
+# Merceologica is often the supplier/brand (Payper, Kariban, …), not a category tree level.
+_MERCEOLOGICA_SECTION_HINTS = (
+    "abbigliamento",
+    "calzatur",
+    "accessori",
+    "antinfort",
+    "lavoro",
+    "profession",
+    "pulizia",
+    "guanti",
+    "sicurezza",
+    "aliment",
+    "industri",
+    "ristor",
+    "hotel",
+    "sanitar",
+    "divis",
+)
+
+
+def _is_merceologica_brand_name(raw: str) -> bool:
+    cleaned = (raw or "").strip()
+    if not cleaned:
+        return False
+    low = cleaned.lower()
+    if any(hint in low for hint in _MERCEOLOGICA_SECTION_HINTS):
+        return False
+    return len(cleaned) <= 48
+
+
+_CATEGORY_TYPE_WORDS = (
+    "pantaloni",
+    "pantalone",
+    "polo",
+    "t-shirt",
+    "tshirt",
+    "felpa",
+    "giacca",
+    "giubb",
+    "camicia",
+    "gilet",
+    "bermuda",
+    "shorts",
+    "cappello",
+    "scarpa",
+    "calzatur",
+    "boxer",
+    "maglia",
+    "softshell",
+    "parka",
+    "fleece",
+    "pile",
+    "cargo",
+    "overall",
+    "tuta",
+    "cotone",
+    "alta visibilit",
+    "antinfort",
+    "accessori",
+)
+
+
+def _categoria_value_is_brand(cat: str, mer: str, sub: str) -> bool:
+    """Listino: brand often in Categoria when Merceologica is the macro family."""
+    if not cat or not sub:
+        return False
+    low = cat.lower().strip()
+    if any(word in low for word in _CATEGORY_TYPE_WORDS):
+        return False
+    if mer and _is_merceologica_brand_name(mer):
+        return False
+    if mer and not _is_merceologica_brand_name(mer):
+        return _is_merceologica_brand_name(cat)
+    return False
+
+
+def canonical_filter_key(raw: str) -> str:
+    if not raw or raw == BRAND_FILTER_NONE:
+        return BRAND_FILTER_NONE
+    text = unicodedata.normalize("NFKD", (raw or "").strip().lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace("&amp;", "&")
+    text = re.sub(r"\s+", "", text)
+    return text or BRAND_FILTER_NONE
+
+
+def canonical_brand_key(raw: str) -> str:
+    return canonical_filter_key(raw)
+
+
+def _row_brand_raw(row: dict) -> str:
+    marca = _cell(row, "marca")
+    if marca:
+        return marca
+    for key in ("marchio", "produttore", "fornitore", "vendor", "brand_name"):
+        val = _cell(row, key)
+        if val:
+            return val
+    mer = _cell(row, "merceologica")
+    if mer and _is_merceologica_brand_name(mer):
+        return mer
+    cat = _cell(row, "categoria")
+    sub = _cell(row, "scategoria")
+    if _categoria_value_is_brand(cat, mer, sub):
+        return cat
+    return ""
+
+
+def _product_brand_raw(row: dict, supplier_row: bool) -> str:
+    """
+    Brand saved on the product. Listino rows share one parent SKU across variants:
+    use explicit marca / Merceologica brand only (not per-row Categoria guessing).
+    """
+    if not supplier_row:
+        return _row_brand_raw(row)
+    marca = _cell(row, "marca")
+    if marca:
+        return marca
+    for key in ("marchio", "produttore", "fornitore", "vendor", "brand_name"):
+        val = _cell(row, key)
+        if val:
+            return val
+    mer = _cell(row, "merceologica")
+    if mer and _is_merceologica_brand_name(mer):
+        return mer
+    return ""
+
+
+def brand_filter_key(row: dict) -> str:
+    raw = _row_brand_raw(row).strip()
+    if not raw:
+        return BRAND_FILTER_NONE
+    return canonical_brand_key(raw)
+
+
+def row_matches_brand_filter(row: dict, brand_keys_filter: set[str] | None) -> bool:
+    if brand_keys_filter is None:
+        return True
+    row_key = brand_filter_key(row)
+    if row_key in brand_keys_filter:
+        return True
+    raw = _row_brand_raw(row).strip()
+    if raw and canonical_brand_key(raw) in brand_keys_filter:
+        return True
+    if raw and raw.strip().lower() in brand_keys_filter:
+        return True
+    return False
+
+
+def brand_display_name(marca_raw: str) -> str:
+    cleaned = (marca_raw or "").strip()
+    return cleaned if cleaned else "Senza marca"
+
+
+def filter_value_display_name(raw: str) -> str:
+    cleaned = (raw or "").strip()
+    return cleaned if cleaned else "(vuoto)"
+
+
+def normalize_column_key(raw: str) -> str:
+    return _normalize_header(raw or "")
+
+
+def column_cell_raw(row: dict, column_key: str) -> str:
+    """Value used for column filters (matches scan + import)."""
+    if column_key == "marca":
+        return (_cell(row, "marca") or _row_brand_raw(row)).strip()
+    return _cell(row, column_key).strip()
+
+
+def column_value_filter_key(row: dict, column_key: str) -> str:
+    raw = column_cell_raw(row, column_key)
+    if not raw:
+        return BRAND_FILTER_NONE
+    return canonical_filter_key(raw)
+
+
+def row_matches_column_value_filter(
+    row: dict,
+    column_key: str,
+    value_keys_filter: set[str] | None,
+) -> bool:
+    if value_keys_filter is None:
+        return True
+    raw = column_cell_raw(row, column_key)
+    candidates = {
+        column_value_filter_key(row, column_key),
+        canonical_filter_key(raw),
+        raw.strip().lower(),
+        _header_key(raw),
+    }
+    for candidate in candidates:
+        if candidate and candidate in value_keys_filter:
+            return True
+    return False
+
+
+def _row_has_product_identity(row: dict) -> bool:
+    """Loose check: row looks like a catalog line (used when listing column values)."""
+    if _cell(row, "sku_prodotto") or _cell(row, "sku_variante"):
+        return True
+    if _cell(row, "ean"):
+        return True
+    name = _cell(row, "nome_it") or _cell(row, "descrizione_it")
+    if name and (_cell(row, "prezzo") or _supplier_price_raw(row)):
+        return True
+    return False
+
+
+def _treat_as_supplier_row(row: dict, supplier_format: bool) -> bool:
+    if supplier_format:
+        return True
+    if _cell(row, "merceologica"):
+        return True
+    if _cell(row, "scategoria") and (_cell(row, "sku_prodotto") or _cell(row, "sku_variante")):
+        return True
+    if _cell(row, "sku_variante") and (_cell(row, "descrizione_it") or _cell(row, "nome_it")):
+        if not _cell(row, "nome_en") and not _cell(row, "descrizione_en"):
+            return True
+    return False
+
+
+PRICE_COLUMN_KEYS = (
+    "prezzo",
+    "prezzo_unico",
+    "prezzo_confezione",
+    "prezzo_imballo",
+    "prezzo_listino",
+    "prezzo_vendita",
+    "prezzo_unitario",
+    "prezzo_scontato",
+)
+
+_PRICE_KEY_HINTS = ("prezzo", "price", "listino", "importo", "retail", "wholesale", "pv")
+_PRICE_SCAN_SKIP_KEYS = frozenset({
+    "sku_prodotto", "sku_variante", "nome_it", "nome_en", "descrizione_it", "descrizione_en",
+    "descrizione_breve_it", "descrizione_breve_en", "marca", "categoria", "scategoria",
+    "merceologica", "colore", "taglia", "ean", "url_immagini", "url_mockup", "foto",
+    "in_arrivo", "scorte", "bestseller", "ricamo_petto", "ricamo_grande", "dtf_petto",
+    "dtf_grande", "costo_ricamo_petto", "costo_ricamo_grande", "costo_dtf_petto",
+    "costo_dtf_grande", "costo_personalizzazione",
+})
+
+
+def _looks_like_price_string(value: str) -> bool:
+    if not (value or "").strip():
+        return False
+    cleaned = _normalize_price_string(value)
+    if not cleaned:
+        return False
+    try:
+        Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return False
+    return True
+
+
+def _headers_include_price(normalized_headers: list[str]) -> bool:
+    if any(h in normalized_headers for h in PRICE_COLUMN_KEYS):
+        return True
+    return any(
+        "prezzo" in h or h in {"price", "listino", "importo", "pv"}
+        for h in normalized_headers
+    )
+
+
+def _remember_row_price(cache: dict[str, str], row: dict, price_raw: str) -> None:
+    if not price_raw or not _looks_like_price_string(price_raw):
+        return
+    for key in (
+        _cell(row, "sku_prodotto"),
+        _cell(row, "sku_variante"),
+        _cell(row, "nome_it"),
+        _cell(row, "descrizione_it"),
+    ):
+        token = key.strip().lower()
+        if token:
+            cache[token] = price_raw
+
+
+def _build_row_price_cache(text: str) -> dict[str, str]:
+    """First pass: collect prices keyed by parent SKU / variant / name (shared on variant rows)."""
+    cache: dict[str, str] = {}
+    reader = _csv_reader(text)
+    for raw in reader:
+        if not raw:
+            continue
+        row = _build_import_row(raw)
+        _apply_derived_fields(row)
+        price = _cell(row, "prezzo")
+        if price and _looks_like_price_string(price):
+            _remember_row_price(cache, row, price)
+            continue
+        found = _supplier_price_raw(row)
+        if found:
+            _remember_row_price(cache, row, found)
+    return cache
+
+
+def _resolve_row_price_raw(row: dict, price_cache: dict[str, str]) -> str:
+    prezzo = _cell(row, "prezzo")
+    if prezzo and _looks_like_price_string(prezzo):
+        return prezzo
+    found = _supplier_price_raw(row)
+    if found:
+        return found
+    for token in (
+        _cell(row, "sku_prodotto"),
+        _cell(row, "sku_variante"),
+        _cell(row, "nome_it"),
+        _cell(row, "descrizione_it"),
+    ):
+        key = token.strip().lower()
+        if key and key in price_cache:
+            return price_cache[key]
+    return ""
+
+
+def _effective_price_raw(row: dict) -> str:
+    return _resolve_row_price_raw(row, {})
+
+
+def _row_eligible_for_import_scan(row: dict, supplier_format: bool) -> bool:
+    """Rows that will likely produce an importable variant (counts in value scan)."""
+    if not _row_has_product_identity(row):
+        return False
+    product_sku = _cell(row, "sku_prodotto") or _cell(row, "sku_variante")
+    if not product_sku:
+        return False
+    supplier_like = _treat_as_supplier_row(row, supplier_format)
+    price_raw = _effective_price_raw(row)
+    if supplier_like:
+        if not price_raw:
+            return False
+        if _parse_price(price_raw, "prezzo", 0, []) is None:
+            return False
+        return True
+    if not _cell(row, "taglia") or not _cell(row, "colore"):
+        return False
+    if price_raw and _parse_price(price_raw, "prezzo", 0, []) is None:
+        return False
+    return True
+
+
 def ensure_brand(name: str) -> str:
     cleaned = (name or "").strip()
     if not cleaned:
@@ -113,6 +459,11 @@ HEADER_ALIASES = {
     "product_sku": "sku_prodotto",
     "brand": "marca",
     "branch": "marca",
+    "marchio": "marca",
+    "produttore": "marca",
+    "fornitore": "marca",
+    "vendor": "marca",
+    "brand_name": "marca",
     "name_it": "nome_it",
     "name_en": "nome_en",
     "short_description_it": "descrizione_breve_it",
@@ -128,6 +479,21 @@ HEADER_ALIASES = {
     "size": "taglia",
     "color": "colore",
     "price": "prezzo",
+    "listino": "prezzo",
+    "importo": "prezzo",
+    "valore": "prezzo",
+    "pv": "prezzo",
+    "selling_price": "prezzo",
+    "retail_price": "prezzo",
+    "wholesale_price": "prezzo",
+    "prezzo_ivato": "prezzo",
+    "prezzo_lordo": "prezzo",
+    "prezzo_netto": "prezzo",
+    "prezzo_di_vendita": "prezzo",
+    "price_incl_tax": "prezzo",
+    "price_excl_tax": "prezzo",
+    "unit_price": "prezzo",
+    "variation_price": "prezzo",
     "stock": "scorte",
     "variant_sku": "sku_variante",
     "slug_categorie": "categoria",
@@ -167,8 +533,18 @@ HEADER_ALIASES = {
     "foto": "url_immagini",
     "immagine": "url_immagini",
     "immagini": "url_immagini",
-    "prezzo_unico": "prezzo",
     "prezzo_unitario": "prezzo",
+    "prezzo_unico": "prezzo_unico",
+    "prezzo_confezione": "prezzo_confezione",
+    "prezzo_imballo": "prezzo_imballo",
+    "prezzo_listino": "prezzo",
+    "prezzo_vendita": "prezzo",
+    "codice_articolo": "sku_variante",
+    "cod_articolo": "sku_variante",
+    "articolo": "sku_variante",
+    "codice": "sku_variante",
+    "riferimento": "sku_variante",
+    "ref": "sku_variante",
     "in_arrivo": "in_arrivo",
 }
 
@@ -346,19 +722,78 @@ def export_products_csv() -> str:
     return buffer.getvalue()
 
 
-def _normalize_header(value: str) -> str:
+def _header_key(value: str) -> str:
     text = unicodedata.normalize("NFKD", (value or "").strip().lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"[\s\-]+", "_", text)
     text = re.sub(r"[^a-z0-9_]", "", text)
-    return HEADER_ALIASES.get(text, text)
+    return text
 
 
-def _is_supplier_format(headers: list[str]) -> bool:
+def _normalize_header(value: str) -> str:
+    return HEADER_ALIASES.get(_header_key(value), _header_key(value))
+
+
+def _build_import_row(raw: dict) -> dict:
+    """Merge duplicate normalized headers; prefer numeric price over SKU-like text in price fields."""
+    row: dict[str, str] = {}
+    price_keys = frozenset(PRICE_COLUMN_KEYS)
+    for key_raw, value in raw.items():
+        if not key_raw:
+            continue
+        norm_key = _normalize_header(key_raw)
+        val = (value or "").strip() if value is not None else ""
+        if norm_key not in row:
+            row[norm_key] = val
+            continue
+        existing = row[norm_key]
+        if norm_key in price_keys:
+            new_ok = _looks_like_price_string(val)
+            old_ok = _looks_like_price_string(existing)
+            if new_ok and not old_ok:
+                row[norm_key] = val
+            elif not old_ok and not new_ok:
+                row[norm_key] = val
+        else:
+            row[norm_key] = val or existing
+    return row
+
+
+def _is_supplier_format(headers: list[str], raw_headers: list[str] | None = None) -> bool:
     header_set = set(headers)
     if header_set & SUPPLIER_FORMAT_MARKERS:
         return True
-    return "sku_variante" in header_set and "descrizione_it" in header_set and "nome_it" not in header_set
+    raw_keys = {_header_key(h) for h in (raw_headers or [])}
+    if raw_keys & {"prezzo_unico", "prezzo_confezione", "prezzo_imballo", "codice_padre"}:
+        return True
+    if raw_keys & {"foto", "immagine", "immagini"} and (
+        "sku_variante" in header_set or "sku" in raw_keys
+    ):
+        return True
+    if "sku_variante" in header_set and "descrizione_it" in header_set and "nome_it" not in header_set:
+        return True
+    native_markers = {
+        "nome_en",
+        "descrizione_en",
+        "descrizione_breve_it",
+        "descrizione_breve_en",
+        "bestseller",
+        "costo_personalizzazione",
+        "ricamo_petto",
+    }
+    if (
+        "sku_variante" in header_set
+        and "sku_prodotto" in header_set
+        and not (native_markers & header_set)
+    ):
+        return True
+    if (
+        ("descrizione_it" in header_set or "descrizione" in raw_keys)
+        and ("sku_variante" in header_set or "sku" in raw_keys)
+        and not (native_markers & header_set)
+    ):
+        return True
+    return False
 
 
 def _section_from_merceologica(raw: str) -> str:
@@ -416,6 +851,21 @@ def _merge_image_url_lists(*lists: list[str]) -> list[str]:
     return merged
 
 
+def _normalize_http_url(url: str) -> str:
+    cleaned = (url or "").strip()
+    if not cleaned:
+        return ""
+    if cleaned.startswith(("http://", "https://")):
+        return cleaned
+    if cleaned.startswith("//"):
+        return f"https:{cleaned}"
+    if " " in cleaned:
+        return cleaned
+    if "." in cleaned:
+        return f"https://{cleaned.lstrip('/')}"
+    return cleaned
+
+
 def _parse_http_urls(
     raw: str,
     field: str,
@@ -427,9 +877,10 @@ def _parse_http_urls(
     urls = split_url_list(raw)
     valid: list[str] = []
     for url in urls:
-        if url.startswith(("http://", "https://")):
-            valid.append(url)
-        elif strict:
+        normalized = _normalize_http_url(url)
+        if normalized.startswith(("http://", "https://")):
+            valid.append(normalized)
+        elif strict and url.strip():
             errors.append({
                 "row": row_num,
                 "field": field,
@@ -447,10 +898,30 @@ def _suggest_variant_sku(product_sku: str, size: str, color: str) -> str:
     return "-".join(p for p in parts if p)
 
 
+def _normalize_price_string(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    raw = re.sub(r"(?i)^\s*(eur|€)\s*", "", raw)
+    raw = re.sub(r"(?i)\s*eur\s*$", "", raw)
+    raw = raw.replace("€", "").replace("\u00a0", "").replace(" ", "")
+    if "," in raw and "." in raw:
+        if raw.rfind(",") > raw.rfind("."):
+            raw = raw.replace(".", "").replace(",", ".")
+        else:
+            raw = raw.replace(",", "")
+    else:
+        raw = raw.replace(",", ".")
+    raw = re.sub(r"[^\d.\-]", "", raw)
+    return raw
+
+
 def _parse_price(value: str, field: str, row_num: int, errors: list[dict]) -> Decimal | None:
     if not value:
         return None
-    cleaned = value.replace(",", ".").replace("€", "").replace(" ", "")
+    cleaned = _normalize_price_string(value)
+    if not cleaned:
+        return None
     try:
         amount = Decimal(cleaned)
     except (InvalidOperation, ValueError):
@@ -501,6 +972,62 @@ def _parse_bool(value: str, field: str, row_num: int, errors: list[dict], defaul
     return None
 
 
+def _parse_customization_enabled(value: str) -> bool:
+    """Wholesale sheets often put max print size in ricamo/dtf columns instead of si/no."""
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    normalized = raw.lower()
+    if normalized in {"si", "sì", "s", "yes", "y", "true", "1"}:
+        return True
+    if normalized in {"no", "n", "false", "0"}:
+        return False
+    if any(token in normalized for token in ("formato", "max ", " cm", "a4", "x10", "x15", "x20")):
+        return True
+    return False
+
+
+def _row_has_category_value(row: dict) -> bool:
+    return any(
+        _cell(row, key)
+        for key in (
+            "categoria",
+            "scategoria",
+            "merceologica",
+            "famiglia",
+            "linea",
+            "reparto",
+            "macro_categoria",
+            "categoria_principale",
+        )
+    )
+
+
+def _missing_native_headers(normalized_headers: list[str]) -> list[str]:
+    missing: list[str] = []
+    for field in REQUIRED_FIELDS:
+        if field in normalized_headers:
+            continue
+        if field == "categoria" and any(
+            key in normalized_headers
+            for key in (
+                "scategoria",
+                "merceologica",
+                "slug_categorie",
+                "category",
+                "categories",
+                "famiglia",
+                "linea",
+                "reparto",
+                "macro_categoria",
+                "categoria_principale",
+            )
+        ):
+            continue
+        missing.append(field)
+    return missing
+
+
 def _category_lookup_maps() -> tuple[dict[str, Category], dict[str, Category]]:
     by_slug: dict[str, Category] = {}
     by_name: dict[str, Category] = {}
@@ -520,8 +1047,13 @@ def _resolve_category_ids(
     by_name: dict[str, Category],
     row_num: int,
     errors: list[dict],
+    *,
+    auto_create: bool = False,
 ) -> list[int]:
     if not raw:
+        if auto_create:
+            default = ensure_category("Generale")
+            return [default.id] if default else []
         return []
     ids: list[int] = []
     for token in [s.strip() for s in raw.replace(";", ",").split(",") if s.strip()]:
@@ -529,15 +1061,25 @@ def _resolve_category_ids(
         cat = by_slug.get(key) or by_name.get(key)
         if cat:
             ids.append(cat.id)
-        else:
-            errors.append({
-                "row": row_num,
-                "field": "categoria",
-                "message": (
-                    f"Categoria non trovata: '{token}'. "
-                    "Usa lo slug (es. polo, t-shirt) o il nome IT/EN della categoria."
-                ),
-            })
+            continue
+        if auto_create:
+            created = ensure_category(token)
+            if created:
+                ids.append(created.id)
+                by_slug[created.slug.lower()] = created
+                for lang in ("it", "en"):
+                    name = created.safe_translation_getter("name", language_code=lang, any_language=True) or ""
+                    if name.strip():
+                        by_name[name.strip().lower()] = created
+            continue
+        errors.append({
+            "row": row_num,
+            "field": "categoria",
+            "message": (
+                f"Categoria non trovata: '{token}'. "
+                "Usa lo slug (es. polo, t-shirt) o il nome IT/EN della categoria."
+            ),
+        })
     return ids
 
 
@@ -562,11 +1104,36 @@ def _csv_reader(text: str) -> csv.DictReader:
 
 
 def _supplier_price_raw(row: dict) -> str:
-    for key in ("prezzo", "prezzo_unico", "prezzo_confezione", "prezzo_imballo"):
+    for key in PRICE_COLUMN_KEYS:
         value = _cell(row, key)
-        if value:
+        if value and _looks_like_price_string(value):
             return value
+    for key, value in row.items():
+        if key in _PRICE_SCAN_SKIP_KEYS:
+            continue
+        if not any(hint in key for hint in _PRICE_KEY_HINTS):
+            continue
+        if key.startswith("costo_"):
+            continue
+        text = (value or "").strip()
+        if text and _looks_like_price_string(text):
+            return text
     return ""
+
+
+def _first_parseable_price(row: dict, row_num: int) -> Decimal | None:
+    seen: set[str] = set()
+    for key in PRICE_COLUMN_KEYS:
+        value = _cell(row, key)
+        if not value or value in seen:
+            continue
+        if not _looks_like_price_string(value):
+            continue
+        seen.add(value)
+        parsed = _parse_price(value, "prezzo", row_num, [])
+        if parsed is not None:
+            return parsed
+    return None
 
 
 def _apply_derived_fields(row: dict) -> None:
@@ -580,8 +1147,30 @@ def _apply_derived_fields(row: dict) -> None:
         row["nome_en"] = _cell(row, "nome_it")
     if not _cell(row, "descrizione_en"):
         row["descrizione_en"] = _cell(row, "descrizione_it")
-    if not _cell(row, "prezzo"):
-        row["prezzo"] = _supplier_price_raw(row)
+    current_prezzo = _cell(row, "prezzo")
+    if not current_prezzo or not _looks_like_price_string(current_prezzo):
+        derived = _supplier_price_raw(row)
+        if derived:
+            row["prezzo"] = derived
+        elif current_prezzo and not _looks_like_price_string(current_prezzo):
+            row["prezzo"] = ""
+    if not _cell(row, "marca"):
+        inferred_brand = _row_brand_raw(row)
+        if inferred_brand:
+            row["marca"] = inferred_brand
+    if not _cell(row, "categoria"):
+        mer_for_category = _cell(row, "merceologica")
+        if mer_for_category and _is_merceologica_brand_name(mer_for_category):
+            mer_for_category = ""
+        row["categoria"] = (
+            _cell(row, "scategoria")
+            or _cell(row, "famiglia")
+            or _cell(row, "linea")
+            or _cell(row, "reparto")
+            or _cell(row, "macro_categoria")
+            or _cell(row, "categoria_principale")
+            or mer_for_category
+        )
     if not _cell(row, "scorte"):
         incoming = _cell(row, "in_arrivo")
         if incoming.isdigit():
@@ -589,11 +1178,36 @@ def _apply_derived_fields(row: dict) -> None:
 
 
 def _supplier_category_names(row: dict) -> tuple[str, str, str]:
-    return (
-        _cell(row, "merceologica"),
-        _cell(row, "categoria"),
-        _cell(row, "scategoria"),
-    )
+    mer = _cell(row, "merceologica")
+    mer_for_section = mer
+    if mer and _is_merceologica_brand_name(mer):
+        mer_for_section = ""
+    parent = _cell(row, "categoria")
+    child = _cell(row, "scategoria")
+    if not parent and not child:
+        if mer_for_section:
+            parent = mer_for_section
+        else:
+            for key in (
+                "famiglia",
+                "linea",
+                "reparto",
+                "macro_categoria",
+                "categoria_principale",
+            ):
+                val = _cell(row, key)
+                if val:
+                    parent = val
+                    break
+    if not parent and not child:
+        parent = "Generale"
+    return (mer_for_section, parent, child)
+
+
+def _uses_supplier_category_tree(row: dict, supplier: bool) -> bool:
+    if supplier:
+        return True
+    return bool(_cell(row, "merceologica") or _cell(row, "scategoria"))
 
 
 def _resolve_row_categories(
@@ -605,16 +1219,190 @@ def _resolve_row_categories(
     row_num: int,
     errors: list[dict],
 ) -> list[int]:
-    if supplier:
-        _merceologica, parent_name, child_name = _supplier_category_names(row)
-        if not parent_name and not child_name:
-            errors.append({
-                "row": row_num,
-                "field": "categoria",
-                "message": "Indica Categoria o SCategoria.",
-            })
+    if _uses_supplier_category_tree(row, supplier):
+        # Supplier/listino categories are created at import from supplier_category fields.
         return []
-    return _resolve_category_ids(_cell(row, "categoria"), by_slug, by_name, row_num, errors)
+    return _resolve_category_ids(
+        _cell(row, "categoria"),
+        by_slug,
+        by_name,
+        row_num,
+        errors,
+        auto_create=True,
+    )
+
+
+def scan_csv_brands(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
+    """Scan CSV for distinct marca values (no full validation). Returns (brands, errors)."""
+    errors: list[dict] = []
+    text, decode_error = _decode_csv_bytes(file_bytes)
+    if decode_error:
+        return [], [decode_error]
+
+    reader = _csv_reader(text)
+    if not reader.fieldnames:
+        return [], [{"row": 0, "field": "file", "message": "Il CSV non ha una riga di intestazione."}]
+
+    raw_headers = [h for h in reader.fieldnames if h is not None]
+    normalized_headers = [_normalize_header(h) for h in raw_headers]
+    supplier_format = _is_supplier_format(normalized_headers, raw_headers)
+
+    product_ids: dict[str, set[str]] = defaultdict(set)
+    row_counts: dict[str, int] = defaultdict(int)
+    labels: dict[str, str] = {}
+
+    for raw in reader:
+        row = _build_import_row(raw)
+        _apply_derived_fields(row)
+        if not _row_has_product_identity(row):
+            continue
+        product_sku = _cell(row, "sku_prodotto") or _cell(row, "sku_variante")
+        marca_raw = _row_brand_raw(row)
+        key = brand_filter_key(row)
+        if key not in labels:
+            labels[key] = brand_display_name(marca_raw)
+        product_ids[key].add(product_sku.lower())
+        row_counts[key] += 1
+
+    if not product_ids:
+        return [], [{"row": 0, "field": "file", "message": "Nessuna riga prodotto trovata nel CSV."}]
+
+    brands = [
+        {
+            "key": key,
+            "name": labels[key],
+            "product_count": len(product_ids[key]),
+            "row_count": row_counts[key],
+        }
+        for key in sorted(labels.keys(), key=lambda k: labels[k].lower())
+    ]
+    return brands, []
+
+
+def _csv_header_context(file_bytes: bytes) -> tuple[list[str], list[str], list[dict]]:
+    """Return (raw_headers, normalized_headers, errors)."""
+    text, decode_error = _decode_csv_bytes(file_bytes)
+    if decode_error:
+        return [], [], [decode_error]
+    reader = _csv_reader(text)
+    if not reader.fieldnames:
+        return [], [], [{
+            "row": 0,
+            "field": "file",
+            "message": "Il CSV non ha una riga di intestazione.",
+        }]
+    raw_headers = [h for h in reader.fieldnames if h is not None]
+    normalized_headers = [_normalize_header(h) for h in raw_headers]
+    return raw_headers, normalized_headers, []
+
+
+def scan_csv_columns(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
+    """Distinct CSV columns (normalized key + original header label)."""
+    raw_headers, normalized_headers, errors = _csv_header_context(file_bytes)
+    if errors:
+        return [], errors
+    columns: list[dict] = []
+    seen: set[str] = set()
+    for raw_h, norm_h in zip(raw_headers, normalized_headers, strict=True):
+        if not norm_h or norm_h in seen:
+            continue
+        seen.add(norm_h)
+        label = (raw_h or "").strip() or norm_h
+        columns.append({"key": norm_h, "label": label})
+    if _is_supplier_format(normalized_headers, raw_headers) and "marca" not in seen:
+        columns.append({
+            "key": "marca",
+            "label": "marca (ricavata dal listino)",
+        })
+    columns.sort(key=lambda c: c["label"].lower())
+    return columns, []
+
+
+def _iter_scannable_product_rows(file_bytes: bytes):
+    """
+    Yield row dicts used for column-value scans (supplier price/sku rules).
+    Returns (iterator, errors).
+    """
+    text, decode_error = _decode_csv_bytes(file_bytes)
+    if decode_error:
+        return iter(()), [decode_error]
+
+    reader = _csv_reader(text)
+    if not reader.fieldnames:
+        return iter(()), [{
+            "row": 0,
+            "field": "file",
+            "message": "Il CSV non ha una riga di intestazione.",
+        }]
+
+    raw_headers = [h for h in reader.fieldnames if h is not None]
+    normalized_headers = [_normalize_header(h) for h in raw_headers]
+    supplier_format = _is_supplier_format(normalized_headers, raw_headers)
+
+    def gen():
+        for raw in reader:
+            row = _build_import_row(raw)
+            _apply_derived_fields(row)
+            if not _row_has_product_identity(row):
+                continue
+            yield row
+
+    return gen(), []
+
+
+def scan_csv_column_values(file_bytes: bytes, column_key: str) -> tuple[list[dict], list[dict]]:
+    """Distinct values in one column with product/row counts."""
+    norm_key = normalize_column_key(column_key)
+    if not norm_key:
+        return [], [{"row": 0, "field": "column", "message": "Colonna non valida."}]
+
+    _, normalized_headers, header_errors = _csv_header_context(file_bytes)
+    if header_errors:
+        return [], header_errors
+    if norm_key not in normalized_headers and norm_key != "marca":
+        return [], [{
+            "row": 0,
+            "field": "column",
+            "message": f"Colonna '{column_key}' non trovata nel CSV.",
+        }]
+
+    product_ids: dict[str, set[str]] = defaultdict(set)
+    row_counts: dict[str, int] = defaultdict(int)
+    labels: dict[str, str] = {}
+
+    rows_iter, errors = _iter_scannable_product_rows(file_bytes)
+    if errors:
+        return [], errors
+
+    for row in rows_iter:
+        raw_val = column_cell_raw(row, norm_key)
+        key = column_value_filter_key(row, norm_key)
+        if key not in labels:
+            labels[key] = filter_value_display_name(raw_val)
+        product_sku = _cell(row, "sku_prodotto") or _cell(row, "sku_variante")
+        product_ids[key].add(product_sku.lower())
+        row_counts[key] += 1
+
+    if not product_ids:
+        return [], [{
+            "row": 0,
+            "field": "file",
+            "message": (
+                "Nessuna riga prodotto trovata nel CSV. "
+                "Servono almeno colonne tipo Codice Padre/SKU, Descrizione e Prezzo."
+            ),
+        }]
+
+    values = [
+        {
+            "key": key,
+            "name": labels[key],
+            "product_count": len(product_ids[key]),
+            "row_count": row_counts[key],
+        }
+        for key in sorted(labels.keys(), key=lambda k: labels[k].lower())
+    ]
+    return values, []
 
 
 def parse_and_validate_csv(
@@ -622,6 +1410,8 @@ def parse_and_validate_csv(
     *,
     progress_callback: Callable[[int, int], None] | None = None,
     progress_total: int | None = None,
+    brand_keys_filter: set[str] | None = None,
+    column_value_filter: tuple[str, set[str]] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Return (parsed_rows, errors). parsed_rows is empty when errors exist."""
     errors: list[dict] = []
@@ -633,15 +1423,13 @@ def parse_and_validate_csv(
     if not reader.fieldnames:
         return [], [{"row": 0, "field": "file", "message": "Il CSV non ha una riga di intestazione."}]
 
-    normalized_headers = [_normalize_header(h) for h in reader.fieldnames if h is not None]
-    supplier_format = _is_supplier_format(normalized_headers)
+    raw_headers = [h for h in reader.fieldnames if h is not None]
+    normalized_headers = [_normalize_header(h) for h in raw_headers]
+    supplier_format = _is_supplier_format(normalized_headers, raw_headers)
     if supplier_format:
         has_product_id = any(h in normalized_headers for h in ("sku_prodotto", "sku_variante"))
         has_name = any(h in normalized_headers for h in ("nome_it", "descrizione_it"))
-        has_price = any(
-            h in normalized_headers
-            for h in ("prezzo", "prezzo_unico", "prezzo_confezione", "prezzo_imballo")
-        )
+        has_price = _headers_include_price(normalized_headers)
         missing_headers = []
         if not has_product_id:
             missing_headers.append("Codice Padre o SKU")
@@ -650,7 +1438,7 @@ def parse_and_validate_csv(
         if not has_price:
             missing_headers.append("Prezzo Unico")
     else:
-        missing_headers = [h for h in REQUIRED_FIELDS if h not in normalized_headers]
+        missing_headers = _missing_native_headers(normalized_headers)
     if missing_headers:
         return [], [{
             "row": 0,
@@ -674,20 +1462,53 @@ def parse_and_validate_csv(
     if estimated_rows is None:
         estimated_rows = max(1, file_bytes.count(b"\n") - 1)
 
+    row_price_cache = _build_row_price_cache(text)
+    reader = _csv_reader(text)
+
+    column_filter_matched_rows = 0
+    column_filter_matched_row_nums: set[int] = set()
+
     for index, raw in enumerate(reader, start=2):  # header is row 1
-        row = {_normalize_header(k): (v or "").strip() if v is not None else "" for k, v in raw.items() if k}
+        row = _build_import_row(raw)
         row_num = index
         _apply_derived_fields(row)
+        supplier_row = _treat_as_supplier_row(row, supplier_format)
+
+        if column_value_filter is not None:
+            col_key, value_keys = column_value_filter
+            if not row_matches_column_value_filter(row, col_key, value_keys):
+                continue
+            column_filter_matched_rows += 1
+            column_filter_matched_row_nums.add(row_num)
+            supplier_row = True
+            if not _cell(row, "sku_prodotto") and _cell(row, "sku_variante"):
+                row["sku_prodotto"] = _cell(row, "sku_variante")
+        elif not row_matches_brand_filter(row, brand_keys_filter):
+            continue
+
+        price_raw = _resolve_row_price_raw(row, row_price_cache)
+        if price_raw:
+            row["prezzo"] = price_raw
+            _remember_row_price(row_price_cache, row, price_raw)
+        if supplier_row and not price_raw:
+            continue
 
         required_now = ["sku_prodotto", "nome_it", "descrizione_it"]
-        if not supplier_format:
+        if not supplier_row:
             required_now = list(REQUIRED_FIELDS)
         for field in required_now:
+            if field == "categoria":
+                # Resolved later (slug, auto-create, or default "Generale").
+                continue
             if not _cell(row, field):
                 errors.append({"row": row_num, "field": field, "message": f"{field} è obbligatorio."})
 
-        product_sku = _cell(row, "sku_prodotto")
-        brand_raw = _cell(row, "marca")
+        product_sku = _cell(row, "sku_prodotto") or _cell(row, "sku_variante")
+        brand_raw = _product_brand_raw(row, supplier_row)
+        if product_sku:
+            meta_key = product_sku.lower()
+            if meta_key in product_meta and product_meta[meta_key].get("marca"):
+                brand_raw = product_meta[meta_key]["marca"]
         name_it = _cell(row, "nome_it")
         name_en = _cell(row, "nome_en")
         description_it = _cell(row, "descrizione_it")
@@ -696,18 +1517,19 @@ def parse_and_validate_csv(
         short_description_en = _cell(row, "descrizione_breve_en")
         bestseller_raw = _cell(row, "bestseller")
         size_raw = _cell(row, "taglia")
-        size = size_raw.upper() if size_raw.upper() in CLOTHING_SIZES else size_raw
         color_raw = _cell(row, "colore")
-        price_raw = _cell(row, "prezzo")
+        if supplier_row:
+            if not size_raw:
+                size_raw = "UNICA"
+            if not color_raw:
+                color_raw = "UNICO"
+        size = size_raw.upper() if size_raw.upper() in CLOTHING_SIZES else size_raw
         stock_raw = _cell(row, "scorte")
         variant_sku = _cell(row, "sku_variante")
         category_slugs_raw = _cell(row, "categoria")
         sale_price_raw = _cell(row, "prezzo_scontato")
 
-        if supplier_format and not price_raw:
-            continue
-
-        if product_sku and supplier_format:
+        if product_sku and supplier_row:
             parent_key = product_sku.lower()
             if parent_key in existing_skus and parent_key not in reported_existing_parent_skus:
                 reported_existing_parent_skus.add(parent_key)
@@ -727,30 +1549,20 @@ def parse_and_validate_csv(
                     "field": "nome_it",
                     "message": f"Il nome prodotto '{name_it}' esiste già nel catalogo.",
                 })
-            sku_key = product_sku.lower()
-            prev_sku = csv_name_to_sku.get(name_key)
-            if prev_sku and prev_sku != sku_key:
-                errors.append({
-                    "row": row_num,
-                    "field": "nome_it",
-                    "message": (
-                        f"Il nome prodotto '{name_it}' è usato da più SKU nel CSV "
-                        f"('{prev_sku}' e '{product_sku}')."
-                    ),
-                })
-            elif name_key:
-                csv_name_to_sku[name_key] = sku_key
+            if name_key:
+                csv_name_to_sku[name_key] = product_sku.lower()
 
-        if supplier_format:
-            price = _parse_price(price_raw, "prezzo", row_num, [])
+        if supplier_row:
+            price = _first_parseable_price(row, row_num)
             if price is None:
                 continue
+            _remember_row_price(row_price_cache, row, price_raw)
         else:
             price = _parse_price(price_raw, "prezzo", row_num, errors) if price_raw else None
         if stock_raw != "":
-            stock = _parse_stock(stock_raw, row_num, errors, required=not supplier_format)
+            stock = _parse_stock(stock_raw, row_num, errors, required=not supplier_row)
         else:
-            stock = _parse_stock("", row_num, errors, required=not supplier_format)
+            stock = _parse_stock("", row_num, errors, required=not supplier_row)
 
         sale_price = None
         if sale_price_raw:
@@ -759,17 +1571,12 @@ def parse_and_validate_csv(
         method_values: dict[str, bool | Decimal] = {}
         method_parse_ok = True
         for enabled_csv, fee_csv, enabled_attr, fee_attr in METHOD_CSV_FIELDS:
-            enabled = _parse_bool(_cell(row, enabled_csv), enabled_csv, row_num, errors, default=False)
-            if enabled is None:
-                method_parse_ok = False
-                enabled = False
+            enabled = _parse_customization_enabled(_cell(row, enabled_csv))
             fee = Decimal("0.00")
             fee_raw = _cell(row, fee_csv)
             if fee_raw:
-                parsed_fee = _parse_price(fee_raw, fee_csv, row_num, errors)
-                if parsed_fee is None:
-                    method_parse_ok = False
-                else:
+                parsed_fee = _parse_price(fee_raw, fee_csv, row_num, [])
+                if parsed_fee is not None:
                     fee = parsed_fee
             method_values[enabled_attr] = bool(enabled)
             method_values[fee_attr] = fee
@@ -799,7 +1606,7 @@ def parse_and_validate_csv(
 
         category_ids = _resolve_row_categories(
             row,
-            supplier=supplier_format,
+            supplier=supplier_row,
             by_slug=categories_by_slug,
             by_name=categories_by_name,
             row_num=row_num,
@@ -811,11 +1618,11 @@ def parse_and_validate_csv(
             variant_sku = _suggest_variant_sku(product_sku, size, color_raw)
 
         supplier_variant_duplicate = bool(
-            supplier_format
+            supplier_row
             and variant_sku
             and variant_sku.lower() in supplier_variant_row_index
         )
-        if variant_sku and not supplier_format:
+        if variant_sku and not supplier_row:
             key = variant_sku.lower()
             if key in seen_variant_skus:
                 errors.append({
@@ -832,7 +1639,7 @@ def parse_and_validate_csv(
         if product_sku and size and color_raw:
             pair = (size.lower(), color_raw.lower())
             prev = product_size_colors[product_sku.lower()].get(pair)
-            if prev and not (supplier_format and supplier_variant_duplicate):
+            if prev and not (supplier_row and supplier_variant_duplicate):
                 errors.append({
                     "row": row_num,
                     "field": "taglia",
@@ -849,7 +1656,7 @@ def parse_and_validate_csv(
             "url_immagini",
             row_num,
             errors,
-            strict=not supplier_format,
+            strict=not supplier_row,
         )
         mockup_urls = _parse_http_urls(_cell(row, "url_mockup"), "url_mockup", row_num, errors)
         mockup_url = mockup_urls[0] if mockup_urls else ""
@@ -886,6 +1693,10 @@ def parse_and_validate_csv(
                     "descrizione_it", "descrizione_en",
                     "is_bestseller",
                 ):
+                    if field == "marca" and supplier_row:
+                        if not prev.get("marca") and current.get("marca"):
+                            prev["marca"] = current["marca"]
+                        continue
                     if prev.get(field) and current.get(field) and prev[field] != current[field]:
                         errors.append({
                             "row": row_num,
@@ -924,7 +1735,7 @@ def parse_and_validate_csv(
                         ),
                     })
                 if prev.get("image_urls") and image_urls and prev["image_urls"] != image_urls:
-                    if supplier_format:
+                    if supplier_row:
                         prev["image_urls"] = _merge_image_url_lists(
                             prev["image_urls"],
                             image_urls,
@@ -939,7 +1750,7 @@ def parse_and_validate_csv(
                             ),
                         })
                 if prev.get("mockup_url") and mockup_url and prev["mockup_url"] != mockup_url:
-                    if not supplier_format:
+                    if not supplier_row:
                         errors.append({
                             "row": row_num,
                             "field": "url_mockup",
@@ -961,8 +1772,33 @@ def parse_and_validate_csv(
             or stock is None
             or not method_parse_ok
         ):
+            if row_num in column_filter_matched_row_nums:
+                if not product_sku:
+                    errors.append({
+                        "row": row_num,
+                        "field": "sku_prodotto",
+                        "message": "Codice Padre o SKU mancante.",
+                    })
+                elif price is None:
+                    errors.append({
+                        "row": row_num,
+                        "field": "prezzo",
+                        "message": "Prezzo mancante o non valido.",
+                    })
+                elif stock is None:
+                    errors.append({
+                        "row": row_num,
+                        "field": "scorte",
+                        "message": "Scorte non valide.",
+                    })
             continue
-        if not supplier_format and (not size or not color_raw):
+        if not supplier_row and (not size or not color_raw):
+            if row_num in column_filter_matched_row_nums:
+                errors.append({
+                    "row": row_num,
+                    "field": "taglia",
+                    "message": "Taglia e colore sono obbligatori per questo formato CSV.",
+                })
             continue
 
         meta = product_meta.get(product_sku.lower(), {})
@@ -984,16 +1820,22 @@ def parse_and_validate_csv(
             "sale_price": sale_price,
             "variant_sku": variant_sku,
             "category_ids": category_ids,
-            "supplier_section": _section_from_merceologica(merceologica) if supplier_format else "",
-            "supplier_category": category_name if supplier_format else "",
-            "supplier_subcategory": subcategory_name if supplier_format else "",
+            "supplier_section": (
+                _section_from_merceologica(
+                    merceologica or f"{category_name} {subcategory_name}".strip(),
+                )
+                if supplier_row
+                else ""
+            ),
+            "supplier_category": category_name if supplier_row else "",
+            "supplier_subcategory": subcategory_name if supplier_row else "",
             "allows_customization": allows_customization,
             "customization_fee": customization_fee,
             "image_urls": meta.get("image_urls") or image_urls,
             "mockup_url": meta.get("mockup_url") or mockup_url,
             **method_values,
         }
-        if supplier_format and variant_sku:
+        if supplier_row and variant_sku:
             variant_key = variant_sku.lower()
             if variant_key in supplier_variant_row_index:
                 parsed_rows[supplier_variant_row_index[variant_key]] = parsed_row
@@ -1012,6 +1854,26 @@ def parse_and_validate_csv(
         return [], errors
 
     if not parsed_rows:
+        if column_value_filter is not None:
+            col_key, _value_keys = column_value_filter
+            if column_filter_matched_rows > 0:
+                message = (
+                    "Le righe con i valori selezionati non sono importabili "
+                    "(controlla prezzo, SKU, taglia/colore e altri campi obbligatori)."
+                )
+            else:
+                message = "Nessuna riga da importare per i valori selezionati."
+            return [], [{
+                "row": 0,
+                "field": col_key,
+                "message": message,
+            }]
+        if brand_keys_filter is not None:
+            return [], [{
+                "row": 0,
+                "field": "marca",
+                "message": "Nessuna riga da importare per le marche selezionate.",
+            }]
         return [], [{"row": 0, "field": "file", "message": "Il CSV non contiene righe di dati."}]
 
     for row in parsed_rows:
@@ -1137,19 +1999,19 @@ def iter_import_parsed_rows(parsed_rows: list[dict]):
     created_products = 0
     created_variants = 0
 
-    with transaction.atomic():
-        for index, rows in enumerate(grouped.values(), start=1):
-            first = rows[0]
+    for index, rows in enumerate(grouped.values(), start=1):
+        first = rows[0]
+        with transaction.atomic():
             variant_count, _product_count = _import_one_product_group(rows)
-            created_products += 1
-            created_variants += variant_count
-            yield {
-                "phase": "importing",
-                "current": index,
-                "total": total_products,
-                "message": f"Importazione prodotto {index} di {total_products}…",
-                "product_sku": first.get("product_sku") or "",
-            }
+        created_products += 1
+        created_variants += variant_count
+        yield {
+            "phase": "importing",
+            "current": index,
+            "total": total_products,
+            "message": f"Importazione prodotto {index} di {total_products}…",
+            "product_sku": first.get("product_sku") or "",
+        }
 
     yield {
         "phase": "complete",

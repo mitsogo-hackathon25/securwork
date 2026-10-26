@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -94,6 +95,7 @@ const emptyProduct = (): AdminProduct => ({
 })
 
 export default function AdminProductFormPage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const isNew = !id || id === 'new'
   const productId = isNew ? null : Number(id)
@@ -395,8 +397,8 @@ export default function AdminProductFormPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <Link to="/admin/products" className="admin-back">← Torna ai prodotti</Link>
-          <h1>{isNew ? 'Aggiungi prodotto' : 'Modifica prodotto'}</h1>
+          <Link to="/admin/products" className="admin-back">{t('adminProductForm.back')}</Link>
+          <h1>{isNew ? t('adminProductForm.addTitle') : t('adminProductForm.editTitle')}</h1>
         </div>
       </div>
 

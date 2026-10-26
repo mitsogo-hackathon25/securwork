@@ -40,7 +40,7 @@ class AdminProductDeleteTests(APITestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Product.objects.filter(pk=product.pk).exists())
 
-    def test_delete_product_with_order_history_returns_400(self):
+    def test_delete_product_with_order_history_removes_product_keeps_order_line(self):
         product = self._create_product()
         variant = product.variants.get()
         order = Order.objects.create(
@@ -58,7 +58,7 @@ class AdminProductDeleteTests(APITestCase):
             subtotal=Decimal("25.00"),
             total=Decimal("25.00"),
         )
-        OrderItem.objects.create(
+        line = OrderItem.objects.create(
             order=order,
             variant=variant,
             product_name="Delete me",
@@ -70,6 +70,9 @@ class AdminProductDeleteTests(APITestCase):
 
         url = reverse("admin-product-detail", kwargs={"pk": product.pk})
         response = self.client.delete(url)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("ordini", response.data["detail"].lower())
-        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Product.objects.filter(pk=product.pk).exists())
+        line.refresh_from_db()
+        self.assertIsNone(line.variant_id)
+        self.assertEqual(line.product_name, "Delete me")
+        self.assertEqual(line.sku, variant.sku)

@@ -1,22 +1,31 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   bulkDeleteAdminProducts,
+  deleteAllAdminProducts,
   deleteAdminProduct,
   downloadProductCsvTemplate,
   exportProductsCsv,
   fetchAdminProducts,
+  fetchCsvImportColumnValues,
+  fetchCsvImportColumns,
   importProductsCsvWithProgress,
   updateAdminProduct,
+  type CsvImportColumnFilter,
+  type CsvImportColumnOption,
   type CsvImportError,
   type CsvImportProgressEvent,
+  type CsvImportValueOption,
 } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
 import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
 
 export default function AdminProductsPage() {
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
@@ -30,6 +39,36 @@ export default function AdminProductsPage() {
   const [importProgress, setImportProgress] = useState<CsvImportProgressEvent | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [deleteAllBusy, setDeleteAllBusy] = useState(false)
+  const [scanningCsv, setScanningCsv] = useState(false)
+  const [loadingColumnValues, setLoadingColumnValues] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importModalStep, setImportModalStep] = useState<'column' | 'values'>('column')
+  const [importColumnOptions, setImportColumnOptions] = useState<CsvImportColumnOption[]>([])
+  const [importColumnSelected, setImportColumnSelected] = useState<string | null>(null)
+  const [importValueOptions, setImportValueOptions] = useState<CsvImportValueOption[]>([])
+  const [importValueSelected, setImportValueSelected] = useState<string[]>([])
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
+
+  const resetImportModalState = () => {
+    setImportModalStep('column')
+    setImportColumnOptions([])
+    setImportColumnSelected(null)
+    setImportValueOptions([])
+    setImportValueSelected([])
+  }
+
+  useEffect(() => {
+    const onLanguageChanged = () => {
+      setImportModalOpen(false)
+      setPendingImportFile(null)
+      resetImportModalState()
+    }
+    i18n.on('languageChanged', onLanguageChanged)
+    return () => {
+      i18n.off('languageChanged', onLanguageChanged)
+    }
+  }, [i18n])
 
   const params: Record<string, string | number | boolean> = { page, ordering: '-updated_at' }
   if (search) params.search = search
@@ -84,7 +123,7 @@ export default function AdminProductsPage() {
   }
 
   const handleDeactivate = async (id: number, name: string) => {
-    if (!window.confirm(`Disattivare "${name}"? Non sarà più visibile nel negozio.`)) return
+    if (!window.confirm(t('adminProducts.confirmDeactivate', { name }))) return
     try {
       await deactivateProduct(id, name)
     } catch (err: unknown) {
@@ -93,28 +132,13 @@ export default function AdminProductsPage() {
   }
 
   const handleDelete = async (id: number, name: string) => {
-    if (!window.confirm(`Eliminare "${name}"? L'operazione non può essere annullata.`)) return
+    if (!window.confirm(t('adminProducts.confirmDelete', { name }))) return
     setImportDetail('')
     setImportSuccess('')
     try {
       await deleteMutation.mutateAsync(id)
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
     } catch (err: unknown) {
-      const responseData = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { detail?: string; code?: string } } }).response?.data
-        : undefined
-      if (responseData?.code === 'product_has_orders') {
-        const deactivate = window.confirm(
-          `${responseData.detail || 'Prodotto collegato a ordini.'}\n\nVuoi disattivarlo ora?`,
-        )
-        if (deactivate) {
-          try {
-            await deactivateProduct(id, name)
-          } catch (deactivateErr: unknown) {
-            setImportDetail(formatApiError(deactivateErr, 'Impossibile disattivare il prodotto.'))
-          }
-        }
-        return
-      }
       setImportDetail(formatApiError(err, 'Impossibile eliminare il prodotto.'))
     }
   }
@@ -144,11 +168,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-
+  const runCsvImport = async (file: File, columnFilter: CsvImportColumnFilter) => {
     setImporting(true)
     setImportSuccess('')
     setImportErrors([])
@@ -164,6 +184,7 @@ export default function AdminProductsPage() {
           total: 100,
           message: `Caricamento file… ${percent}%`,
         }),
+        columnFilter,
       )
       setImportSuccess(result.detail)
       setImportProgress({ phase: 'done', current: 100, total: 100, message: result.detail })
@@ -175,20 +196,135 @@ export default function AdminProductsPage() {
       if (responseData?.errors?.length) {
         setImportDetail(responseData.detail || 'Validazione CSV non riuscita.')
         setImportErrors(responseData.errors)
+      } else if (responseData?.detail) {
+        setImportDetail(responseData.detail)
+      } else if (err instanceof Error && err.message) {
+        setImportDetail(err.message)
       } else {
         setImportDetail(formatApiError(err, 'Impossibile importare il CSV.'))
       }
     } finally {
       setImporting(false)
+      setPendingImportFile(null)
+    }
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setScanningCsv(true)
+    setImportSuccess('')
+    setImportErrors([])
+    setImportDetail('')
+    setPendingImportFile(file)
+    resetImportModalState()
+    try {
+      const { columns } = await fetchCsvImportColumns(file)
+      setImportColumnOptions(columns)
+      const marca = columns.find((c) => c.key === 'marca' || c.key === 'merceologica')
+      setImportColumnSelected(marca?.key ?? columns[0]?.key ?? null)
+      setImportModalStep('column')
+      setImportModalOpen(true)
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile leggere le colonne dal CSV.'))
+      setPendingImportFile(null)
+    } finally {
+      setScanningCsv(false)
+    }
+  }
+
+  const closeImportModal = () => {
+    setImportModalOpen(false)
+    setPendingImportFile(null)
+    resetImportModalState()
+  }
+
+  const goToValueStep = async () => {
+    if (!pendingImportFile || !importColumnSelected) {
+      setImportDetail(t('adminProducts.selectOneColumn'))
+      return
+    }
+    setLoadingColumnValues(true)
+    setImportDetail('')
+    try {
+      const { values } = await fetchCsvImportColumnValues(pendingImportFile, importColumnSelected)
+      setImportValueOptions(values)
+      setImportValueSelected(values.map((v) => v.key))
+      setImportModalStep('values')
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile leggere i valori dalla colonna.'))
+    } finally {
+      setLoadingColumnValues(false)
+    }
+  }
+
+  const toggleImportValue = (key: string) => {
+    setImportValueSelected((prev) => (
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    ))
+  }
+
+  const confirmColumnImport = async () => {
+    if (!pendingImportFile || !importColumnSelected) return
+    if (importValueSelected.length === 0) {
+      setImportDetail(t('adminProducts.selectOneValue'))
+      return
+    }
+    const file = pendingImportFile
+    const column = importColumnSelected
+    const values = importValueOptions
+      .filter((v) => importValueSelected.includes(v.key))
+      .flatMap((v) => [v.key, v.name])
+    setImportModalOpen(false)
+    resetImportModalState()
+    await runCsvImport(file, { column, values })
+  }
+
+  const handleDeleteAll = async () => {
+    const total = data?.count ?? 0
+    const countLabel = total > 0 ? t('adminProducts.inCatalog', { count: total }) : ''
+    if (!window.confirm(t('adminProducts.confirmDeleteAll', { countLabel }))) return
+    const typed = window.prompt(t('adminProducts.confirmDeleteAllPrompt'))
+    if (typed !== t('adminProducts.confirmDeleteAllToken')) {
+      if (typed !== null) {
+        setImportDetail(t('adminProducts.confirmDeleteAllWrong'))
+      }
+      return
+    }
+
+    setDeleteAllBusy(true)
+    setImportDetail('')
+    setImportSuccess('')
+    setSelectedIds([])
+    try {
+      const result = await deleteAllAdminProducts()
+      if (result.blocked.length > 0) {
+        const names = result.blocked.slice(0, 5).map((b) => b.name).join(', ')
+        const more = result.blocked.length > 5 ? ` (+${result.blocked.length - 5} altri)` : ''
+        setImportDetail(
+          `${result.detail} Non eliminati (ordini collegati): ${names}${more}.`,
+        )
+      }
+      if (result.deleted.length > 0) {
+        setImportSuccess(result.detail)
+      } else if (!result.blocked.length) {
+        setImportDetail(result.detail)
+      }
+      setPage(1)
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, 'Impossibile eliminare tutti i prodotti.'))
+    } finally {
+      setDeleteAllBusy(false)
     }
   }
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return
     const count = selectedIds.length
-    if (!window.confirm(
-      `Eliminare ${count} prodott${count === 1 ? 'o' : 'i'} selezionat${count === 1 ? 'o' : 'i'}? L'operazione non può essere annullata.`,
-    )) return
+    if (!window.confirm(t('adminProducts.confirmBulkDelete', { count }))) return
 
     setBulkDeleting(true)
     setImportDetail('')
@@ -220,12 +356,12 @@ export default function AdminProductsPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Prodotti</h1>
-          <p>Gestisci catalogo, magazzino, prezzi e descrizioni.</p>
+          <h1>{t('adminProducts.title')}</h1>
+          <p>{t('adminProducts.subtitle')}</p>
         </div>
         <div className="admin-header-actions">
           <button type="button" className="btn btn-secondary" onClick={handleDownloadTemplate}>
-            Scarica modello CSV
+            {t('adminProducts.downloadTemplate')}
           </button>
           <button
             type="button"
@@ -233,15 +369,15 @@ export default function AdminProductsPage() {
             disabled={exporting}
             onClick={handleExportCsv}
           >
-            {exporting ? 'Esportazione…' : 'Esporta CSV'}
+            {exporting ? t('adminProducts.exporting') : t('adminProducts.exportCsv')}
           </button>
           <button
             type="button"
             className="btn btn-secondary"
-            disabled={importing}
+            disabled={importing || scanningCsv}
             onClick={() => fileInputRef.current?.click()}
           >
-            {importing ? 'Importazione…' : 'Importa CSV'}
+            {scanningCsv ? t('adminProducts.scanningCsv') : importing ? t('adminProducts.importing') : t('adminProducts.importCsv')}
           </button>
           <input
             ref={fileInputRef}
@@ -250,35 +386,17 @@ export default function AdminProductsPage() {
             className="admin-file-input"
             onChange={handleImportFile}
           />
-          <Link to="/admin/products/new" className="btn btn-primary">Aggiungi prodotto</Link>
+          <Link to="/admin/products/new" className="btn btn-primary">{t('adminProducts.addProduct')}</Link>
         </div>
       </div>
 
       <section className="admin-card admin-import-panel">
-        <h2>Import / export massivo</h2>
-        <p className="admin-hint">
-          L&apos;export scarica tutti i prodotti attuali (una riga per taglia/colore). Scarica il modello
-          per iniziare da zero, oppure modifica un export e reimporta nuovi prodotti. Colonne obbligatorie
-          principali: <strong>marca</strong> (brand), <strong>categoria</strong> (slug o nome, es. polo o
-          T-shirt; anche <code>slug_categorie</code> nel vecchio modello), <strong>colore</strong>, taglia e
-          prezzo. Opzionali: <strong>descrizione_breve_it/en</strong>, <strong>bestseller</strong> (si/no),{' '}
-          <strong>costo_personalizzazione</strong> (costo base logo sul prodotto). Marche e colori non presenti
-          nel catalogo vengono creati automaticamente. Nel modello standard il nome italiano (nome_it)
-          deve essere univoco; nel listino fornitore il prodotto è identificato dal{' '}
-          <strong>Codice Padre</strong> (più righe = taglie/colori, descrizioni uguali o diverse).
-          Per la personalizzazione logo usa: ricamo_petto, costo_ricamo_petto, ricamo_grande,
-          costo_ricamo_grande, dtf_petto, costo_dtf_petto, dtf_grande, costo_dtf_grande (si/no + prezzo).
-          Per le immagini usa url_immagini (URL pubblici separati da virgola; il primo è principale)
-          e opzionalmente url_mockup. È supportato anche il listino fornitore con colonne Codice Padre,
-          Merceologica, Categoria, SCategoria, SKU, Colore, Taglia, Descrizione, Foto, Prezzo Unico
-          (Confezione/Imballo usati solo se manca il prezzo unitario; scorte = In Arrivo se numerico,
-          altrimenti 0). Righe senza prezzo nel listino fornitore vengono saltate. Righe duplicate con lo
-          stesso SKU variante vengono unite (resta l&apos;ultima).
-        </p>
+        <h2>{t('adminProducts.importExportTitle')}</h2>
+        <p className="admin-hint">{t('adminProducts.importHint')}</p>
         {(importing || importProgress?.phase === 'done') && importProgress && (
           <div className="admin-import-progress" aria-live="polite">
             <div className="admin-import-progress-label">
-              {importProgress.message || 'Import in corso…'}
+              {importProgress.message || t('adminProducts.importInProgress')}
               {importProgress.phase === 'importing' && importProgress.product_sku && (
                 <span className="admin-import-progress-sku"> ({importProgress.product_sku})</span>
               )}
@@ -292,8 +410,8 @@ export default function AdminProductsPage() {
             {importProgress.total ? (
               <span className="admin-import-progress-meta">
                 {importProgress.current ?? 0} / {importProgress.total}
-                {importProgress.phase === 'validating' ? ' righe' : ''}
-                {importProgress.phase === 'importing' ? ' prodotti' : ''}
+                {importProgress.phase === 'validating' ? t('adminProducts.progressRows') : ''}
+                {importProgress.phase === 'importing' ? t('adminProducts.progressProducts') : ''}
               </span>
             ) : null}
           </div>
@@ -304,15 +422,16 @@ export default function AdminProductsPage() {
         )}
         {importErrors.length > 0 && (
           <div className="admin-import-errors">
-            <strong>{importErrors.length} error{importErrors.length === 1 ? 'e' : 'i'} trovat{importErrors.length === 1 ? 'o' : 'i'}</strong>
+            <strong>{t('adminProducts.errorsFound', { count: importErrors.length })}</strong>
             <ul>
               {importErrors.map((error, index) => (
                 <li key={`${error.row}-${error.field}-${index}`}>
                   {error.row > 0 ? (
-                    <>
-                      Riga {error.row}
-                      {error.field ? ` · ${error.field}` : ''}: {error.message}
-                    </>
+                    t('adminProducts.rowError', {
+                      row: error.row,
+                      field: error.field ? ` · ${error.field}` : '',
+                      message: error.message,
+                    })
                   ) : (
                     error.message
                   )}
@@ -326,25 +445,24 @@ export default function AdminProductsPage() {
       <div className="admin-toolbar">
         <input
           type="search"
-          placeholder="Cerca per nome, SKU o slug…"
+          placeholder={t('adminProducts.searchPlaceholder')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         />
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}>
-          <option value="all">Tutti gli stati</option>
-          <option value="active">Solo attivi</option>
-          <option value="inactive">Solo inattivi</option>
+          <option value="all">{t('adminProducts.filterAll')}</option>
+          <option value="active">{t('adminProducts.filterActive')}</option>
+          <option value="inactive">{t('adminProducts.filterInactive')}</option>
         </select>
       </div>
 
       <div className="admin-bulk-bar">
         <p className="admin-bulk-hint">
-          <strong>Eliminazione multipla:</strong> seleziona i prodotti con le caselle nella prima colonna
-          della tabella (intestazione = tutta la pagina). Se la tabella è larga, scorri leggermente a sinistra.
+          <strong>{t('adminProducts.bulkDeleteHint')}</strong>
         </p>
         <div className="admin-bulk-actions">
           <span className="admin-bulk-count">
-            {selectedIds.length} selezionat{selectedIds.length === 1 ? 'o' : 'i'}
+            {t('adminProducts.selectedCount', { count: selectedIds.length })}
           </span>
           <button
             type="button"
@@ -352,28 +470,37 @@ export default function AdminProductsPage() {
             disabled={selectedIds.length === 0}
             onClick={() => setSelectedIds([])}
           >
-            Deseleziona tutto
+            {t('adminProducts.deselectAll')}
           </button>
           <button
             type="button"
             className="btn btn-secondary admin-bulk-delete-btn"
-            disabled={selectedIds.length === 0 || bulkDeleting}
+            disabled={selectedIds.length === 0 || bulkDeleting || deleteAllBusy}
             onClick={handleBulkDelete}
           >
-            {bulkDeleting ? 'Eliminazione…' : 'Elimina selezionati'}
+            {bulkDeleting ? t('adminProducts.bulkDeleting') : t('adminProducts.bulkDelete')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary admin-bulk-delete-btn"
+            disabled={bulkDeleting || deleteAllBusy || (data?.count ?? 0) === 0}
+            onClick={handleDeleteAll}
+            title={t('adminProducts.deleteAllTitle')}
+          >
+            {deleteAllBusy ? t('adminProducts.bulkDeleting') : t('adminProducts.deleteAll')}
           </button>
         </div>
       </div>
 
       {isLoading ? (
-        <p>Caricamento prodotti…</p>
+        <p>{t('adminProducts.loadingProducts')}</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
                 <th className="admin-table-check" scope="col">
-                  <span className="admin-table-check-label">Sel.</span>
+                  <span className="admin-table-check-label">{t('adminProducts.colSelect')}</span>
                   <input
                     type="checkbox"
                     className="admin-table-checkbox"
@@ -382,19 +509,19 @@ export default function AdminProductsPage() {
                     onChange={toggleSelectAllOnPage}
                   />
                 </th>
-                <th>Prodotto</th>
-                <th>SKU</th>
-                <th>Prezzo</th>
-                <th>Scorte</th>
-                <th>Stato</th>
-                <th>Flag</th>
+                <th>{t('adminProducts.colProduct')}</th>
+                <th>{t('adminProducts.colSku')}</th>
+                <th>{t('adminProducts.colPrice')}</th>
+                <th>{t('adminProducts.colStock')}</th>
+                <th>{t('adminProducts.colStatus')}</th>
+                <th>{t('adminProducts.colFlags')}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="admin-empty">Nessun prodotto trovato.</td>
+                  <td colSpan={8} className="admin-empty">{t('adminProducts.empty')}</td>
                 </tr>
               ) : products.map((product) => (
                 <tr key={product.id}>
@@ -429,25 +556,25 @@ export default function AdminProductsPage() {
                   </td>
                   <td>
                     <span className={`admin-badge ${product.is_active ? 'admin-badge-success' : 'admin-badge-muted'}`}>
-                      {product.is_active ? 'Attivo' : 'Inattivo'}
+                      {product.is_active ? t('adminCommon.active') : t('adminCommon.inactive')}
                     </span>
                   </td>
                   <td>
                     <div className="admin-flags">
-                      {product.is_featured && <span className="admin-flag">In evidenza</span>}
-                      {product.is_new_arrival && <span className="admin-flag">Nuovo</span>}
-                      {product.is_bestseller && <span className="admin-flag">Best</span>}
+                      {product.is_featured && <span className="admin-flag">{t('adminProducts.flagFeatured')}</span>}
+                      {product.is_new_arrival && <span className="admin-flag">{t('adminProducts.flagNew')}</span>}
+                      {product.is_bestseller && <span className="admin-flag">{t('adminProducts.flagBest')}</span>}
                     </div>
                   </td>
                   <td className="admin-actions">
-                    <Link to={`/admin/products/${product.id}`} className="admin-link">Modifica</Link>
+                    <Link to={`/admin/products/${product.id}`} className="admin-link">{t('adminCommon.edit')}</Link>
                     {product.is_active && (
                       <button
                         type="button"
                         className="admin-link"
                         onClick={() => handleDeactivate(product.id, product.name)}
                       >
-                        Disattiva
+                        {t('adminCommon.deactivate')}
                       </button>
                     )}
                     <button
@@ -455,7 +582,7 @@ export default function AdminProductsPage() {
                       className="admin-link admin-link-danger"
                       onClick={() => handleDelete(product.id, product.name)}
                     >
-                      Elimina
+                      {t('adminCommon.delete')}
                     </button>
                   </td>
                 </tr>
@@ -467,10 +594,127 @@ export default function AdminProductsPage() {
 
       {totalPages > 1 && (
         <div className="admin-pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Precedente</button>
-          <span>Pagina {page} di {totalPages}</span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Successiva</button>
+          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('adminCommon.prev')}</button>
+          <span>{t('adminCommon.pageOf', { page, total: totalPages })}</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t('adminCommon.next')}</button>
         </div>
+      )}
+
+      {importModalOpen && createPortal(
+        <div className="admin-import-brand-overlay" role="dialog" aria-modal="true" aria-labelledby="import-filter-title">
+          <div className="admin-import-brand-dialog admin-card">
+            <h3 id="import-filter-title">
+              {importModalStep === 'column'
+                ? t('adminProducts.columnModalTitle')
+                : t('adminProducts.valueModalTitle')}
+            </h3>
+            <p className="admin-hint">
+              {importModalStep === 'column'
+                ? t('adminProducts.columnModalHint', { file: pendingImportFile?.name ?? '' })
+                : t('adminProducts.valueModalHint', {
+                  file: pendingImportFile?.name ?? '',
+                  column: importColumnOptions.find((c) => c.key === importColumnSelected)?.label
+                    ?? importColumnSelected
+                    ?? '',
+                })}
+            </p>
+            {importModalStep === 'column' ? (
+              <ul className="admin-import-brand-list">
+                {importColumnOptions.map((col) => (
+                  <li key={col.key}>
+                    <label className="admin-import-brand-option">
+                      <input
+                        type="radio"
+                        name="csv-import-column"
+                        checked={importColumnSelected === col.key}
+                        onChange={() => setImportColumnSelected(col.key)}
+                      />
+                      <span className="admin-import-brand-name">{col.label}</span>
+                      <span className="admin-import-brand-meta">{col.key}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <>
+                <div className="admin-import-brand-toolbar">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setImportValueSelected(importValueOptions.map((v) => v.key))}
+                  >
+                    {t('adminProducts.selectAllValues')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setImportValueSelected([])}
+                  >
+                    {t('adminProducts.deselectAllValues')}
+                  </button>
+                </div>
+                <ul className="admin-import-brand-list">
+                  {importValueOptions.map((value) => (
+                    <li key={value.key}>
+                      <label className="admin-import-brand-option">
+                        <input
+                          type="checkbox"
+                          checked={importValueSelected.includes(value.key)}
+                          onChange={() => toggleImportValue(value.key)}
+                        />
+                        <span className="admin-import-brand-name">
+                          {value.key === '__none__'
+                            ? t('adminProducts.filterValueEmpty')
+                            : value.name}
+                        </span>
+                        <span className="admin-import-brand-meta">
+                          {t('adminProducts.brandProducts', { count: value.product_count })}
+                          {' · '}
+                          {t('adminProducts.brandRows', { count: value.row_count })}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <div className="admin-import-brand-actions">
+              <button type="button" className="btn btn-secondary" onClick={closeImportModal}>
+                {t('adminCommon.cancel')}
+              </button>
+              {importModalStep === 'column' ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!importColumnSelected || loadingColumnValues}
+                  onClick={() => void goToValueStep()}
+                >
+                  {loadingColumnValues ? t('adminProducts.loadingValues') : t('adminProducts.nextSelectValues')}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={loadingColumnValues}
+                    onClick={() => setImportModalStep('column')}
+                  >
+                    {t('adminProducts.backToColumns')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={importValueSelected.length === 0 || importing}
+                    onClick={() => void confirmColumnImport()}
+                  >
+                    {t('adminProducts.importSelectedValues')}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

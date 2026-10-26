@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adjustProductPricesByBrand,
@@ -12,6 +13,7 @@ import './Admin.css'
 const NO_BRAND_VALUE = '__none__'
 
 export default function AdminGlobalSettingsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [percent, setPercent] = useState('10')
   const [direction, setDirection] = useState<'increase' | 'decrease'>('increase')
@@ -114,8 +116,8 @@ export default function AdminGlobalSettingsPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Impostazioni globali</h1>
-          <p>Prezzi per marca e notifiche email per i nuovi ordini.</p>
+          <h1>{t('adminSettings.title')}</h1>
+          <p>{t('adminSettings.subtitle')}</p>
         </div>
       </div>
 

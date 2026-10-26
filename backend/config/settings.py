@@ -106,8 +106,15 @@ if config("USE_SQLITE", default=False, cast=bool):
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {
+                # Reduce "database is locked" during concurrent admin import + deletes.
+                "timeout": 30,
+            },
         }
     }
+    from config.sqlite import enable_sqlite_wal
+
+    enable_sqlite_wal()
 else:
     DATABASES = {
         "default": {

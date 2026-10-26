@@ -5,7 +5,10 @@ export function formatApiError(err: unknown, fallback = 'Something went wrong.')
 
   const data = (err as { response?: { data?: unknown } }).response?.data
   if (!data) return fallback
-  if (typeof data === 'string') return data
+  if (typeof data === 'string') {
+    if (data.includes('<!DOCTYPE') || data.includes('<html')) return fallback
+    return data
+  }
 
   if (typeof data === 'object' && data !== null) {
     const record = data as Record<string, unknown>

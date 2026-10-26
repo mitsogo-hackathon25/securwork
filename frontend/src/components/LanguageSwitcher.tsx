@@ -5,9 +5,13 @@ export default function LanguageSwitcher() {
   const current = i18n.language
 
   const switchLang = (lang: string) => {
-    i18n.changeLanguage(lang)
+    if (lang === i18n.resolvedLanguage || lang === i18n.language) return
     localStorage.setItem('securwork_lang', lang)
     document.documentElement.lang = lang
+    // Defer so open dialogs/portals can close before React reconciles translated trees.
+    window.setTimeout(() => {
+      void i18n.changeLanguage(lang)
+    }, 0)
   }
 
   return (

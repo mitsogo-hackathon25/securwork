@@ -52,6 +52,11 @@ export type BulkDeleteResult = {
 export const bulkDeleteAdminProducts = (ids: number[]) =>
   api.post<BulkDeleteResult>('/admin/products/bulk_delete/', { ids }).then((r) => r.data)
 
+export const deleteAllAdminProducts = () =>
+  api
+    .post<BulkDeleteResult>('/admin/products/delete_all/', { confirm: 'Stilpromo@2026' })
+    .then((r) => r.data)
+
 export type CsvImportError = {
   row: number
   field: string
@@ -107,14 +112,71 @@ export type CsvImportProgressEvent = {
   created_variants?: number
 }
 
+export type CsvImportBrandOption = {
+  key: string
+  name: string
+  product_count: number
+  row_count: number
+}
+
+export type CsvImportColumnOption = {
+  key: string
+  label: string
+}
+
+export type CsvImportValueOption = CsvImportBrandOption
+
+export type CsvImportColumnFilter = {
+  column: string
+  values: string[]
+}
+
+export const fetchCsvImportBrands = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post<{ brands: CsvImportBrandOption[] }>('/admin/products/import_csv_brands/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+}
+
+export const fetchCsvImportColumns = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post<{ columns: CsvImportColumnOption[] }>('/admin/products/import_csv_columns/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+}
+
+export const fetchCsvImportColumnValues = (file: File, column: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('column', column)
+  return api
+    .post<{ column: string; values: CsvImportValueOption[] }>(
+      '/admin/products/import_csv_column_values/',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    .then((r) => r.data)
+}
+
 export function importProductsCsvWithProgress(
   file: File,
   onEvent: (event: CsvImportProgressEvent) => void,
   onUploadProgress?: (percent: number) => void,
+  columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportResult> {
   return new Promise((resolve, reject) => {
     const form = new FormData()
     form.append('file', file)
+    if (columnFilter && columnFilter.column && columnFilter.values.length > 0) {
+      form.append('filter_column', columnFilter.column)
+      form.append('filter_values', JSON.stringify(columnFilter.values))
+    }
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/admin/products/import_csv_stream/')
     xhr.withCredentials = true
@@ -185,10 +247,33 @@ export function importProductsCsvWithProgress(
       consumeBuffer()
       if (settled) return
       if (xhr.status >= 200 && xhr.status < 300) {
-        reject(new Error('Import terminato senza conferma dal server.'))
+        reject(
+          Object.assign(new Error('Import terminato senza conferma dal server.'), {
+            response: {
+              data: {
+                detail:
+                  'Import terminato senza conferma dal server. '
+                  + 'Riprova: se il file è molto grande attendi il completamento o riduci il filtro.',
+                errors: [],
+              },
+            },
+          }),
+        )
         return
       }
-      reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
+      let detail = xhr.responseText || `HTTP ${xhr.status}`
+      try {
+        const parsed = JSON.parse(xhr.responseText) as { detail?: string; errors?: CsvImportError[] }
+        if (parsed.detail) detail = parsed.detail
+        reject(
+          Object.assign(new Error(detail), {
+            response: { data: parsed },
+          }),
+        )
+        return
+      } catch {
+        reject(new Error(detail))
+      }
     }
 
     xhr.onerror = () => reject(new Error('Errore di rete durante l\'import CSV.'))

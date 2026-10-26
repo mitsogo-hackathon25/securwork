@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteAdminCoupon, fetchAdminCoupons } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
@@ -27,6 +28,7 @@ function formatDateRange(from: string | null, until: string | null) {
 }
 
 export default function AdminCouponsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
@@ -59,10 +61,10 @@ export default function AdminCouponsPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Coupon</h1>
-          <p>Crea codici sconto per i clienti. Imposta un limite di utilizzi per controllare quante volte ogni codice può essere usato.</p>
+          <h1>{t('adminCoupons.title')}</h1>
+          <p>{t('adminCoupons.subtitle')}</p>
         </div>
-        <Link to="/admin/coupons/new" className="btn btn-primary">Aggiungi coupon</Link>
+        <Link to="/admin/coupons/new" className="btn btn-primary">{t('adminCoupons.addCoupon')}</Link>
       </div>
 
       <div className="admin-toolbar">
