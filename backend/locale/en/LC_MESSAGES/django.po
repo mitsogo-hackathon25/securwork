@@ -1,0 +1,19 @@
+msgid ""
+msgstr ""
+"Language: en\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Passwords do not match."
+msgstr "Passwords do not match."
+
+msgid "This username is already taken."
+msgstr "This username is already taken."
+
+msgid "This email is already registered."
+msgstr "This email is already registered."
+
+msgid "Enter a valid email address."
+msgstr "Enter a valid email address."
+
+msgid "This field is required."
+msgstr "This field is required."

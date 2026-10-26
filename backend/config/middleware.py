@@ -2,6 +2,9 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.http import HttpResponseRedirect
+from django.utils import translation
+
+from config.i18n import request_language
 
 
 class DevFrontendRedirectMiddleware:
@@ -28,3 +31,20 @@ class DevFrontendRedirectMiddleware:
                     url = f"{url}?{query}"
                 return HttpResponseRedirect(url)
         return self.get_response(request)
+
+
+class ApiLanguageMiddleware:
+    """Activate Django translations from ?lang= on API requests (storefront i18n)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path.startswith("/api/"):
+            lang = request_language(request)
+            translation.activate(lang)
+            request.LANGUAGE_CODE = lang
+        response = self.get_response(request)
+        if request.path.startswith("/api/"):
+            translation.deactivate()
+        return response

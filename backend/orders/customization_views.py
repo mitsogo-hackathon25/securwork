@@ -2,6 +2,7 @@ import json
 
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -19,6 +20,7 @@ from .serializers import LineItemCustomizationSerializer
 class CustomizationCreateView(APIView):
     """Upload logo + placement data; returns customization id for add-to-cart."""
 
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):

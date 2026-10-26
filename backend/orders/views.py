@@ -47,6 +47,11 @@ def _cart_with_items(cart):
 
 
 class CartView(APIView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
     def get(self, request):
         cart = _cart_with_items(get_or_create_cart(request))
         serializer = CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")})
@@ -97,6 +102,8 @@ class CartView(APIView):
 
 
 class CartItemView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def patch(self, request, item_id):
         cart = get_or_create_cart(request)
         try:

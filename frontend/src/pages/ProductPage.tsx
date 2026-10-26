@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
@@ -11,11 +11,15 @@ import { addToCart, fetchProduct, fetchRelated } from '../api/store'
 import type { ProductVariant } from '../api/types'
 import { sortClothingSizes } from '../constants/clothingSizes'
 import { useToast } from '../components/toast/ToastProvider'
+import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
+import { formatApiError } from '../utils/formatApiError'
 import { formatPrice, variantHasDiscount } from '../utils/format'
 import './ProductPage.css'
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
+  const location = useLocation()
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
@@ -69,6 +73,11 @@ export default function ProductPage() {
   const handleAddToCart = async () => {
     if (!variant) return
     if (customize && !hasLogo) return
+    if (!isLoggedIn()) {
+      showToast(t('account.loginRequiredAddToCart'))
+      navigate(accountUrlWithNext(location.pathname + location.search))
+      return
+    }
     setAdding(true)
     try {
       let customizationId: number | undefined
@@ -78,6 +87,8 @@ export default function ProductPage() {
       await addToCart(variant.id, quantity, customizationId)
       await queryClient.invalidateQueries({ queryKey: ['cart'] })
       showToast(t('product.addedToCart'))
+    } catch (err: unknown) {
+      showToast(formatApiError(err, t('common.error')))
     } finally {
       setAdding(false)
     }
