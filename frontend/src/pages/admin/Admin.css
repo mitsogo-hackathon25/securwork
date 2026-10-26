@@ -1124,3 +1124,7 @@
   .admin-form-grid { grid-template-columns: 1fr; }
   .admin-order-grid { grid-template-columns: 1fr; }
 }
+
+.admin-ticket-thread {
+  margin: 1rem 0 1.5rem;
+}

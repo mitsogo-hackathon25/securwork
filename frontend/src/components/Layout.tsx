@@ -3,6 +3,7 @@ import Header from './Header'
 import Footer from './Footer'
 import AnnouncementBar from './AnnouncementBar'
 import CookieBanner from './CookieBanner'
+import HelpWidget from './HelpWidget'
 
 export default function Layout() {
   return (
@@ -14,6 +15,7 @@ export default function Layout() {
       </main>
       <Footer />
       <CookieBanner />
+      <HelpWidget />
     </>
   )
 }

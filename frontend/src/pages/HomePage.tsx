@@ -8,7 +8,6 @@ import CategoryCard from '../components/CategoryCard'
 import Newsletter from '../components/Newsletter'
 import TrustBadges from '../components/TrustBadges'
 import { OrganizationSchema } from '../components/SeoSchema'
-import { IconQuality, IconService, IconShield, IconTruck } from '../components/Icons'
 import { SITE_LOGO_URL } from '../constants/branding'
 import {
   fetchBestsellers,
@@ -18,9 +17,6 @@ import {
 } from '../api/store'
 import { sortByName } from '../utils/sortCategories'
 import './HomePage.css'
-
-const whyIcons = [IconShield, IconQuality, IconService, IconTruck]
-const whyKeys = ['whySafety', 'whyQuality', 'whyService', 'whyDelivery'] as const
 
 const industryKeys = ['industryConstruction', 'industryManufacturing', 'industryHealthcare', 'industryFood', 'industryLogistics'] as const
 
@@ -109,28 +105,6 @@ export default function HomePage() {
       </section>
 
       <TrustBadges />
-
-      <section className="section home-why">
-        <div className="container">
-          <div className="home-section-intro">
-            <span className="home-section-eyebrow">{t('home.whyEyebrow')}</span>
-            <h2>{t('home.whyTitle')}</h2>
-            <p>{t('home.whySubtitle')}</p>
-          </div>
-          <div className="why-grid">
-            {whyKeys.map((key, i) => {
-              const Icon = whyIcons[i]
-              return (
-                <article key={key} className="why-card">
-                  <div className="why-icon"><Icon size={28} /></div>
-                  <h3>{t(`home.${key}`)}</h3>
-                  <p>{t(`home.${key}Desc`)}</p>
-                </article>
-              )
-            })}
-          </div>
-        </div>
-      </section>
 
       <section className="section section-alt home-categories">
         <div className="container">

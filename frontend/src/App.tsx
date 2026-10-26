@@ -12,6 +12,7 @@ import CmsPage from './pages/CmsPage'
 import ContactPage from './pages/ContactPage'
 import FAQPage from './pages/FAQPage'
 import AccountPage from './pages/AccountPage'
+import TicketsPage from './pages/TicketsPage'
 import NotFoundPage from './pages/NotFoundPage'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
@@ -23,6 +24,7 @@ import AdminCouponsPage from './pages/admin/AdminCouponsPage'
 import AdminCouponFormPage from './pages/admin/AdminCouponFormPage'
 import AdminCatalogPage from './pages/admin/AdminCatalogPage'
 import AdminGlobalSettingsPage from './pages/admin/AdminGlobalSettingsPage'
+import AdminSupportPage from './pages/admin/AdminSupportPage'
 
 export default function App() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
             <Route path="coupons/:id" element={<AdminCouponFormPage />} />
             <Route path="catalog" element={<AdminCatalogPage />} />
             <Route path="settings" element={<AdminGlobalSettingsPage />} />
+            <Route path="tickets" element={<AdminSupportPage />} />
+            <Route path="tickets/:id" element={<AdminSupportPage />} />
             <Route path="pricing" element={<Navigate to="/admin/settings" replace />} />
           </Route>
         </Route>
@@ -58,6 +62,8 @@ export default function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/tickets" element={<TicketsPage />} />
+          <Route path="/tickets/:id" element={<TicketsPage />} />
           <Route path="/pages/:pageType" element={<CmsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

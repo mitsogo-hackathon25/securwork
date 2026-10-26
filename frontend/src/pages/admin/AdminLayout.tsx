@@ -1,5 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
+import { fetchAdminSupportUnreadCount } from '../../api/support'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import { SITE_LOGO_URL } from '../../constants/branding'
 import './Admin.css'
@@ -7,6 +9,12 @@ import './Admin.css'
 export default function AdminLayout() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
+
+  const { data: supportUnread } = useQuery({
+    queryKey: ['admin-support-unread'],
+    queryFn: fetchAdminSupportUnreadCount,
+    refetchInterval: 30_000,
+  })
 
   const handleLogout = () => {
     localStorage.removeItem('access_token')
@@ -27,6 +35,12 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
             {t('adminNav.orders')}
+          </NavLink>
+          <NavLink to="/admin/tickets" className={({ isActive }) => `admin-nav-link admin-nav-link-with-dot${isActive ? ' active' : ''}`}>
+            {t('adminNav.tickets')}
+            {(supportUnread?.count ?? 0) > 0 && (
+              <span className="nav-unread-dot" aria-label={t('tickets.unread')} />
+            )}
           </NavLink>
           <NavLink to="/admin/coupons" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
             {t('adminNav.coupons')}

@@ -1,0 +1,127 @@
+.help-widget {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 900;
+}
+
+.help-widget-toggle {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-primary, #e85d04);
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+}
+
+.help-widget-toggle:hover {
+  filter: brightness(1.05);
+}
+
+.help-widget-panel {
+  position: absolute;
+  right: 0;
+  bottom: 4rem;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(28rem, 70vh);
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.help-widget-header {
+  padding: 1rem 1rem 0.5rem;
+  position: relative;
+}
+
+.help-widget-header h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.help-widget-header p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted, #64748b);
+}
+
+.help-widget-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.help-widget-body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.help-widget-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0 0 0.5rem;
+}
+
+.help-widget-questions {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.help-widget-questions button {
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.help-widget-questions button:hover {
+  border-color: var(--color-primary, #e85d04);
+}
+
+.help-widget-answer p {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.help-widget-back {
+  border: none;
+  background: none;
+  color: var(--color-primary, #e85d04);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.help-widget-ticket {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.help-widget-faq {
+  display: block;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-primary, #e85d04);
+}

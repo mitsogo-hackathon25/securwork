@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import LanguageSwitcher from './LanguageSwitcher'
 import MegaMenu from './MegaMenu'
 import { fetchCart, fetchCategories } from '../api/store'
+import { fetchSupportUnreadCount } from '../api/support'
+import { isLoggedIn } from '../utils/auth'
 import { getShopCategoryGroups } from '../utils/categoryNav'
 import { SITE_LOGO_URL } from '../constants/branding'
 import './Header.css'
@@ -17,9 +19,18 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [search, setSearch] = useState('')
 
+  const loggedIn = isLoggedIn()
+
   const { data: cart } = useQuery({
     queryKey: ['cart'],
     queryFn: fetchCart,
+    refetchInterval: 30_000,
+  })
+
+  const { data: supportUnread } = useQuery({
+    queryKey: ['support-unread'],
+    queryFn: fetchSupportUnreadCount,
+    enabled: loggedIn,
     refetchInterval: 30_000,
   })
 
@@ -80,6 +91,12 @@ export default function Header() {
             <Link to="/about" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.about')}</Link>
             <Link to="/contact" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.contact')}</Link>
             <Link to="/faq" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)}>{t('nav.faq')}</Link>
+            <Link to="/tickets" onClick={closeAll} onMouseEnter={() => setMegaOpen(false)} className="nav-link-with-dot">
+              {t('nav.tickets')}
+              {loggedIn && (supportUnread?.count ?? 0) > 0 && (
+                <span className="nav-unread-dot" aria-label={t('tickets.unread')} />
+              )}
+            </Link>
 
             {mobileOpen && (workwearChildren.length > 0 || professionalChildren.length > 0) && (
               <div className="mobile-categories">
