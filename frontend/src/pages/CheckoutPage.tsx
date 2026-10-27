@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
-import { checkout, fetchCart, fetchPaymentConfig } from '../api/store'
+import { checkout, fetchCart, fetchCheckoutQuote, fetchPaymentConfig, fetchPickupLocations } from '../api/store'
 import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
 import { formatApiError } from '../utils/formatApiError'
 import { formatPrice } from '../utils/format'
+import { estimateCheckoutQuote } from '../utils/checkoutQuote'
 import './CheckoutPage.css'
 
 export default function CheckoutPage() {
@@ -18,6 +19,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'stripe' | 'bank_transfer'>('paypal')
   const [sameAsBilling, setSameAsBilling] = useState(true)
+  const [couponCode, setCouponCode] = useState('')
+  const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery')
+  const [pickupLocationId, setPickupLocationId] = useState<number | null>(null)
 
   const cancelled = searchParams.get('cancelled')
   const loggedIn = isLoggedIn()
@@ -28,7 +32,49 @@ export default function CheckoutPage() {
     }
   }, [loggedIn, navigate])
 
-  const { data: cart } = useQuery({ queryKey: ['cart'], queryFn: fetchCart, enabled: loggedIn })
+  const couponParam = couponCode.trim() || undefined
+
+  const { data: pickupLocations } = useQuery({
+    queryKey: ['pickup-locations'],
+    queryFn: fetchPickupLocations,
+    enabled: loggedIn,
+  })
+
+  const { data: cart, isLoading: cartLoading } = useQuery({
+    queryKey: ['cart', paymentMethod, couponParam, fulfillmentType],
+    queryFn: () => fetchCart({
+      payment_method: paymentMethod,
+      coupon_code: couponParam,
+      fulfillment_type: fulfillmentType,
+    }),
+    enabled: loggedIn,
+  })
+
+  const { data: apiQuote } = useQuery({
+    queryKey: ['checkout-quote', paymentMethod, couponParam, fulfillmentType, cart?.items.length],
+    queryFn: () => fetchCheckoutQuote({
+      payment_method: paymentMethod,
+      coupon_code: couponParam,
+      fulfillment_type: fulfillmentType,
+    }),
+    enabled: loggedIn && Boolean(cart?.items.length),
+    retry: 1,
+  })
+
+  const quote = useMemo(() => {
+    if (!cart?.items.length) return null
+    if (apiQuote) return apiQuote
+    if (cart.checkout_preview) return cart.checkout_preview
+    const subtotal = parseFloat(cart.total)
+    const discount = 0
+    return estimateCheckoutQuote(subtotal, paymentMethod, discount, fulfillmentType)
+  }, [apiQuote, cart, paymentMethod, fulfillmentType])
+
+  useEffect(() => {
+    if (fulfillmentType !== 'pickup' || !pickupLocations?.length) return
+    if (pickupLocationId && pickupLocations.some((l) => l.id === pickupLocationId)) return
+    setPickupLocationId(pickupLocations[0].id)
+  }, [fulfillmentType, pickupLocations, pickupLocationId])
   const { data: paymentConfig } = useQuery({
     queryKey: ['paymentConfig'],
     queryFn: fetchPaymentConfig,
@@ -63,8 +109,15 @@ export default function CheckoutPage() {
     data.accept_terms = form.get('accept_terms') === 'on'
     data.language = i18n.language
     data.payment_method = paymentMethod
-
-    if (sameAsBilling) {
+    data.fulfillment_type = fulfillmentType
+    if (fulfillmentType === 'pickup') {
+      if (!pickupLocationId) {
+        setError(t('checkout.pickupRequired'))
+        setLoading(false)
+        return
+      }
+      data.pickup_location_id = pickupLocationId
+    } else if (sameAsBilling) {
       data.shipping_first_name = data.billing_first_name
       data.shipping_last_name = data.billing_last_name
       data.shipping_address = data.billing_address
@@ -133,6 +186,59 @@ export default function CheckoutPage() {
             </section>
 
             <section>
+              <h2>{t('checkout.fulfillment')}</h2>
+              <div className="fulfillment-methods">
+                <label className={`payment-option ${fulfillmentType === 'delivery' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="fulfillment_type_ui"
+                    checked={fulfillmentType === 'delivery'}
+                    onChange={() => setFulfillmentType('delivery')}
+                  />
+                  <span>{t('checkout.fulfillmentDelivery')}</span>
+                </label>
+                <label className={`payment-option ${fulfillmentType === 'pickup' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="fulfillment_type_ui"
+                    checked={fulfillmentType === 'pickup'}
+                    onChange={() => setFulfillmentType('pickup')}
+                  />
+                  <span>{t('checkout.fulfillmentPickup')}</span>
+                </label>
+              </div>
+
+              {fulfillmentType === 'pickup' && (
+                <div className="pickup-locations">
+                  {!pickupLocations?.length ? (
+                    <p className="checkout-notice">{t('checkout.pickupNone')}</p>
+                  ) : (
+                    pickupLocations.map((loc) => (
+                      <label
+                        key={loc.id}
+                        className={`pickup-location-option ${pickupLocationId === loc.id ? 'active' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="pickup_location"
+                          checked={pickupLocationId === loc.id}
+                          onChange={() => setPickupLocationId(loc.id)}
+                        />
+                        <div>
+                          <strong>{loc.name}</strong>
+                          <p>{loc.address}, {loc.postcode} {loc.city}</p>
+                          {loc.phone && <p>{loc.phone}</p>}
+                          {loc.notes && <p className="pickup-notes">{loc.notes}</p>}
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </section>
+
+            {fulfillmentType === 'delivery' && (
+            <section>
               <label className="same-address-check">
                 <input
                   type="checkbox"
@@ -154,6 +260,7 @@ export default function CheckoutPage() {
                 </div>
               )}
             </section>
+            )}
 
             <section>
               <h2>{t('checkout.paymentMethod')}</h2>
@@ -165,7 +272,7 @@ export default function CheckoutPage() {
                       name="payment_method_ui"
                       value="paypal"
                       checked={paymentMethod === 'paypal'}
-                      onChange={() => setPaymentMethod('paypal')}
+                      onChange={() => { setPaymentMethod('paypal') }}
                     />
                     <span>{t('checkout.payPayPal')}</span>
                   </label>
@@ -204,7 +311,13 @@ export default function CheckoutPage() {
             </section>
 
             <section>
-              <input name="coupon_code" placeholder={t('checkout.coupon')} className="full-width coupon-input" />
+              <input
+                name="coupon_code"
+                placeholder={t('checkout.coupon')}
+                className="full-width coupon-input"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+              />
             </section>
 
             <label className="terms-check">
@@ -238,11 +351,46 @@ export default function CheckoutPage() {
                     </li>
                   ))}
                 </ul>
-                <p className="checkout-total">
-                  <strong>{t('cart.total')}</strong>
-                  <strong>{formatPrice(cart.total)}</strong>
-                </p>
-                <p className="checkout-note">{t('checkout.taxNote')}</p>
+                {cartLoading && !quote ? (
+                  <p className="checkout-note">{t('checkout.calculatingTotal')}</p>
+                ) : quote ? (
+                  <div className="checkout-quote">
+                    <div className="checkout-quote-row">
+                      <span>{t('cart.subtotal')}</span>
+                      <span>{formatPrice(quote.subtotal)}</span>
+                    </div>
+                    {parseFloat(quote.discount_amount) > 0 && (
+                      <div className="checkout-quote-row">
+                        <span>{t('checkout.discount')}</span>
+                        <span>−{formatPrice(quote.discount_amount)}</span>
+                      </div>
+                    )}
+                    <div className="checkout-quote-row">
+                      <span>
+                        {fulfillmentType === 'pickup' ? t('checkout.pickupLine') : t('checkout.shipping')}
+                      </span>
+                      <span>
+                        {parseFloat(quote.shipping_cost) > 0
+                          ? formatPrice(quote.shipping_cost)
+                          : t('checkout.shippingFree')}
+                      </span>
+                    </div>
+                    <div className="checkout-quote-row">
+                      <span>{t('checkout.vat')}</span>
+                      <span>{formatPrice(quote.tax_amount)}</span>
+                    </div>
+                    {paymentMethod === 'paypal' && parseFloat(quote.payment_fee) > 0 && (
+                      <div className="checkout-quote-row">
+                        <span>{t('checkout.paypalFee')}</span>
+                        <span>{formatPrice(quote.payment_fee)}</span>
+                      </div>
+                    )}
+                    <p className="checkout-total">
+                      <strong>{t('checkout.totalPayable')}</strong>
+                      <strong>{formatPrice(quote.total)}</strong>
+                    </p>
+                  </div>
+                ) : null}
               </>
             ) : (
               <p>{t('cart.empty')}</p>

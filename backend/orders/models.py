@@ -102,7 +102,31 @@ class CartItem(models.Model):
         return self.unit_price * self.quantity
 
 
+class PickupLocation(models.Model):
+    name = models.CharField(max_length=200)
+    address = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    postcode = models.CharField(max_length=20)
+    country = models.CharField(max_length=2, default="IT")
+    phone = models.CharField(max_length=30, blank=True)
+    notes = models.TextField(blank=True, help_text="Opening hours or pickup instructions.")
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Order(models.Model):
+    class FulfillmentType(models.TextChoices):
+        DELIVERY = "delivery", "Consegna"
+        PICKUP = "pickup", "Ritiro in sede"
+
     class Status(models.TextChoices):
         PENDING = "pending", "In attesa di pagamento"
         PROCESSING = "processing", "In lavorazione"
@@ -147,10 +171,30 @@ class Order(models.Model):
     shipping_postcode = models.CharField(max_length=20)
     shipping_country = models.CharField(max_length=2, default="IT")
 
+    fulfillment_type = models.CharField(
+        max_length=20,
+        choices=FulfillmentType.choices,
+        default=FulfillmentType.DELIVERY,
+    )
+    pickup_location = models.ForeignKey(
+        PickupLocation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="orders",
+    )
+    pickup_location_name = models.CharField(max_length=200, blank=True)
+
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    payment_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Payment processing fee charged to the customer (e.g. PayPal).",
+    )
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
     coupon_code = models.CharField(max_length=50, blank=True)

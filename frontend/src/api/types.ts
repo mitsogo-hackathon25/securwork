@@ -101,6 +101,7 @@ export interface Cart {
   items: CartItem[]
   total: string
   item_count: number
+  checkout_preview?: CheckoutQuote
 }
 
 export interface PaginatedResponse<T> {
@@ -136,6 +137,35 @@ export interface OrderItem {
   customization?: LineItemCustomization | null
 }
 
+export interface CheckoutQuote {
+  subtotal: string
+  discount_amount: string
+  shipping_cost: string
+  tax_amount: string
+  payment_fee: string
+  total: string
+  payment_method: string
+  fulfillment_type?: string
+}
+
+export interface PickupLocation {
+  id: number
+  name: string
+  address: string
+  city: string
+  postcode: string
+  country: string
+  phone: string
+  notes: string
+}
+
+export interface AdminPickupLocation extends PickupLocation {
+  is_active: boolean
+  sort_order: number
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Order {
   order_number: string
   status: string
@@ -146,6 +176,9 @@ export interface Order {
   shipping_cost: string
   tax_amount: string
   discount_amount: string
+  payment_fee?: string
+  fulfillment_type?: string
+  pickup_location_name?: string
   items: OrderItem[]
   created_at: string
   paid_at?: string | null

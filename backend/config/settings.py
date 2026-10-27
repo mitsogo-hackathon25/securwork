@@ -246,6 +246,9 @@ STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
 PAYPAL_CLIENT_ID = config("PAYPAL_CLIENT_ID", default="")
 PAYPAL_CLIENT_SECRET = config("PAYPAL_CLIENT_SECRET", default="")
 PAYPAL_MODE = config("PAYPAL_MODE", default="sandbox")  # sandbox | live
+# Passed to customer on PayPal checkout (gross-up; see orders.payment_fees)
+PAYPAL_CUSTOMER_FEE_PERCENT = config("PAYPAL_CUSTOMER_FEE_PERCENT", default="3.4", cast=str)
+PAYPAL_CUSTOMER_FEE_FIXED = config("PAYPAL_CUSTOMER_FEE_FIXED", default="0.35", cast=str)
 
 # Bank transfer (displayed at checkout)
 SECURWORK_BANK_IBAN = config("SECURWORK_BANK_IBAN", default="[PLACEHOLDER-IBAN]")

@@ -9,6 +9,7 @@ import type {
   AdminMonthlySales,
   AdminOrder,
   AdminOrderListItem,
+  AdminPickupLocation,
   AdminUserDetail,
   AdminUserListItem,
   AdminProduct,
@@ -414,3 +415,18 @@ export const updateAdminCoupon = (id: number, data: Partial<AdminCoupon>) =>
 
 export const deleteAdminCoupon = (id: number) =>
   api.delete(`/admin/coupons/${id}/`)
+
+export const fetchAdminPickupLocations = (params?: Record<string, string | number | boolean>) =>
+  api.get<PaginatedResponse<AdminPickupLocation>>('/admin/pickup-locations/', { params }).then((r) => r.data)
+
+export const fetchAdminPickupLocation = (id: number) =>
+  api.get<AdminPickupLocation>(`/admin/pickup-locations/${id}/`).then((r) => r.data)
+
+export const createAdminPickupLocation = (data: Partial<AdminPickupLocation>) =>
+  api.post<AdminPickupLocation>('/admin/pickup-locations/', data).then((r) => r.data)
+
+export const updateAdminPickupLocation = (id: number, data: Partial<AdminPickupLocation>) =>
+  api.patch<AdminPickupLocation>(`/admin/pickup-locations/${id}/`, data).then((r) => r.data)
+
+export const deleteAdminPickupLocation = (id: number) =>
+  api.delete(`/admin/pickup-locations/${id}/`)

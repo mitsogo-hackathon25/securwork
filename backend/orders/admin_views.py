@@ -18,7 +18,8 @@ from .admin_serializers import (
     AdminOrderSerializer,
     AdminOrderUpdateSerializer,
 )
-from .models import Coupon, Order
+from .models import Coupon, Order, PickupLocation
+from .pickup_serializers import PickupLocationSerializer
 
 
 class AdminOrderViewSet(
@@ -119,6 +120,17 @@ class AdminOrderViewSet(
                 "revenue": str(total_revenue.quantize(Decimal("0.01"))),
             },
         })
+
+
+class AdminPickupLocationViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsStaffUser]
+    serializer_class = PickupLocationSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ["name", "city", "address"]
+    filterset_fields = ["is_active"]
+    ordering_fields = ["sort_order", "name", "city"]
+    ordering = ["sort_order", "name"]
+    queryset = PickupLocation.objects.all()
 
 
 class AdminCouponViewSet(viewsets.ModelViewSet):

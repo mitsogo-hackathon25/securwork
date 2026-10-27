@@ -218,6 +218,9 @@ export default function AdminOrderDetailPage() {
           {parseFloat(order.discount_amount) > 0 && (
             <div><span>Sconto</span><span>-{formatPrice(order.discount_amount)}</span></div>
           )}
+          {order.payment_fee && parseFloat(order.payment_fee) > 0 && (
+            <div><span>Commissione PayPal</span><span>{formatPrice(order.payment_fee)}</span></div>
+          )}
           <div className="admin-order-total-row"><span>Totale</span><span>{formatPrice(order.total)}</span></div>
         </div>
       </div>

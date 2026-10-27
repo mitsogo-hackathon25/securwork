@@ -85,6 +85,11 @@ def _breakdown_for_order(order: Order, currency: str) -> dict:
             "currency_code": currency,
             "value": _money(order.discount_amount),
         }
+    if order.payment_fee > 0:
+        breakdown["handling"] = {
+            "currency_code": currency,
+            "value": _money(order.payment_fee),
+        }
     return breakdown
 
 
@@ -95,7 +100,10 @@ def _breakdown_matches_total(order: Order, breakdown: dict) -> bool:
     discount = Decimal("0.00")
     if "discount" in breakdown:
         discount = Decimal(breakdown["discount"]["value"])
-    expected = (item_total + shipping + tax - discount).quantize(Decimal("0.01"))
+    handling = Decimal("0.00")
+    if "handling" in breakdown:
+        handling = Decimal(breakdown["handling"]["value"])
+    expected = (item_total + shipping + tax - discount + handling).quantize(Decimal("0.01"))
     return expected == Decimal(order.total).quantize(Decimal("0.01"))
 
 

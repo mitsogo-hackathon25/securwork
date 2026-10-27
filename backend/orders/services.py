@@ -7,6 +7,7 @@ from django.utils import timezone
 from store.models import ProductVariant
 
 from .models import Cart, CartItem, Coupon, Order, OrderItem
+from .payment_fees import calculate_paypal_customer_fee
 
 
 def get_or_create_cart(request) -> Cart:
@@ -34,6 +35,12 @@ def calculate_shipping(subtotal: Decimal) -> Decimal:
     return flat_rate
 
 
+def resolve_shipping_cost(taxable: Decimal, fulfillment_type: str) -> Decimal:
+    if fulfillment_type == Order.FulfillmentType.PICKUP:
+        return Decimal("0.00")
+    return calculate_shipping(taxable)
+
+
 def apply_coupon(code: str, subtotal: Decimal) -> tuple[Decimal, Coupon | None]:
     if not code:
         return Decimal("0.00"), None
@@ -57,6 +64,37 @@ def apply_coupon(code: str, subtotal: Decimal) -> tuple[Decimal, Coupon | None]:
     return Decimal("0.00"), None
 
 
+def quote_checkout_from_cart(
+    cart: Cart,
+    *,
+    coupon_code: str = "",
+    payment_method: str = Order.PaymentMethod.PAYPAL,
+    fulfillment_type: str = Order.FulfillmentType.DELIVERY,
+) -> dict:
+    """Line items for checkout summary (no stock mutation)."""
+    items = list(cart.items.select_related("variant"))
+    subtotal = sum(item.line_total for item in items)
+    discount, _coupon = apply_coupon(coupon_code, subtotal)
+    taxable = subtotal - discount
+    tax = calculate_tax(taxable)
+    shipping = resolve_shipping_cost(taxable, fulfillment_type)
+    net_before_fee = taxable + tax + shipping
+    payment_fee = Decimal("0.00")
+    if payment_method == Order.PaymentMethod.PAYPAL:
+        payment_fee = calculate_paypal_customer_fee(net_before_fee)
+    total = net_before_fee + payment_fee
+    return {
+        "subtotal": subtotal,
+        "discount_amount": discount,
+        "shipping_cost": shipping,
+        "tax_amount": tax,
+        "payment_fee": payment_fee,
+        "total": total,
+        "payment_method": payment_method,
+        "fulfillment_type": fulfillment_type,
+    }
+
+
 @transaction.atomic
 def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
     items = list(cart.items.select_related("variant", "variant__product", "customization"))
@@ -72,12 +110,24 @@ def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
     discount, coupon = apply_coupon(data.get("coupon_code", ""), subtotal)
     taxable = subtotal - discount
     tax = calculate_tax(taxable)
-    shipping = calculate_shipping(taxable)
-    total = taxable + tax + shipping
+    fulfillment_type = data.get("fulfillment_type", Order.FulfillmentType.DELIVERY)
+    if fulfillment_type not in Order.FulfillmentType.values:
+        fulfillment_type = Order.FulfillmentType.DELIVERY
+
+    shipping = resolve_shipping_cost(taxable, fulfillment_type)
+    net_before_fee = taxable + tax + shipping
 
     payment_method = data.get("payment_method", Order.PaymentMethod.STRIPE)
     if payment_method not in Order.PaymentMethod.values:
         payment_method = Order.PaymentMethod.STRIPE
+
+    payment_fee = Decimal("0.00")
+    if payment_method == Order.PaymentMethod.PAYPAL:
+        payment_fee = calculate_paypal_customer_fee(net_before_fee)
+    total = net_before_fee + payment_fee
+
+    pickup_location = data.get("_pickup_location")
+    pickup_location_name = pickup_location.name if pickup_location else ""
 
     order = Order.objects.create(
         user=user,
@@ -97,10 +147,14 @@ def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
         shipping_city=data["shipping_city"],
         shipping_postcode=data["shipping_postcode"],
         shipping_country=data.get("shipping_country", "IT"),
+        fulfillment_type=fulfillment_type,
+        pickup_location=pickup_location,
+        pickup_location_name=pickup_location_name,
         subtotal=subtotal,
         shipping_cost=shipping,
         tax_amount=tax,
         discount_amount=discount,
+        payment_fee=payment_fee,
         total=total,
         coupon_code=data.get("coupon_code", ""),
         notes=data.get("notes", ""),

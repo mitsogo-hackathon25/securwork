@@ -51,6 +51,9 @@ export default function AdminLayout() {
           <NavLink to="/admin/catalog" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
             {t('adminNav.catalog')}
           </NavLink>
+          <NavLink to="/admin/pickup-locations" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
+            {t('adminNav.pickup')}
+          </NavLink>
           <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
             {t('adminNav.settings')}
           </NavLink>

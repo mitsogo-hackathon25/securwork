@@ -6,7 +6,7 @@ from rest_framework import serializers
 from store.models import ProductVariant
 from store.serializers import ProductVariantSerializer
 
-from .models import Cart, CartItem, Coupon, LineItemCustomization, Order, OrderItem
+from .models import Cart, CartItem, Coupon, LineItemCustomization, Order, OrderItem, PickupLocation
 
 
 class LineItemCustomizationSerializer(serializers.ModelSerializer):
@@ -119,7 +119,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "billing_address", "billing_city", "billing_postcode", "billing_country", "billing_vat",
             "shipping_first_name", "shipping_last_name",
             "shipping_address", "shipping_city", "shipping_postcode", "shipping_country",
-            "subtotal", "shipping_cost", "tax_amount", "discount_amount", "total",
+            "subtotal", "shipping_cost", "tax_amount", "discount_amount", "payment_fee", "total",
+            "fulfillment_type", "pickup_location_name",
             "coupon_code", "payment_method", "payment_status", "paid_at",
             "items", "created_at",
         ]
@@ -137,12 +138,17 @@ class CheckoutSerializer(serializers.Serializer):
     billing_postcode = serializers.CharField(max_length=20)
     billing_country = serializers.CharField(max_length=2, default="IT")
     billing_vat = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    shipping_first_name = serializers.CharField(max_length=100)
-    shipping_last_name = serializers.CharField(max_length=100)
-    shipping_address = serializers.CharField(max_length=255)
-    shipping_city = serializers.CharField(max_length=100)
-    shipping_postcode = serializers.CharField(max_length=20)
-    shipping_country = serializers.CharField(max_length=2, default="IT")
+    shipping_first_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    shipping_last_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    shipping_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    shipping_city = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    shipping_postcode = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    shipping_country = serializers.CharField(max_length=2, default="IT", required=False, allow_blank=True)
+    fulfillment_type = serializers.ChoiceField(
+        choices=["delivery", "pickup"],
+        default="delivery",
+    )
+    pickup_location_id = serializers.IntegerField(required=False, allow_null=True)
     coupon_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     language = serializers.ChoiceField(choices=["it", "en"], default="it")
@@ -156,3 +162,43 @@ class CheckoutSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("You must accept the terms and conditions.")
         return value
+
+    def validate(self, data):
+        fulfillment = data.get("fulfillment_type", "delivery")
+        if fulfillment == "pickup":
+            location_id = data.get("pickup_location_id")
+            if not location_id:
+                raise serializers.ValidationError({
+                    "pickup_location_id": "Select a pickup location.",
+                })
+            try:
+                location = PickupLocation.objects.get(pk=location_id, is_active=True)
+            except PickupLocation.DoesNotExist:
+                raise serializers.ValidationError({
+                    "pickup_location_id": "Pickup location is not available.",
+                })
+            data["_pickup_location"] = location
+            data["shipping_first_name"] = data["billing_first_name"]
+            data["shipping_last_name"] = data["billing_last_name"]
+            data["shipping_address"] = location.address
+            data["shipping_city"] = location.city
+            data["shipping_postcode"] = location.postcode
+            data["shipping_country"] = location.country or "IT"
+            return data
+
+        required_shipping = [
+            "shipping_first_name",
+            "shipping_last_name",
+            "shipping_address",
+            "shipping_city",
+            "shipping_postcode",
+        ]
+        errors = {}
+        for field in required_shipping:
+            if not (data.get(field) or "").strip():
+                errors[field] = "This field is required for delivery."
+        if errors:
+            raise serializers.ValidationError(errors)
+        if not data.get("shipping_country"):
+            data["shipping_country"] = "IT"
+        return data

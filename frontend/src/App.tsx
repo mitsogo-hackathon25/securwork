@@ -27,6 +27,8 @@ import AdminGlobalSettingsPage from './pages/admin/AdminGlobalSettingsPage'
 import AdminSupportPage from './pages/admin/AdminSupportPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminUserDetailPage from './pages/admin/AdminUserDetailPage'
+import AdminPickupLocationsPage from './pages/admin/AdminPickupLocationsPage'
+import AdminPickupLocationFormPage from './pages/admin/AdminPickupLocationFormPage'
 
 export default function App() {
   return (
@@ -48,6 +50,9 @@ export default function App() {
             <Route path="coupons/new" element={<AdminCouponFormPage />} />
             <Route path="coupons/:id" element={<AdminCouponFormPage />} />
             <Route path="catalog" element={<AdminCatalogPage />} />
+            <Route path="pickup-locations" element={<AdminPickupLocationsPage />} />
+            <Route path="pickup-locations/new" element={<AdminPickupLocationFormPage />} />
+            <Route path="pickup-locations/:id" element={<AdminPickupLocationFormPage />} />
             <Route path="settings" element={<AdminGlobalSettingsPage />} />
             <Route path="tickets" element={<AdminSupportPage />} />
             <Route path="tickets/:id" element={<AdminSupportPage />} />

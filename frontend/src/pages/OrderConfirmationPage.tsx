@@ -63,20 +63,38 @@ export default function OrderConfirmationPage() {
               <span>{t('cart.subtotal')}</span>
               <span>{formatPrice(order.subtotal)}</span>
             </div>
-            {parseFloat(order.shipping_cost) > 0 && (
+            {order.fulfillment_type === 'pickup' && order.pickup_location_name && (
+              <div className="summary-row">
+                <span>{t('checkout.fulfillmentPickup')}</span>
+                <span>{order.pickup_location_name}</span>
+              </div>
+            )}
+            {order.fulfillment_type !== 'pickup' && parseFloat(order.shipping_cost) > 0 && (
               <div className="summary-row">
                 <span>{t('checkout.shipping')}</span>
                 <span>{formatPrice(order.shipping_cost)}</span>
               </div>
             )}
+            {order.fulfillment_type === 'pickup' && (
+              <div className="summary-row">
+                <span>{t('checkout.pickupLine')}</span>
+                <span>{t('checkout.shippingFree')}</span>
+              </div>
+            )}
             {parseFloat(order.tax_amount) > 0 && (
               <div className="summary-row">
-                <span>IVA</span>
+                <span>{t('checkout.vat')}</span>
                 <span>{formatPrice(order.tax_amount)}</span>
               </div>
             )}
+            {order.payment_fee && parseFloat(order.payment_fee) > 0 && (
+              <div className="summary-row">
+                <span>{t('checkout.paypalFee')}</span>
+                <span>{formatPrice(order.payment_fee)}</span>
+              </div>
+            )}
             <div className="summary-row total">
-              <span>{t('cart.total')}</span>
+              <span>{t('checkout.totalPayable')}</span>
               <span>{formatPrice(order.total)}</span>
             </div>
           </div>

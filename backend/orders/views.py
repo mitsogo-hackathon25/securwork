@@ -36,7 +36,7 @@ from .serializers import (
     CheckoutSerializer,
     OrderSerializer,
 )
-from .services import create_order_from_cart, get_or_create_cart
+from .services import create_order_from_cart, get_or_create_cart, quote_checkout_from_cart
 
 
 def _cart_with_items(cart):
@@ -55,7 +55,24 @@ class CartView(APIView):
     def get(self, request):
         cart = _cart_with_items(get_or_create_cart(request))
         serializer = CartSerializer(cart, context={"request": request, "lang": request.query_params.get("lang", "it")})
-        return Response(serializer.data)
+        payload = dict(serializer.data)
+        payment_method = request.query_params.get("payment_method")
+        fulfillment_type = request.query_params.get("fulfillment_type", "delivery")
+        if fulfillment_type not in ("delivery", "pickup"):
+            fulfillment_type = "delivery"
+        if request.user.is_authenticated and payment_method in ("stripe", "paypal", "bank_transfer"):
+            coupon_code = request.query_params.get("coupon_code", "")
+            quote = quote_checkout_from_cart(
+                cart,
+                coupon_code=coupon_code,
+                payment_method=payment_method,
+                fulfillment_type=fulfillment_type,
+            )
+            payload["checkout_preview"] = {
+                key: f"{quote[key]:.2f}" if hasattr(quote[key], "quantize") else quote[key]
+                for key in quote
+            }
+        return Response(payload)
 
     def post(self, request):
         serializer = AddToCartSerializer(data=request.data)
@@ -156,6 +173,30 @@ class PaymentConfigView(APIView):
                 "bic": getattr(settings, "SECURWORK_BANK_BIC", "[PLACEHOLDER-BIC]"),
                 "account_name": getattr(settings, "SECURWORK_BANK_ACCOUNT_NAME", "SecurWork S.r.l."),
             },
+        })
+
+
+class CheckoutQuoteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        payment_method = request.query_params.get("payment_method", "paypal")
+        if payment_method not in ("stripe", "paypal", "bank_transfer"):
+            payment_method = "paypal"
+        fulfillment_type = request.query_params.get("fulfillment_type", "delivery")
+        if fulfillment_type not in ("delivery", "pickup"):
+            fulfillment_type = "delivery"
+        coupon_code = request.query_params.get("coupon_code", "")
+        cart = get_or_create_cart(request)
+        quote = quote_checkout_from_cart(
+            cart,
+            coupon_code=coupon_code,
+            payment_method=payment_method,
+            fulfillment_type=fulfillment_type,
+        )
+        return Response({
+            key: f"{quote[key]:.2f}" if hasattr(quote[key], "quantize") else quote[key]
+            for key in quote
         })
 
 

@@ -1,7 +1,7 @@
 import api from './client'
 import type {
   Cart, Category, CheckoutResponse, CustomizationDesign, FAQ, LineItemCustomization,
-  Order, Page, PaginatedResponse, PaymentConfig, Product, SiteConfig,
+  CheckoutQuote, Order, Page, PaginatedResponse, PaymentConfig, PickupLocation, Product, SiteConfig,
 } from './types'
 import { sortCategoryTree } from '../utils/sortCategories'
 
@@ -43,8 +43,15 @@ export const fetchBestsellers = () =>
 export const fetchRelated = (slug: string) =>
   api.get<Product[]>(`/products/${slug}/related/`).then((r) => r.data)
 
-export const fetchCart = () =>
-  api.get<Cart>('/cart/').then((r) => r.data)
+export const fetchCart = (params?: {
+  payment_method?: string
+  coupon_code?: string
+  fulfillment_type?: string
+}) =>
+  api.get<Cart>('/cart/', { params }).then((r) => r.data)
+
+export const fetchPickupLocations = () =>
+  api.get<PickupLocation[]>('/pickup-locations/').then((r) => r.data)
 
 export const addToCart = (variantId: number, quantity = 1, customizationId?: number) =>
   api.post<Cart>('/cart/', {
@@ -79,6 +86,13 @@ export const removeCartItem = (itemId: number) =>
 
 export const fetchPaymentConfig = () =>
   api.get<PaymentConfig>('/payments/config/').then((r) => r.data)
+
+export const fetchCheckoutQuote = (params: {
+  payment_method: string
+  coupon_code?: string
+  fulfillment_type?: string
+}) =>
+  api.get<CheckoutQuote>('/checkout/quote/', { params }).then((r) => r.data)
 
 export const checkout = (data: Record<string, unknown>) =>
   api.post<CheckoutResponse>('/checkout/', data).then((r) => r.data)
