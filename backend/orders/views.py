@@ -16,6 +16,7 @@ from .paypal_payments import (
     PayPalError,
     PayPalVerificationError,
     create_paypal_checkout,
+    create_paypal_order_for_card,
     paypal_enabled,
 )
 from .payments import (
@@ -60,12 +61,14 @@ class CartView(APIView):
         fulfillment_type = request.query_params.get("fulfillment_type", "delivery")
         if fulfillment_type not in ("delivery", "pickup"):
             fulfillment_type = "delivery"
-        if request.user.is_authenticated and payment_method in ("stripe", "paypal", "bank_transfer"):
+        if request.user.is_authenticated and payment_method in ("stripe", "paypal", "bank_transfer", "card"):
             coupon_code = request.query_params.get("coupon_code", "")
+            from .payment_methods import normalize_payment_method
+
             quote = quote_checkout_from_cart(
                 cart,
                 coupon_code=coupon_code,
-                payment_method=payment_method,
+                payment_method=normalize_payment_method(payment_method),
                 fulfillment_type=fulfillment_type,
             )
             payload["checkout_preview"] = {
@@ -162,10 +165,10 @@ class PaymentConfigView(APIView):
 
     def get(self, request):
         return Response({
-            "stripe_enabled": stripe_enabled(),
-            "stripe_publishable_key": getattr(settings, "STRIPE_PUBLISHABLE_KEY", ""),
+            "card_enabled": paypal_enabled(),
             "paypal_enabled": paypal_enabled(),
             "paypal_client_id": getattr(settings, "PAYPAL_CLIENT_ID", ""),
+            "paypal_mode": getattr(settings, "PAYPAL_MODE", "sandbox"),
             "currency": settings.SECURWORK_CURRENCY,
             "bank_transfer_enabled": True,
             "bank_details": {
@@ -181,17 +184,19 @@ class CheckoutQuoteView(APIView):
 
     def get(self, request):
         payment_method = request.query_params.get("payment_method", "paypal")
-        if payment_method not in ("stripe", "paypal", "bank_transfer"):
+        if payment_method not in ("stripe", "paypal", "bank_transfer", "card"):
             payment_method = "paypal"
         fulfillment_type = request.query_params.get("fulfillment_type", "delivery")
         if fulfillment_type not in ("delivery", "pickup"):
             fulfillment_type = "delivery"
         coupon_code = request.query_params.get("coupon_code", "")
         cart = get_or_create_cart(request)
+        from .payment_methods import normalize_payment_method
+
         quote = quote_checkout_from_cart(
             cart,
             coupon_code=coupon_code,
-            payment_method=payment_method,
+            payment_method=normalize_payment_method(payment_method),
             fulfillment_type=fulfillment_type,
         )
         return Response({
@@ -218,16 +223,26 @@ class CheckoutView(APIView):
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        payment_method = data.get("payment_method", "stripe")
+        payment_method = data.get("payment_method", Order.PaymentMethod.PAYPAL)
         checkout_url = None
+        paypal_order_id = None
 
-        if payment_method == "stripe" and stripe_enabled():
+        if payment_method == Order.PaymentMethod.CARD and paypal_enabled():
             try:
-                checkout_url = create_stripe_checkout_session(order)
-            except stripe.error.StripeError as e:
-                cancel_order(order)
-                return Response({"detail": str(e.user_message if hasattr(e, "user_message") else e)}, status=status.HTTP_502_BAD_GATEWAY)
-        elif payment_method == "paypal" and paypal_enabled():
+                paypal_order_id = create_paypal_order_for_card(order)
+            except PayPalError as e:
+                try:
+                    cancel_order(order)
+                except Exception:
+                    logger.exception(
+                        "Failed to cancel order %s after PayPal card order error",
+                        order.order_number,
+                    )
+                return Response(
+                    {"detail": e.user_message()},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+        elif payment_method == Order.PaymentMethod.PAYPAL and paypal_enabled():
             try:
                 checkout_url = create_paypal_checkout(order)
             except PayPalError as e:
@@ -247,7 +262,7 @@ class CheckoutView(APIView):
                     {"detail": e.user_message()},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
-        elif payment_method in ("stripe", "paypal"):
+        elif payment_method in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD):
             cancel_order(order)
             return Response(
                 {"detail": "Selected payment method is not available."},
@@ -266,6 +281,7 @@ class CheckoutView(APIView):
         return Response({
             "order": OrderSerializer(order).data,
             "checkout_url": checkout_url,
+            "paypal_order_id": paypal_order_id,
             "payment_method": payment_method,
         }, status=status.HTTP_201_CREATED)
 
@@ -300,7 +316,7 @@ class OrderVerifyView(APIView):
             paypal_token
             and paypal_enabled()
             and order.payment_status != Order.PaymentStatus.PAID
-            and order.payment_method == Order.PaymentMethod.PAYPAL
+            and order.payment_method in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD)
             and order.paypal_order_id == paypal_token
         ):
             try:

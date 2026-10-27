@@ -136,7 +136,8 @@ class Order(models.Model):
         REFUNDED = "refunded", "Rimborsato"
 
     class PaymentMethod(models.TextChoices):
-        STRIPE = "stripe", "Carta (Stripe)"
+        STRIPE = "stripe", "Carta (Stripe)"  # legacy
+        CARD = "card", "Carta di credito / debito"
         PAYPAL = "paypal", "PayPal"
         BANK_TRANSFER = "bank_transfer", "Bonifico bancario"
         MANUAL = "manual", "Manuale"

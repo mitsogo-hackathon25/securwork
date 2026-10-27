@@ -8,6 +8,7 @@ from store.models import ProductVariant
 
 from .models import Cart, CartItem, Coupon, Order, OrderItem
 from .payment_fees import calculate_paypal_customer_fee
+from .payment_methods import normalize_payment_method
 
 
 def get_or_create_cart(request) -> Cart:
@@ -71,6 +72,7 @@ def quote_checkout_from_cart(
     payment_method: str = Order.PaymentMethod.PAYPAL,
     fulfillment_type: str = Order.FulfillmentType.DELIVERY,
 ) -> dict:
+    payment_method = normalize_payment_method(payment_method)
     """Line items for checkout summary (no stock mutation)."""
     items = list(cart.items.select_related("variant"))
     subtotal = sum(item.line_total for item in items)
@@ -117,9 +119,7 @@ def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
     shipping = resolve_shipping_cost(taxable, fulfillment_type)
     net_before_fee = taxable + tax + shipping
 
-    payment_method = data.get("payment_method", Order.PaymentMethod.STRIPE)
-    if payment_method not in Order.PaymentMethod.values:
-        payment_method = Order.PaymentMethod.STRIPE
+    payment_method = normalize_payment_method(data.get("payment_method", Order.PaymentMethod.STRIPE))
 
     payment_fee = Decimal("0.00")
     if payment_method == Order.PaymentMethod.PAYPAL:

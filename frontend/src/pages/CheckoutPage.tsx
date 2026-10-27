@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
+import PayPalCardFields, { type PayPalCardFieldsController } from '../components/PayPalCardFields'
 import { checkout, fetchCart, fetchCheckoutQuote, fetchPaymentConfig, fetchPickupLocations } from '../api/store'
 import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
 import { formatApiError } from '../utils/formatApiError'
@@ -17,7 +18,9 @@ export default function CheckoutPage() {
   const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'stripe' | 'bank_transfer'>('paypal')
+  const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'card' | 'bank_transfer'>('paypal')
+  const paymentMethodInitialized = useRef(false)
+  const cardFieldsController = useRef<PayPalCardFieldsController | null>(null)
   const [sameAsBilling, setSameAsBilling] = useState(true)
   const [couponCode, setCouponCode] = useState('')
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery')
@@ -81,18 +84,19 @@ export default function CheckoutPage() {
     enabled: loggedIn,
   })
 
-  const stripeAvailable = paymentConfig?.stripe_enabled ?? false
   const paypalAvailable = paymentConfig?.paypal_enabled ?? false
+  const cardAvailable = paymentConfig?.card_enabled ?? paypalAvailable
 
   useEffect(() => {
-    if (!paymentConfig) return
+    if (!paymentConfig || paymentMethodInitialized.current) return
     if (paymentConfig.paypal_enabled) {
       setPaymentMethod('paypal')
-    } else if (paymentConfig.stripe_enabled) {
-      setPaymentMethod('stripe')
+    } else if (paymentConfig.card_enabled) {
+      setPaymentMethod('card')
     } else {
       setPaymentMethod('bank_transfer')
     }
+    paymentMethodInitialized.current = true
   }, [paymentConfig])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -127,6 +131,17 @@ export default function CheckoutPage() {
     }
 
     try {
+      if (paymentMethod === 'card') {
+        const controller = cardFieldsController.current
+        if (!controller?.isEligible()) {
+          setError(t('checkout.cardNotEligible'))
+          setLoading(false)
+          return
+        }
+        await controller.submit(data)
+        return
+      }
+
       const result = await checkout(data)
       if (result.checkout_url) {
         window.location.href = result.checkout_url
@@ -274,19 +289,25 @@ export default function CheckoutPage() {
                       checked={paymentMethod === 'paypal'}
                       onChange={() => { setPaymentMethod('paypal') }}
                     />
-                    <span>{t('checkout.payPayPal')}</span>
+                    <span className="payment-option-label">
+                      <span>{t('checkout.payPayPal')}</span>
+                      <small>{t('checkout.payPalHint')}</small>
+                    </span>
                   </label>
                 )}
-                {stripeAvailable && (
-                  <label className={`payment-option ${paymentMethod === 'stripe' ? 'active' : ''}`}>
+                {cardAvailable && (
+                  <label className={`payment-option ${paymentMethod === 'card' ? 'active' : ''}`}>
                     <input
                       type="radio"
                       name="payment_method_ui"
-                      value="stripe"
-                      checked={paymentMethod === 'stripe'}
-                      onChange={() => setPaymentMethod('stripe')}
+                      value="card"
+                      checked={paymentMethod === 'card'}
+                      onChange={() => setPaymentMethod('card')}
                     />
-                    <span>{t('checkout.payCard')}</span>
+                    <span className="payment-option-label">
+                      <span>{t('checkout.payCard')}</span>
+                      <small>{t('checkout.payCardHint')}</small>
+                    </span>
                   </label>
                 )}
                 <label className={`payment-option ${paymentMethod === 'bank_transfer' ? 'active' : ''}`}>
@@ -300,6 +321,23 @@ export default function CheckoutPage() {
                   <span>{t('checkout.payBank')}</span>
                 </label>
               </div>
+              {paymentMethod === 'card' && paymentConfig?.paypal_client_id && (
+                <PayPalCardFields
+                  clientId={paymentConfig.paypal_client_id}
+                  currency={paymentConfig.currency || 'EUR'}
+                  enabled={paymentMethod === 'card'}
+                  onReady={(controller) => { cardFieldsController.current = controller }}
+                  onSuccess={(result, paypalOrderId) => {
+                    navigate(
+                      `/order-confirmation/${result.order.order_number}?token=${encodeURIComponent(paypalOrderId)}`,
+                    )
+                  }}
+                  onError={(message) => {
+                    setError(message)
+                    setLoading(false)
+                  }}
+                />
+              )}
               {paymentMethod === 'bank_transfer' && paymentConfig && (
                 <div className="bank-details">
                   <p><strong>{paymentConfig.bank_details.account_name}</strong></p>
@@ -332,7 +370,7 @@ export default function CheckoutPage() {
             </label>
 
             <button type="submit" className="btn btn-primary checkout-submit" disabled={loading}>
-              {loading ? t('common.loading') : (paymentMethod === 'stripe' && stripeAvailable)
+              {loading ? t('common.loading') : (paymentMethod === 'card' && cardAvailable)
                   || (paymentMethod === 'paypal' && paypalAvailable)
                 ? t('checkout.payNow')
                 : t('checkout.placeOrder')}

@@ -220,12 +220,8 @@ def _basic_auth(client_id: str, secret: str) -> str:
     return token
 
 
-def create_paypal_checkout(order: Order) -> str:
-    """Create PayPal order and return the approval URL."""
-    frontend = _frontend_base()
-    access_token = get_paypal_access_token()
+def _create_paypal_order_payload(order: Order, *, include_redirect: bool) -> dict:
     currency = settings.SECURWORK_CURRENCY
-
     breakdown = _breakdown_for_order(order, currency)
     items = _build_paypal_items(order, currency)
     amount: dict = {
@@ -248,18 +244,43 @@ def create_paypal_checkout(order: Order) -> str:
             order.order_number,
         )
 
-    payload = {
+    payload: dict = {
         "intent": "CAPTURE",
         "purchase_units": [purchase_unit],
-        "application_context": {
+    }
+    if include_redirect:
+        frontend = _frontend_base()
+        payload["application_context"] = {
             "brand_name": "SecurWork",
             "landing_page": "BILLING",
             "user_action": "PAY_NOW",
             "return_url": f"{frontend}/order-confirmation/{order.order_number}",
             "cancel_url": f"{frontend}/checkout?cancelled=1",
-        },
-    }
+        }
+    return payload
 
+
+def _create_paypal_order(order: Order, payload: dict) -> str:
+    access_token = get_paypal_access_token()
+    result = _paypal_request("POST", "/v2/checkout/orders", access_token, payload)
+    paypal_order_id = result.get("id", "")
+    if not paypal_order_id:
+        raise PayPalError("PayPal did not return an order id.")
+    order.paypal_order_id = paypal_order_id
+    order.save(update_fields=["paypal_order_id", "updated_at"])
+    return paypal_order_id
+
+
+def create_paypal_order_for_card(order: Order) -> str:
+    """Create PayPal order for on-page Card Fields (no redirect)."""
+    payload = _create_paypal_order_payload(order, include_redirect=False)
+    return _create_paypal_order(order, payload)
+
+
+def create_paypal_checkout(order: Order) -> str:
+    """Create PayPal order and return the approval URL."""
+    payload = _create_paypal_order_payload(order, include_redirect=True)
+    access_token = get_paypal_access_token()
     result = _paypal_request("POST", "/v2/checkout/orders", access_token, payload)
     paypal_order_id = result.get("id", "")
     if not paypal_order_id:
@@ -348,7 +369,7 @@ def verify_paypal_payment_for_order(order: Order, paypal_order_id: str) -> str:
     Capture (or retrieve) the PayPal order and validate it against the SecurWork order.
     Returns the PayPal capture id on success.
     """
-    if order.payment_method != Order.PaymentMethod.PAYPAL:
+    if order.payment_method not in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD):
         raise PayPalVerificationError("Order payment method is not PayPal.")
     if not order.paypal_order_id or order.paypal_order_id != paypal_order_id:
         raise PayPalVerificationError("PayPal order id does not match this order.")

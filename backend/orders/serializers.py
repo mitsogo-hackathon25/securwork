@@ -153,7 +153,7 @@ class CheckoutSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
     language = serializers.ChoiceField(choices=["it", "en"], default="it")
     payment_method = serializers.ChoiceField(
-        choices=["stripe", "paypal", "bank_transfer"],
+        choices=["paypal", "bank_transfer", "card"],
         default="paypal",
     )
     accept_terms = serializers.BooleanField()
@@ -164,6 +164,10 @@ class CheckoutSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
+        from .payment_methods import normalize_payment_method
+
+        data["payment_method"] = normalize_payment_method(data.get("payment_method", "paypal"))
+
         fulfillment = data.get("fulfillment_type", "delivery")
         if fulfillment == "pickup":
             location_id = data.get("pickup_location_id")

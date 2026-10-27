@@ -298,10 +298,10 @@ export interface AdminOrder extends Order {
 }
 
 export interface PaymentConfig {
-  stripe_enabled: boolean
-  stripe_publishable_key: string
+  card_enabled: boolean
   paypal_enabled: boolean
   paypal_client_id: string
+  paypal_mode: string
   currency: string
   bank_transfer_enabled: boolean
   bank_details: {
@@ -314,6 +314,7 @@ export interface PaymentConfig {
 export interface CheckoutResponse {
   order: Order
   checkout_url: string | null
+  paypal_order_id?: string | null
   payment_method: string
 }
 
