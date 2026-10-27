@@ -13,6 +13,10 @@ export function formatApiError(err: unknown, fallback = 'Something went wrong.')
   if (typeof data === 'object' && data !== null) {
     const record = data as Record<string, unknown>
     if (typeof record.detail === 'string') return record.detail
+    if (Array.isArray(record.detail)) {
+      const parts = record.detail.filter((item): item is string => typeof item === 'string')
+      if (parts.length) return parts.join(' ')
+    }
 
     const messages: string[] = []
     for (const value of Object.values(record)) {

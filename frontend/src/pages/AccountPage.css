@@ -100,7 +100,8 @@
   grid-column: 1 / -1;
 }
 
-.account-form .form-grid input {
+.account-form .form-grid input,
+.account-form .form-grid .password-input-field {
   width: 100%;
   margin: 0;
   font-family: inherit;
@@ -115,9 +116,11 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   -webkit-appearance: none;
   appearance: none;
+  box-sizing: border-box;
 }
 
-.account-form .form-grid input:focus {
+.account-form .form-grid input:focus,
+.account-form .form-grid .password-input-field:focus {
   outline: none;
   border-color: var(--color-accent, #e85d04);
   box-shadow: 0 0 0 3px var(--color-accent-soft, #fff4ed);
@@ -256,17 +259,55 @@
 
 @media (min-width: 769px) {
   .account-page--auth {
-    padding-top: 3rem;
-    padding-bottom: 4rem;
+    max-width: 520px;
+    padding-top: 3.5rem;
+    padding-bottom: 5rem;
   }
 
-  .account-auth-heading,
+  .account-auth {
+    display: flex;
+    justify-content: center;
+  }
+
+  .account-auth-shell {
+    width: 100%;
+    max-width: 440px;
+  }
+
+  .account-auth-card {
+    padding: 2.25rem 2rem 2.5rem;
+    border-radius: 1.125rem;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 12px 40px rgba(15, 23, 42, 0.08);
+  }
+
+  .account-auth-heading {
+    font-size: 1.75rem;
+    text-align: left;
+  }
+
   .account-auth-sub {
     text-align: left;
+    margin-bottom: 1.5rem;
+  }
+
+  .account-tabs {
+    margin-bottom: 1.5rem;
+  }
+
+  .account-form .form-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1rem;
+    margin-bottom: 1.5rem;
   }
 
   .account-subtitle,
   .account-hint {
+    text-align: left;
+  }
+
+  .account-switch {
     text-align: left;
   }
 }

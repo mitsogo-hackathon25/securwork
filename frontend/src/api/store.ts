@@ -106,8 +106,8 @@ export const fetchFAQ = () =>
 export const sendContact = (data: Record<string, string>) =>
   api.post('/contact/', data).then((r) => r.data)
 
-export const login = (username: string, password: string) =>
-  api.post('/auth/login/', { username, password }).then((r) => r.data)
+export const login = (email: string, password: string) =>
+  api.post('/auth/login/', { email, password }).then((r) => r.data)
 
 export const register = (data: Record<string, string>) =>
   api.post('/auth/register/', data).then((r) => r.data)

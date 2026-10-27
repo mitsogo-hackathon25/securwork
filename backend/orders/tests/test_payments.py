@@ -21,6 +21,7 @@ from orders.payments import (
 from orders.paypal_payments import (
     PayPalError,
     PayPalVerificationError,
+    create_paypal_checkout,
     verify_paypal_payment_for_order,
 )
 from store.models import Product, ProductVariant
@@ -103,6 +104,52 @@ def _paypal_capture_response(
             },
         }],
     }
+
+
+@override_settings(USE_SQLITE=True)
+class PayPalCheckoutCreationTests(TestCase):
+    @override_settings(FRONTEND_URL="")
+    def test_requires_frontend_url(self):
+        order = _make_order()
+        with self.assertRaises(PayPalError) as ctx:
+            create_paypal_checkout(order)
+        self.assertIn("FRONTEND_URL", str(ctx.exception))
+
+    @override_settings(
+        FRONTEND_URL="https://www.securwork.it",
+        PAYPAL_CLIENT_ID="id",
+        PAYPAL_CLIENT_SECRET="secret",
+        SECURWORK_CURRENCY="EUR",
+    )
+    @patch("orders.paypal_payments.get_paypal_access_token", return_value="token")
+    @patch("orders.paypal_payments._paypal_request")
+    def test_create_order_sends_valid_urls_and_amount(self, mock_request, _token):
+        order = _make_order(total=Decimal("50.00"))
+        order.subtotal = Decimal("50.00")
+        order.shipping_cost = Decimal("0.00")
+        order.tax_amount = Decimal("0.00")
+        order.save(update_fields=["subtotal", "shipping_cost", "tax_amount", "total"])
+
+        mock_request.return_value = {
+            "id": "PAYPAL-NEW",
+            "links": [{"rel": "approve", "href": "https://paypal.test/approve"}],
+        }
+
+        url = create_paypal_checkout(order)
+        self.assertEqual(url, "https://paypal.test/approve")
+        order.refresh_from_db()
+        self.assertEqual(order.paypal_order_id, "PAYPAL-NEW")
+
+        payload = mock_request.call_args[0][3]
+        ctx = payload["application_context"]
+        self.assertEqual(
+            ctx["return_url"],
+            f"https://www.securwork.it/order-confirmation/{order.order_number}",
+        )
+        unit = payload["purchase_units"][0]
+        self.assertEqual(unit["amount"]["value"], "50.00")
+        self.assertIn("breakdown", unit["amount"])
+        self.assertIn("items", unit)
 
 
 @override_settings(USE_SQLITE=True)

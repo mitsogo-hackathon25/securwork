@@ -180,6 +180,8 @@ def cancel_order(order: Order, restore_stock: bool = True) -> Order:
     if restore_stock:
         from store.models import ProductVariant
         for item in locked.items.select_related("variant"):
+            if not item.variant_id:
+                continue
             variant = ProductVariant.objects.select_for_update().get(pk=item.variant_id)
             variant.stock_quantity += item.quantity
             variant.save(update_fields=["stock_quantity"])

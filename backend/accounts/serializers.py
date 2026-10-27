@@ -3,6 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from .auth_tokens import unique_username_from_email
 from .messages import api_message, lang_from_serializer_context
 from .models import UserProfile
 from config.email_utils import EmailDeliveryError
@@ -34,14 +35,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["username", "email", "first_name", "last_name", "password", "password_confirm"]
-
-    def validate_username(self, value):
-        username = (value or "").strip()
-        if User.objects.filter(username__iexact=username).exists():
-            lang = lang_from_serializer_context(self.context)
-            raise serializers.ValidationError(api_message("username_taken", lang))
-        return username
+        fields = ["email", "first_name", "last_name", "password", "password_confirm"]
 
     def validate_email(self, value):
         email = (value or "").strip().lower()
@@ -54,9 +48,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return email
 
     def validate_password(self, value):
+        email = (self.initial_data.get("email") or "").strip().lower()
         user = User(
-            username=(self.initial_data.get("username") or "").strip(),
-            email=(self.initial_data.get("email") or "").strip().lower(),
+            username=unique_username_from_email(email) if email else "user",
+            email=email,
             first_name=(self.initial_data.get("first_name") or "").strip(),
             last_name=(self.initial_data.get("last_name") or "").strip(),
         )
@@ -76,6 +71,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")
+        validated_data["username"] = unique_username_from_email(validated_data["email"])
         return User.objects.create_user(**validated_data)
 
 

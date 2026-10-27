@@ -15,7 +15,6 @@ class RegisterViewTests(APITestCase):
         response = self.client.post(
             url,
             {
-                "username": "shopper1",
                 "email": "shopper1@example.com",
                 "first_name": "Shop",
                 "last_name": "Per",
@@ -25,7 +24,7 @@ class RegisterViewTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 201)
-        user = User.objects.get(username="shopper1")
+        user = User.objects.get(email="shopper1@example.com")
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
 
     def test_register_password_mismatch_message_italian(self):
@@ -33,7 +32,6 @@ class RegisterViewTests(APITestCase):
         response = self.client.post(
             f"{url}?lang=it",
             {
-                "username": "shopper2",
                 "email": "shopper2@example.com",
                 "password": "Str0ngPass!2026",
                 "password_confirm": "Different!2026",
@@ -48,7 +46,6 @@ class RegisterViewTests(APITestCase):
         response = self.client.post(
             f"{url}?lang=en",
             {
-                "username": "shopper3",
                 "email": "shopper3@example.com",
                 "password": "Str0ngPass!2026",
                 "password_confirm": "Different!2026",

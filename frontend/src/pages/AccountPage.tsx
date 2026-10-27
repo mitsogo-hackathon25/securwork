@@ -12,6 +12,7 @@ import {
 } from '../api/store'
 import { clearAuthTokens, isLoggedIn, setAuthTokens } from '../utils/auth'
 import { formatApiError } from '../utils/formatApiError'
+import PasswordInput from '../components/PasswordInput'
 import { formatPrice } from '../utils/format'
 import './AccountPage.css'
 
@@ -62,7 +63,7 @@ export default function AccountPage() {
     setSubmitting(true)
     const form = new FormData(e.currentTarget)
     try {
-      const res = await login(form.get('username') as string, form.get('password') as string)
+      const res = await login((form.get('email') as string).trim(), form.get('password') as string)
       setAuthTokens(res.access, res.refresh)
       setLoggedIn(true)
       redirectAfterAuth()
@@ -83,7 +84,7 @@ export default function AccountPage() {
     form.forEach((v, k) => { data[k] = v.toString() })
     try {
       await register(data)
-      const res = await login(data.username, data.password)
+      const res = await login(data.email, data.password)
       setAuthTokens(res.access, res.refresh)
       setLoggedIn(true)
       setSuccess(t('account.registerSuccess'))
@@ -226,12 +227,12 @@ export default function AccountPage() {
               <form onSubmit={handleLogin} className="account-form">
                 <div className="form-grid">
                   <label className="full-width">
-                    {t('account.username')}
-                    <input name="username" required autoComplete="username" />
+                    {t('contact.email')}
+                    <input name="email" type="email" required autoComplete="email" />
                   </label>
                   <label className="full-width">
                     {t('account.password')}
-                    <input name="password" type="password" required autoComplete="current-password" />
+                    <PasswordInput name="password" required autoComplete="current-password" />
                   </label>
                 </div>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
@@ -253,10 +254,6 @@ export default function AccountPage() {
               <form onSubmit={handleRegister} className="account-form">
                 <div className="form-grid">
                   <label className="full-width">
-                    {t('account.username')}
-                    <input name="username" required autoComplete="username" />
-                  </label>
-                  <label className="full-width">
                     {t('contact.email')}
                     <input name="email" type="email" required autoComplete="email" />
                   </label>
@@ -270,11 +267,11 @@ export default function AccountPage() {
                   </label>
                   <label className="full-width">
                     {t('account.password')}
-                    <input name="password" type="password" required autoComplete="new-password" />
+                    <PasswordInput name="password" required autoComplete="new-password" />
                   </label>
                   <label className="full-width">
                     {t('account.passwordConfirm')}
-                    <input name="password_confirm" type="password" required autoComplete="new-password" />
+                    <PasswordInput name="password_confirm" required autoComplete="new-password" />
                   </label>
                 </div>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
@@ -341,11 +338,11 @@ export default function AccountPage() {
                     </label>
                     <label className="full-width">
                       {t('account.password')}
-                      <input name="password" type="password" required autoComplete="new-password" />
+                      <PasswordInput name="password" required autoComplete="new-password" />
                     </label>
                     <label className="full-width">
                       {t('account.passwordConfirm')}
-                      <input name="password_confirm" type="password" required autoComplete="new-password" />
+                      <PasswordInput name="password_confirm" required autoComplete="new-password" />
                     </label>
                   </div>
                   <button type="submit" className="btn btn-primary" disabled={submitting}>

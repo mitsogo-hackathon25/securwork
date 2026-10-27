@@ -127,6 +127,7 @@ export default function CheckoutPage() {
                 <input name="billing_address" required placeholder="Indirizzo *" className="full-width" />
                 <input name="billing_city" required placeholder="Città *" />
                 <input name="billing_postcode" required placeholder="CAP *" />
+                <input type="hidden" name="billing_country" value="IT" />
                 <input name="billing_vat" placeholder="P.IVA" />
               </div>
             </section>
@@ -149,6 +150,7 @@ export default function CheckoutPage() {
                   <input name="shipping_address" required placeholder="Indirizzo *" className="full-width" />
                   <input name="shipping_city" required placeholder="Città *" />
                   <input name="shipping_postcode" required placeholder="CAP *" />
+                  <input type="hidden" name="shipping_country" value="IT" />
                 </div>
               )}
             </section>

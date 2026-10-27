@@ -19,6 +19,14 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "it": "Inserisci un indirizzo email valido.",
         "en": "Enter a valid email address.",
     },
+    "login_invalid": {
+        "it": "Email o password non corretti.",
+        "en": "Invalid email or password.",
+    },
+    "login_inactive": {
+        "it": "Questo account è disattivato.",
+        "en": "This account is disabled.",
+    },
 }
 
 

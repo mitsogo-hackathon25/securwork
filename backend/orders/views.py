@@ -190,11 +190,17 @@ class CheckoutView(APIView):
             try:
                 checkout_url = create_paypal_checkout(order)
             except PayPalError as e:
-                cancel_order(order)
+                try:
+                    cancel_order(order)
+                except Exception:
+                    logger.exception(
+                        "Failed to cancel order %s after PayPal error",
+                        order.order_number,
+                    )
                 logger.warning(
                     "PayPal checkout failed for order %s: issues=%s",
                     order.order_number,
-                    e.issue_codes() or "unknown",
+                    e.issue_codes() or str(e)[:200],
                 )
                 return Response(
                     {"detail": e.user_message()},

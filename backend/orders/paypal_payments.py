@@ -31,6 +31,74 @@ def _money(value: Decimal | str) -> str:
     return f"{Decimal(value).quantize(Decimal('0.01')):.2f}"
 
 
+def _frontend_base() -> str:
+    base = (getattr(settings, "FRONTEND_URL", "") or "").strip().rstrip("/")
+    if not base.startswith("http://") and not base.startswith("https://"):
+        raise PayPalError(
+            "Store checkout URL is not configured (FRONTEND_URL). "
+            "Contact support or try bank transfer."
+        )
+    return base
+
+
+def _items_subtotal(items: list[dict]) -> Decimal:
+    total = Decimal("0.00")
+    for item in items:
+        unit = Decimal(item["unit_amount"]["value"])
+        qty = int(item["quantity"])
+        total += unit * qty
+    return total.quantize(Decimal("0.01"))
+
+
+def _build_paypal_items(order: Order, currency: str) -> list[dict]:
+    """Line items for PayPal; item totals must match order.subtotal."""
+    items: list[dict] = []
+    for item in order.items.all():
+        items.append({
+            "name": (item.product_name or item.sku)[:127],
+            "sku": item.sku[:127],
+            "quantity": str(item.quantity),
+            "unit_amount": {
+                "currency_code": currency,
+                "value": _money(item.unit_price),
+            },
+        })
+
+    subtotal = Decimal(order.subtotal).quantize(Decimal("0.01"))
+    if items and _items_subtotal(items) != subtotal:
+        items = [{
+            "name": f"SecurWork {order.order_number}"[:127],
+            "quantity": "1",
+            "unit_amount": {"currency_code": currency, "value": _money(subtotal)},
+        }]
+    return items
+
+
+def _breakdown_for_order(order: Order, currency: str) -> dict:
+    breakdown = {
+        "item_total": {"currency_code": currency, "value": _money(order.subtotal)},
+        "shipping": {"currency_code": currency, "value": _money(order.shipping_cost)},
+        "tax_total": {"currency_code": currency, "value": _money(order.tax_amount)},
+    }
+    if order.discount_amount > 0:
+        breakdown["discount"] = {
+            "currency_code": currency,
+            "value": _money(order.discount_amount),
+        }
+    return breakdown
+
+
+def _breakdown_matches_total(order: Order, breakdown: dict) -> bool:
+    item_total = Decimal(breakdown["item_total"]["value"])
+    shipping = Decimal(breakdown["shipping"]["value"])
+    tax = Decimal(breakdown["tax_total"]["value"])
+    discount = Decimal("0.00")
+    if "discount" in breakdown:
+        discount = Decimal(breakdown["discount"]["value"])
+    expected = (item_total + shipping + tax - discount).quantize(Decimal("0.01"))
+    return expected == Decimal(order.total).quantize(Decimal("0.01"))
+
+
 def _paypal_request(method: str, path: str, access_token: str, payload: dict | None = None) -> dict:
     url = f"{_paypal_api_base()}{path}"
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -51,6 +119,8 @@ def _paypal_request(method: str, path: str, access_token: str, payload: dict | N
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
         raise PayPalError(detail or str(e), status_code=e.code) from e
+    except urllib.error.URLError as e:
+        raise PayPalError(f"Could not reach PayPal: {e.reason}") from e
 
 
 class PayPalError(Exception):
@@ -71,7 +141,24 @@ class PayPalError(Exception):
         return codes
 
     def user_message(self) -> str:
+        raw = str(self).strip()
+        try:
+            json.loads(raw)
+        except json.JSONDecodeError:
+            if raw and not raw.lstrip().startswith("<"):
+                return raw[:500]
+
         codes = set(self.issue_codes())
+        if "INVALID_REQUEST_URL" in codes or "INVALID_REDIRECT_URL" in codes:
+            return (
+                "PayPal could not start checkout because the store return URL is invalid. "
+                "Please contact support or use bank transfer."
+            )
+        if "AMOUNT_MISMATCH" in codes or "ITEM_TOTAL_MISMATCH" in codes:
+            return (
+                "PayPal could not match the order total. Please refresh the cart and try again, "
+                "or use another payment method."
+            )
         if "PAYEE_ACCOUNT_RESTRICTED" in codes:
             return (
                 "PayPal payments are temporarily unavailable because the merchant "
@@ -107,10 +194,15 @@ def get_paypal_access_token() -> str:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-            return payload["access_token"]
+            token = payload.get("access_token")
+            if not token:
+                raise PayPalError("PayPal did not return an access token.")
+            return token
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
         raise PayPalError(detail or str(e), status_code=e.code) from e
+    except urllib.error.URLError as e:
+        raise PayPalError(f"Could not reach PayPal: {e.reason}") from e
 
 
 def _basic_auth(client_id: str, secret: str) -> str:
@@ -122,52 +214,41 @@ def _basic_auth(client_id: str, secret: str) -> str:
 
 def create_paypal_checkout(order: Order) -> str:
     """Create PayPal order and return the approval URL."""
+    frontend = _frontend_base()
     access_token = get_paypal_access_token()
     currency = settings.SECURWORK_CURRENCY
 
-    items = []
-    for item in order.items.all():
-        items.append({
-            "name": (item.product_name or item.sku)[:127],
-            "sku": item.sku[:127],
-            "quantity": str(item.quantity),
-            "unit_amount": {
-                "currency_code": currency,
-                "value": _money(item.unit_price),
-            },
-        })
-
-    breakdown = {
-        "item_total": {"currency_code": currency, "value": _money(order.subtotal)},
-        "shipping": {"currency_code": currency, "value": _money(order.shipping_cost)},
-        "tax_total": {"currency_code": currency, "value": _money(order.tax_amount)},
+    breakdown = _breakdown_for_order(order, currency)
+    items = _build_paypal_items(order, currency)
+    amount: dict = {
+        "currency_code": currency,
+        "value": _money(order.total),
     }
-    if order.discount_amount > 0:
-        breakdown["discount"] = {
-            "currency_code": currency,
-            "value": _money(order.discount_amount),
-        }
+    purchase_unit: dict = {
+        "reference_id": order.order_number,
+        "description": f"SecurWork {order.order_number}",
+        "amount": amount,
+    }
+    if _breakdown_matches_total(order, breakdown) and _items_subtotal(items) == Decimal(
+        order.subtotal
+    ).quantize(Decimal("0.01")):
+        amount["breakdown"] = breakdown
+        purchase_unit["items"] = items
+    else:
+        logger.warning(
+            "PayPal amount breakdown mismatch for order %s; sending total-only amount",
+            order.order_number,
+        )
 
     payload = {
         "intent": "CAPTURE",
-        "purchase_units": [{
-            "reference_id": order.order_number,
-            "description": f"SecurWork {order.order_number}",
-            "amount": {
-                "currency_code": currency,
-                "value": _money(order.total),
-                "breakdown": breakdown,
-            },
-            "items": items,
-        }],
+        "purchase_units": [purchase_unit],
         "application_context": {
             "brand_name": "SecurWork",
             "landing_page": "BILLING",
             "user_action": "PAY_NOW",
-            "return_url": (
-                f"{settings.FRONTEND_URL}/order-confirmation/{order.order_number}"
-            ),
-            "cancel_url": f"{settings.FRONTEND_URL}/checkout?cancelled=1",
+            "return_url": f"{frontend}/order-confirmation/{order.order_number}",
+            "cancel_url": f"{frontend}/checkout?cancelled=1",
         },
     }
 
