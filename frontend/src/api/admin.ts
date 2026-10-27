@@ -9,6 +9,8 @@ import type {
   AdminMonthlySales,
   AdminOrder,
   AdminOrderListItem,
+  AdminUserDetail,
+  AdminUserListItem,
   AdminProduct,
   AdminProductListItem,
   PaginatedResponse,
@@ -379,6 +381,12 @@ export const uploadProductMockup = (productId: number, file: File) => {
 
 export const removeProductMockup = (productId: number) =>
   api.delete(`/admin/products/${productId}/remove_mockup/`)
+
+export const fetchAdminUsers = (params?: Record<string, string | number | boolean>) =>
+  api.get<PaginatedResponse<AdminUserListItem>>('/admin/users/', { params }).then((r) => r.data)
+
+export const fetchAdminUser = (id: number) =>
+  api.get<AdminUserDetail>(`/admin/users/${id}/`).then((r) => r.data)
 
 export const fetchAdminOrders = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<AdminOrderListItem>>('/admin/orders/', { params }).then((r) => r.data)

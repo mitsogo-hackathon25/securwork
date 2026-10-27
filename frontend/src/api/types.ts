@@ -169,6 +169,51 @@ export interface AdminMonthlySales {
   }
 }
 
+export interface AdminUserListItem {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  phone: string
+  is_active: boolean
+  is_staff: boolean
+  date_joined: string
+  last_login: string | null
+  order_count: number
+}
+
+export interface AdminUserOrderSummary {
+  id: number
+  order_number: string
+  status: string
+  payment_status: string
+  total: string
+  created_at: string
+}
+
+export interface AdminUserDetail {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  is_active: boolean
+  is_staff: boolean
+  date_joined: string
+  last_login: string | null
+  profile: {
+    phone: string
+    company: string
+    vat_number: string
+  }
+  order_count: number
+  paid_order_count: number
+  total_spent: string
+  last_order_at: string | null
+  recent_orders: AdminUserOrderSummary[]
+}
+
 export interface AdminOrderListItem {
   id: number
   order_number: string

@@ -31,3 +31,19 @@ class EmailLoginTests(APITestCase):
             format="json",
         )
         self.assertIn(response.status_code, (400, 401))
+
+    def test_login_with_username_for_staff(self):
+        User.objects.create_user(
+            username="admin",
+            email="admin@example.com",
+            password="Str0ngPass!2026",
+            is_staff=True,
+        )
+        url = reverse("token_obtain")
+        response = self.client.post(
+            url,
+            {"username": "admin", "password": "Str0ngPass!2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)

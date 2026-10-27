@@ -36,6 +36,9 @@ export default function AdminLayout() {
           <NavLink to="/admin/orders" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
             {t('adminNav.orders')}
           </NavLink>
+          <NavLink to="/admin/users" className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}>
+            {t('adminNav.users')}
+          </NavLink>
           <NavLink to="/admin/tickets" className={({ isActive }) => `admin-nav-link admin-nav-link-with-dot${isActive ? ' active' : ''}`}>
             {t('adminNav.tickets')}
             {(supportUnread?.count ?? 0) > 0 && (

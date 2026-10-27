@@ -23,12 +23,14 @@ def unique_username_from_email(email: str) -> str:
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Log in with email + password (JWT)."""
+    """Log in with email or username + password (JWT)."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields.pop(self.username_field, None)
-        self.fields["email"] = serializers.EmailField(write_only=True)
+        username_field = self.username_field
+        self.fields[username_field].required = False
+        self.fields[username_field].allow_blank = True
+        self.fields["email"] = serializers.EmailField(required=False, allow_blank=True, write_only=True)
 
     def validate(self, attrs):
         request = self.context.get("request")
@@ -37,8 +39,20 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             lang = request.GET.get("lang") or getattr(request, "LANGUAGE_CODE", "it") or "it"
 
         email = (attrs.pop("email", "") or "").strip().lower()
+        username = (attrs.get(self.username_field) or "").strip()
         password = attrs.get("password")
-        user = User.objects.filter(email__iexact=email).first()
+
+        if not email and not username:
+            raise serializers.ValidationError({
+                "detail": api_message("login_invalid", lang),
+            })
+
+        user = None
+        if email:
+            user = User.objects.filter(email__iexact=email).first()
+        if user is None and username:
+            user = User.objects.filter(username__iexact=username).first()
+
         if user is None or not user.check_password(password):
             raise serializers.ValidationError({
                 "detail": api_message("login_invalid", lang),

@@ -25,6 +25,8 @@ import AdminCouponFormPage from './pages/admin/AdminCouponFormPage'
 import AdminCatalogPage from './pages/admin/AdminCatalogPage'
 import AdminGlobalSettingsPage from './pages/admin/AdminGlobalSettingsPage'
 import AdminSupportPage from './pages/admin/AdminSupportPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminUserDetailPage from './pages/admin/AdminUserDetailPage'
 
 export default function App() {
   return (
@@ -40,6 +42,8 @@ export default function App() {
             <Route path="products/:id" element={<AdminProductFormPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="users/:id" element={<AdminUserDetailPage />} />
             <Route path="coupons" element={<AdminCouponsPage />} />
             <Route path="coupons/new" element={<AdminCouponFormPage />} />
             <Route path="coupons/:id" element={<AdminCouponFormPage />} />
