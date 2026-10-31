@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
@@ -6,7 +6,7 @@ import LanguageSwitcher from './LanguageSwitcher'
 import MegaMenu from './MegaMenu'
 import { fetchCart, fetchCategories } from '../api/store'
 import { fetchSupportUnreadCount } from '../api/support'
-import { isLoggedIn } from '../utils/auth'
+import { isLoggedIn, SESSION_EXPIRED_EVENT } from '../utils/auth'
 import { getShopCategoryGroups } from '../utils/categoryNav'
 import { SITE_LOGO_URL } from '../constants/branding'
 import './Header.css'
@@ -19,7 +19,18 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [search, setSearch] = useState('')
 
+  const [, bumpAuth] = useReducer((n: number) => n + 1, 0)
   const loggedIn = isLoggedIn()
+
+  useEffect(() => {
+    const sync = () => bumpAuth()
+    window.addEventListener(SESSION_EXPIRED_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
 
   const { data: cart } = useQuery({
     queryKey: ['cart'],

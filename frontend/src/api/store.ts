@@ -137,5 +137,8 @@ export const confirmPasswordReset = (data: {
 }) =>
   api.post<{ detail: string }>('/auth/password-reset/confirm/', data).then((r) => r.data)
 
+export const fetchMe = () =>
+  api.get<{ id: number; username: string; email: string }>('/auth/me/').then((r) => r.data)
+
 export const fetchOrders = () =>
   api.get<Order[]>('/orders/').then((r) => r.data)

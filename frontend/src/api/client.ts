@@ -66,9 +66,9 @@ function redirectAfterSessionExpired() {
 }
 
 function handleSessionExpired() {
+  clearAuthTokens()
   if (sessionExpiryHandled) return
   sessionExpiryHandled = true
-  clearAuthTokens()
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
   window.setTimeout(() => {
     redirectAfterSessionExpired()

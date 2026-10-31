@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import {
   confirmPasswordReset,
+  fetchMe,
   fetchOrders,
   login,
   register,
@@ -31,7 +32,8 @@ export default function AccountPage() {
   const initialMode = parseAuthMode(searchParams.get('mode'))
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [resetEmail, setResetEmail] = useState(searchParams.get('email') || '')
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn)
+  const [loggedIn, setLoggedIn] = useState(() => isLoggedIn())
+  const [sessionChecked, setSessionChecked] = useState(() => !isLoggedIn())
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -45,11 +47,38 @@ export default function AccountPage() {
   useEffect(() => {
     const onSessionExpired = () => {
       setLoggedIn(false)
+      setSessionChecked(true)
       setMode('login')
       setError('')
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+  }, [])
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      setLoggedIn(false)
+      setSessionChecked(true)
+      return
+    }
+    let cancelled = false
+    fetchMe()
+      .then(() => {
+        if (!cancelled) setLoggedIn(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearAuthTokens()
+          setLoggedIn(false)
+          setMode('login')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSessionChecked(true)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const { data: orders = [] } = useQuery({
@@ -154,6 +183,14 @@ export default function AccountPage() {
   }
 
   const showAuthTabs = mode === 'login' || mode === 'register'
+
+  if (!sessionChecked) {
+    return (
+      <div className="container section account-page">
+        <p>{t('common.loading')}</p>
+      </div>
+    )
+  }
 
   return (
     <>
