@@ -36,6 +36,7 @@ export function loadPayPalSdk(clientId: string, currency: string): Promise<void>
       'client-id': clientId,
       components: 'card-fields',
       currency,
+      intent: 'capture',
     })
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`
     script.async = true

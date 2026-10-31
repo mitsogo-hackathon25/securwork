@@ -51,7 +51,10 @@ export default function PayPalCardFields({
 
     loadPayPalSdk(clientId, currency)
       .then(() => {
-        if (cancelled || !window.paypal?.CardFields) return
+        if (cancelled || !window.paypal?.CardFields) {
+          onErrorRef.current(t('checkout.cardSdkError'))
+          return
+        }
 
         const cardField = window.paypal.CardFields({
           createOrder: async () => {

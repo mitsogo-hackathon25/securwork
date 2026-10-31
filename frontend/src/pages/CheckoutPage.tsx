@@ -21,6 +21,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'card' | 'bank_transfer'>('paypal')
   const paymentMethodInitialized = useRef(false)
   const cardFieldsController = useRef<PayPalCardFieldsController | null>(null)
+  const [cardFieldsReady, setCardFieldsReady] = useState(false)
   const [sameAsBilling, setSameAsBilling] = useState(true)
   const [couponCode, setCouponCode] = useState('')
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery')
@@ -133,7 +134,12 @@ export default function CheckoutPage() {
     try {
       if (paymentMethod === 'card') {
         const controller = cardFieldsController.current
-        if (!controller?.isEligible()) {
+        if (!controller) {
+          setError(t('checkout.cardFieldsLoading'))
+          setLoading(false)
+          return
+        }
+        if (!controller.isEligible()) {
           setError(t('checkout.cardNotEligible'))
           setLoading(false)
           return
@@ -326,7 +332,10 @@ export default function CheckoutPage() {
                   clientId={paymentConfig.paypal_client_id}
                   currency={paymentConfig.currency || 'EUR'}
                   enabled={paymentMethod === 'card'}
-                  onReady={(controller) => { cardFieldsController.current = controller }}
+                  onReady={(controller) => {
+                    cardFieldsController.current = controller
+                    setCardFieldsReady(Boolean(controller))
+                  }}
                   onSuccess={(result, paypalOrderId) => {
                     navigate(
                       `/order-confirmation/${result.order.order_number}?token=${encodeURIComponent(paypalOrderId)}`,
@@ -369,7 +378,11 @@ export default function CheckoutPage() {
               />
             </label>
 
-            <button type="submit" className="btn btn-primary checkout-submit" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary checkout-submit"
+              disabled={loading || (paymentMethod === 'card' && cardAvailable && !cardFieldsReady)}
+            >
               {loading ? t('common.loading') : (paymentMethod === 'card' && cardAvailable)
                   || (paymentMethod === 'paypal' && paypalAvailable)
                 ? t('checkout.payNow')
