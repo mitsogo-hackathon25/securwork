@@ -82,7 +82,7 @@ def quote_checkout_from_cart(
     shipping = resolve_shipping_cost(taxable, fulfillment_type)
     net_before_fee = taxable + tax + shipping
     payment_fee = Decimal("0.00")
-    if payment_method == Order.PaymentMethod.PAYPAL:
+    if payment_method in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD):
         payment_fee = calculate_paypal_customer_fee(net_before_fee)
     total = net_before_fee + payment_fee
     return {
@@ -122,7 +122,7 @@ def create_order_from_cart(cart: Cart, data: dict, user=None) -> Order:
     payment_method = normalize_payment_method(data.get("payment_method", Order.PaymentMethod.STRIPE))
 
     payment_fee = Decimal("0.00")
-    if payment_method == Order.PaymentMethod.PAYPAL:
+    if payment_method in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD):
         payment_fee = calculate_paypal_customer_fee(net_before_fee)
     total = net_before_fee + payment_fee
 

@@ -30,7 +30,9 @@ export function estimateCheckoutQuote(
     ? 0
     : (taxable >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT)
   const net = Math.round((taxable + tax + shipping) * 100) / 100
-  const paymentFee = paymentMethod === 'paypal' ? paypalCustomerFee(net) : 0
+  const paymentFee = paymentMethod === 'paypal' || paymentMethod === 'card'
+    ? paypalCustomerFee(net)
+    : 0
   const total = Math.round((net + paymentFee) * 100) / 100
   return {
     subtotal: money(subtotal),

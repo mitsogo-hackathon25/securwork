@@ -4,7 +4,6 @@ import { Trans, useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import Breadcrumbs from '../components/Breadcrumbs'
-import PayPalCardFields, { type PayPalCardFieldsController } from '../components/PayPalCardFields'
 import { checkout, fetchCart, fetchCheckoutQuote, fetchPaymentConfig, fetchPickupLocations } from '../api/store'
 import { accountUrlWithNext, isLoggedIn } from '../utils/auth'
 import { formatApiError } from '../utils/formatApiError'
@@ -20,8 +19,6 @@ export default function CheckoutPage() {
   const [error, setError] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'card' | 'bank_transfer'>('paypal')
   const paymentMethodInitialized = useRef(false)
-  const cardFieldsController = useRef<PayPalCardFieldsController | null>(null)
-  const [cardFieldsReady, setCardFieldsReady] = useState(false)
   const [sameAsBilling, setSameAsBilling] = useState(true)
   const [couponCode, setCouponCode] = useState('')
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery')
@@ -132,22 +129,6 @@ export default function CheckoutPage() {
     }
 
     try {
-      if (paymentMethod === 'card') {
-        const controller = cardFieldsController.current
-        if (!controller) {
-          setError(t('checkout.cardFieldsLoading'))
-          setLoading(false)
-          return
-        }
-        if (!controller.isEligible()) {
-          setError(t('checkout.cardNotEligible'))
-          setLoading(false)
-          return
-        }
-        await controller.submit(data)
-        return
-      }
-
       const result = await checkout(data)
       if (result.checkout_url) {
         window.location.href = result.checkout_url
@@ -320,25 +301,8 @@ export default function CheckoutPage() {
                   <span>{t('checkout.payBank')}</span>
                 </label>
               </div>
-              {paymentMethod === 'card' && paymentConfig?.paypal_client_id && (
-                <PayPalCardFields
-                  clientId={paymentConfig.paypal_client_id}
-                  currency={paymentConfig.currency || 'EUR'}
-                  enabled={paymentMethod === 'card'}
-                  onReady={(controller) => {
-                    cardFieldsController.current = controller
-                    setCardFieldsReady(Boolean(controller))
-                  }}
-                  onSuccess={(result, paypalOrderId) => {
-                    navigate(
-                      `/order-confirmation/${result.order.order_number}?token=${encodeURIComponent(paypalOrderId)}`,
-                    )
-                  }}
-                  onError={(message) => {
-                    setError(message)
-                    setLoading(false)
-                  }}
-                />
+              {paymentMethod === 'card' && (
+                <p className="checkout-note">{t('checkout.cardRedirectHint')}</p>
               )}
               {paymentMethod === 'bank_transfer' && paymentConfig && (
                 <div className="bank-details">
@@ -374,7 +338,7 @@ export default function CheckoutPage() {
             <button
               type="submit"
               className="btn btn-primary checkout-submit"
-              disabled={loading || (paymentMethod === 'card' && cardAvailable && !cardFieldsReady)}
+              disabled={loading}
             >
               {loading ? t('common.loading') : (paymentMethod === 'card' && cardAvailable)
                   || (paymentMethod === 'paypal' && paypalAvailable)
@@ -423,7 +387,7 @@ export default function CheckoutPage() {
                       <span>{t('checkout.vat')}</span>
                       <span>{formatPrice(quote.tax_amount)}</span>
                     </div>
-                    {paymentMethod === 'paypal' && parseFloat(quote.payment_fee) > 0 && (
+                    {(paymentMethod === 'paypal' || paymentMethod === 'card') && parseFloat(quote.payment_fee) > 0 && (
                       <div className="checkout-quote-row">
                         <span>{t('checkout.paypalFee')}</span>
                         <span>{formatPrice(quote.payment_fee)}</span>

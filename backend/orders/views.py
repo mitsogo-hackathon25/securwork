@@ -16,7 +16,6 @@ from .paypal_payments import (
     PayPalError,
     PayPalVerificationError,
     create_paypal_checkout,
-    create_paypal_order_for_card,
     paypal_enabled,
 )
 from .payments import (
@@ -225,24 +224,8 @@ class CheckoutView(APIView):
 
         payment_method = data.get("payment_method", Order.PaymentMethod.PAYPAL)
         checkout_url = None
-        paypal_order_id = None
 
-        if payment_method == Order.PaymentMethod.CARD and paypal_enabled():
-            try:
-                paypal_order_id = create_paypal_order_for_card(order)
-            except PayPalError as e:
-                try:
-                    cancel_order(order)
-                except Exception:
-                    logger.exception(
-                        "Failed to cancel order %s after PayPal card order error",
-                        order.order_number,
-                    )
-                return Response(
-                    {"detail": e.user_message()},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-        elif payment_method == Order.PaymentMethod.PAYPAL and paypal_enabled():
+        if payment_method in (Order.PaymentMethod.PAYPAL, Order.PaymentMethod.CARD) and paypal_enabled():
             try:
                 checkout_url = create_paypal_checkout(order)
             except PayPalError as e:
@@ -281,7 +264,6 @@ class CheckoutView(APIView):
         return Response({
             "order": OrderSerializer(order).data,
             "checkout_url": checkout_url,
-            "paypal_order_id": paypal_order_id,
             "payment_method": payment_method,
         }, status=status.HTTP_201_CREATED)
 
