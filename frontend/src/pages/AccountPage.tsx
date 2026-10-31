@@ -10,7 +10,7 @@ import {
   register,
   requestPasswordReset,
 } from '../api/store'
-import { clearAuthTokens, isLoggedIn, setAuthTokens } from '../utils/auth'
+import { clearAuthTokens, isLoggedIn, SESSION_EXPIRED_EVENT, setAuthTokens } from '../utils/auth'
 import { formatApiError } from '../utils/formatApiError'
 import PasswordInput from '../components/PasswordInput'
 import { formatPrice } from '../utils/format'
@@ -41,6 +41,16 @@ export default function AccountPage() {
     const emailParam = searchParams.get('email')
     if (emailParam) setResetEmail(emailParam)
   }, [searchParams])
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      setLoggedIn(false)
+      setMode('login')
+      setError('')
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+  }, [])
 
   const { data: orders = [] } = useQuery({
     queryKey: ['orders'],

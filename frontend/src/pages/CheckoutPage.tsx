@@ -155,13 +155,6 @@ export default function CheckoutPage() {
       }
       navigate(`/order-confirmation/${result.order.order_number}`)
     } catch (err: unknown) {
-      const status = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { status?: number } }).response?.status
-        : undefined
-      if (status === 401) {
-        navigate(accountUrlWithNext('/checkout', 'login'))
-        return
-      }
       setError(formatApiError(err, t('common.error')))
     } finally {
       setLoading(false)

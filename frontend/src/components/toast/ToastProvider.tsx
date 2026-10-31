@@ -2,17 +2,20 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react'
+import { useTranslation } from 'react-i18next'
+import { SESSION_EXPIRED_EVENT } from '../../utils/auth'
 import './Toast.css'
 
 type ToastVariant = 'success' | 'error'
 
 type ToastContextValue = {
-  showToast: (message: string, variant?: ToastVariant) => void
+  showToast: (message: string, variant?: ToastVariant, durationMs?: number) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
@@ -20,11 +23,12 @@ const ToastContext = createContext<ToastContextValue | null>(null)
 const TOAST_DURATION_MS = 2000
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null)
   const [visible, setVisible] = useState(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const showToast = useCallback((message: string, variant: ToastVariant = 'success') => {
+  const showToast = useCallback((message: string, variant: ToastVariant = 'success', durationMs = TOAST_DURATION_MS) => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current)
       hideTimerRef.current = null
@@ -37,8 +41,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         setToast(null)
         hideTimerRef.current = null
       }, 280)
-    }, TOAST_DURATION_MS)
+    }, durationMs)
   }, [])
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      showToast(t('common.sessionExpired'), 'error', 3200)
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+  }, [showToast, t])
 
   const value = useMemo(() => ({ showToast }), [showToast])
 

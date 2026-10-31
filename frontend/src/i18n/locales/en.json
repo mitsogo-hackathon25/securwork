@@ -281,6 +281,7 @@
   "common": {
     "loading": "Loading...",
     "error": "An error occurred.",
+    "sessionExpired": "Your session expired. Please log in again.",
     "back": "Back"
   },
   "notFound": {

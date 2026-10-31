@@ -281,6 +281,7 @@
   "common": {
     "loading": "Caricamento...",
     "error": "Si è verificato un errore.",
+    "sessionExpired": "La sessione è scaduta. Accedi di nuovo.",
     "back": "Indietro"
   },
   "notFound": {
