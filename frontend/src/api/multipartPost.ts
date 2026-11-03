@@ -22,6 +22,7 @@ export function postMultipartJson<T>(apiPath: string, form: FormData): Promise<T
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     }
     xhr.setRequestHeader('Accept', 'application/json')
+    xhr.timeout = 0
 
     xhr.onload = () => {
       const data = xhr.response as T | ApiErrorBody | null

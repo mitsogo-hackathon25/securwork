@@ -211,6 +211,78 @@ export const fetchCsvImportColumnValues = async (file: File, column: string) => 
   )
 }
 
+export type CsvImportPrepareResult = {
+  upload_id: string
+  batch_id: string
+  total_products: number
+  variant_rows: number
+  chunk_size: number
+  detail: string
+}
+
+export type CsvImportChunkResult = {
+  upload_id: string
+  batch_id: string
+  offset: number
+  next_offset: number
+  done: boolean
+  total_products: number
+  chunk_created_products: number
+  chunk_skipped_products: number
+  chunk_created_variants: number
+  created_products: number
+  created_variants: number
+  skipped_products: number
+  errors: CsvImportError[]
+  can_rollback?: boolean
+  import_partial?: boolean
+  detail: string
+}
+
+function buildCsvImportPostForm(
+  uploadId: string,
+  file: File,
+  columnFilter?: CsvImportColumnFilter,
+  extra?: Record<string, string>,
+) {
+  const form = new FormData()
+  form.append('upload_id', uploadId)
+  form.append('filename', file.name)
+  form.append('skip_existing', '1')
+  appendCsvImportFilters(form, columnFilter)
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      form.append(key, value)
+    }
+  }
+  return form
+}
+
+async function prepareCsvImport(
+  uploadId: string,
+  file: File,
+  columnFilter?: CsvImportColumnFilter,
+): Promise<CsvImportPrepareResult> {
+  const form = buildCsvImportPostForm(uploadId, file, columnFilter)
+  return postMultipartJson<CsvImportPrepareResult>('/admin/products/import_csv_prepare/', form)
+}
+
+async function importCsvImportChunk(
+  uploadId: string,
+  batchId: string,
+  offset: number,
+  chunkSize: number,
+  file: File,
+  columnFilter?: CsvImportColumnFilter,
+): Promise<CsvImportChunkResult> {
+  const form = buildCsvImportPostForm(uploadId, file, columnFilter, {
+    batch_id: batchId,
+    offset: String(offset),
+    chunk_size: String(chunkSize),
+  })
+  return postMultipartJson<CsvImportChunkResult>('/admin/products/import_csv_chunk/', form)
+}
+
 function appendCsvImportFilters(form: FormData, columnFilter?: CsvImportColumnFilter) {
   if (columnFilter?.column && columnFilter.values.length > 0) {
     form.append('filter_column', columnFilter.column)
@@ -241,9 +313,26 @@ function applyCsvImportStreamXhr(
     let lastBatchId: string | undefined
     let lastCanRollback = false
 
-    const failImport = (message: string) => {
+    const failImport = (message: string, partial?: Partial<CsvImportResult>) => {
       if (settled) return
       settled = true
+      if (partial?.batch_id && partial.can_rollback) {
+        const err = new Error(message) as Error & {
+          response?: { data: CsvImportResult & { error_count?: number } }
+        }
+        err.response = {
+          data: {
+            detail: message,
+            errors: [],
+            created_products: partial.created_products ?? 0,
+            created_variants: partial.created_variants ?? 0,
+            batch_id: partial.batch_id,
+            can_rollback: true,
+          },
+        }
+        reject(err)
+        return
+      }
       reject(new Error(message))
     }
 
@@ -257,6 +346,13 @@ function applyCsvImportStreamXhr(
           const event = JSON.parse(trimmed) as CsvImportProgressEvent
           if (event.batch_id) lastBatchId = event.batch_id
           if (event.can_rollback) lastCanRollback = true
+          if (
+            event.batch_id
+            && (event.phase === 'importing' || event.phase === 'skipped')
+            && (event.current ?? 0) > 0
+          ) {
+            lastCanRollback = true
+          }
           onEvent(event)
           if (event.phase === 'done' && !settled) {
             settled = true
@@ -347,11 +443,26 @@ function applyCsvImportStreamXhr(
 
     xhr.onerror = () => {
       stopPoll()
-      failImport(
+      drainResponse()
+      const partialMsg =
         'Connessione interrotta (import_csv_stream). '
-        + 'Il file viene caricato in un passo separato; se fallisce qui, di solito è timeout proxy durante validazione/import. '
-        + 'Controlla DevTools → Network (524 o failed).',
-      )
+        + 'Di solito è Cloudflare (proxy arancione ~100s) o timeout nginx non aggiornato. '
+        + 'In Cloudflare: DNS only (nuvola grigia) per www.securwork.it opure importa a blocchi con filtro colonna.'
+      if (lastBatchId && lastCanRollback) {
+        failImport(
+          `${partialMsg} Alcuni prodotti potrebbero essere già stati importati: usa «Annulla questo import» o reimporta (i duplicati vengono saltati).`,
+          {
+            batch_id: lastBatchId,
+            can_rollback: true,
+            created_products: 0,
+            created_variants: 0,
+            detail: partialMsg,
+            errors: [],
+          },
+        )
+        return
+      }
+      failImport(partialMsg)
     }
     xhr.ontimeout = () => {
       stopPoll()
@@ -432,19 +543,93 @@ export function importProductsCsvWithProgress(
   onUploadProgress?: (percent: number) => void,
   columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportResult> {
-  return stageCsvImportFile(file, onUploadProgress).then((staged) => {
+  return stageCsvImportFile(file, onUploadProgress).then(async (staged) => {
     onEvent({
       phase: 'uploading',
       current: 100,
       total: 100,
       message: 'File caricato sul server, avvio validazione…',
     })
-    const form = new FormData()
-    form.append('upload_id', staged.upload_id)
-    form.append('filename', file.name)
-    form.append('skip_existing', '1')
-    appendCsvImportFilters(form, columnFilter)
-    return applyCsvImportStreamXhr(form, onEvent)
+    onEvent({
+      phase: 'validating',
+      current: 0,
+      total: staged.estimated_rows || 1,
+      message: 'Validazione CSV…',
+    })
+
+    const prepared = await prepareCsvImport(staged.upload_id, file, columnFilter)
+    onEvent({
+      phase: 'validated',
+      current: prepared.variant_rows,
+      total: prepared.variant_rows,
+      message: prepared.detail,
+      batch_id: prepared.batch_id,
+    })
+
+    let offset = 0
+    const allErrors: CsvImportError[] = []
+    let lastChunk: CsvImportChunkResult | null = null
+
+    while (true) {
+      onEvent({
+        phase: 'importing',
+        current: offset,
+        total: prepared.total_products,
+        message: `Import blocco (${offset + 1}–${Math.min(offset + prepared.chunk_size, prepared.total_products)} di ${prepared.total_products})…`,
+        batch_id: prepared.batch_id,
+      })
+
+      const chunk = await importCsvImportChunk(
+        prepared.upload_id,
+        prepared.batch_id,
+        offset,
+        prepared.chunk_size,
+        file,
+        columnFilter,
+      )
+      lastChunk = chunk
+      if (chunk.errors?.length) {
+        allErrors.push(...chunk.errors)
+      }
+
+      onEvent({
+        phase: 'importing',
+        current: chunk.next_offset,
+        total: chunk.total_products,
+        message: chunk.detail,
+        batch_id: chunk.batch_id,
+      })
+
+      if (chunk.done) break
+      offset = chunk.next_offset
+    }
+
+    const finalDetail = lastChunk?.detail || prepared.detail
+    onEvent({
+      phase: 'done',
+      current: prepared.total_products,
+      total: prepared.total_products,
+      message: finalDetail,
+      detail: finalDetail,
+      batch_id: prepared.batch_id,
+      created_products: lastChunk?.created_products ?? 0,
+      created_variants: lastChunk?.created_variants ?? 0,
+      skipped_products: lastChunk?.skipped_products,
+      can_rollback: (lastChunk?.created_products ?? 0) > 0,
+      import_partial: allErrors.length > 0,
+      errors: allErrors.slice(0, 50),
+    })
+
+    return {
+      detail: finalDetail,
+      errors: allErrors.slice(0, 50),
+      created_products: lastChunk?.created_products ?? 0,
+      created_variants: lastChunk?.created_variants ?? 0,
+      skipped_products: lastChunk?.skipped_products,
+      batch_id: prepared.batch_id,
+      can_rollback: (lastChunk?.created_products ?? 0) > 0,
+      import_partial: allErrors.length > 0,
+    }
   })
 }
 

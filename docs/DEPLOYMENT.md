@@ -137,6 +137,10 @@ nginx -t && systemctl reload nginx
 
 The app also **gzip-compresses** CSV on upload and parses columns **in the browser** so the column picker works even before nginx is fixed; the final import still needs gzip to fit a 1 MB limit or nginx raised to **256M**.
 
+**Long imports:** the admin UI uses **chunked import** (`import_csv_stage` → `import_csv_prepare` → repeated `import_csv_chunk`, default **20 products** per request via `CSV_IMPORT_CHUNK_SIZE`). Each chunk is a short HTTP call, so **Cloudflare’s ~100s limit** applies only to the one-time **prepare/validate** step—not the whole catalog. Use a column filter if prepare times out. Legacy streaming: `import_csv_stream` (NDJSON).
+
+**Cloudflare:** if `www.securwork.it` uses the **orange cloud** (proxied), Cloudflare cuts idle connections after **~100 seconds** → browser shows *failed* or **524** on `import_csv_stream` even when nginx/gunicorn allow 600s. Fix: in Cloudflare DNS set **www** (and optionally `@`) to **DNS only** (grey cloud), or import in smaller chunks via the column filter. Enterprise plans can raise the proxy timeout; Free/Pro cannot rely on 600s nginx alone.
+
 ## 5. SSL
 
 DNS must point to VPS first (see [DNS-SETUP.md](DNS-SETUP.md)).

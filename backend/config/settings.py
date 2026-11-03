@@ -268,6 +268,9 @@ SECURWORK_MAP_LNG = config("SECURWORK_MAP_LNG", default="9.1900")
 _DATA_UPLOAD_MAX = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=256 * 1024 * 1024, cast=int)
 DATA_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX
 FILE_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX
+# Bulk CSV: store supplier Foto URLs without downloading (avoids 30s×N timeouts mid-stream)
+CSV_IMPORT_LINK_IMAGES_ONLY = config("CSV_IMPORT_LINK_IMAGES_ONLY", default=True, cast=bool)
+CSV_IMPORT_CHUNK_SIZE = config("CSV_IMPORT_CHUNK_SIZE", default=20, cast=int)
 
 # Security (production)
 if not DEBUG:

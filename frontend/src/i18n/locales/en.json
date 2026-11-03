@@ -531,6 +531,7 @@
     "rollbackImportError": "Could not undo the import batch.",
     "confirmRollbackImport": "Remove the {{count}} products added in the last import? Products linked to orders cannot be deleted.",
     "skipExistingHint": "Products already in the catalog (same Codice Padre) are skipped on re-import.",
+    "chunkImportHint": "Import runs in small batches (about 20 products per request) so it works behind Cloudflare and long supplier files.",
     "progressRows": " rows",
     "progressProducts": " products",
     "errorsFound_one": "{{count}} error found",

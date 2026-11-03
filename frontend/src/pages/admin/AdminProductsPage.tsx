@@ -324,6 +324,9 @@ export default function AdminProductsPage() {
         setImportBatchId(responseData.batch_id)
         setImportBatchCreated(responseData.created_products ?? 0)
       }
+      if (responseData?.can_rollback && (responseData.created_products ?? 0) > 0) {
+        setImportBatchCreated(responseData.created_products ?? 0)
+      }
       if (responseData?.errors?.length) {
         setImportDetail(responseData.detail || 'Validazione CSV non riuscita.')
         setImportErrors(responseData.errors)
@@ -560,6 +563,7 @@ export default function AdminProductsPage() {
         <h2>{t('adminProducts.importExportTitle')}</h2>
         <p className="admin-hint">{t('adminProducts.importHint')}</p>
         <p className="admin-hint">{t('adminProducts.skipExistingHint')}</p>
+        <p className="admin-hint">{t('adminProducts.chunkImportHint')}</p>
         {catalogEmpty && (
           <div className="admin-alert admin-alert-warning">
             <p>{t('adminProducts.emptyCatalog')}</p>

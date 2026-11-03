@@ -49,6 +49,7 @@ def attach_image_from_url(
     is_primary: bool = False,
     alt_text: str = "",
     sort_order: int | None = None,
+    link_only: bool = False,
 ) -> tuple[ProductImage | None, str]:
     """Download or link an image URL. Returns (image, error_message)."""
     url = (image_url or "").strip()
@@ -56,6 +57,15 @@ def attach_image_from_url(
         return None, "URL immagine mancante."
     if not url.startswith(("http://", "https://")):
         return None, "L'URL deve iniziare con http:// o https://."
+
+    if link_only or is_direct_image_url(url):
+        return create_product_image(
+            product,
+            external_url=url,
+            alt_text=alt_text,
+            is_primary=is_primary,
+            sort_order=sort_order,
+        ), ""
 
     content, reason = download_image_with_reason(url, filename_from_url(url, product.sku))
     if content:
@@ -66,23 +76,20 @@ def attach_image_from_url(
             is_primary=is_primary,
             sort_order=sort_order,
         ), ""
-    if is_direct_image_url(url):
-        return create_product_image(
-            product,
-            external_url=url,
-            alt_text=alt_text,
-            is_primary=is_primary,
-            sort_order=sort_order,
-        ), ""
     return None, reason or "Impossibile scaricare l'immagine da questo URL."
 
 
-def attach_mockup_from_url(product: Product, image_url: str) -> tuple[bool, str]:
+def attach_mockup_from_url(product: Product, image_url: str, *, link_only: bool = False) -> tuple[bool, str]:
     url = (image_url or "").strip()
     if not url:
         return False, "URL mockup mancante."
     if not url.startswith(("http://", "https://")):
         return False, "L'URL mockup deve iniziare con http:// o https://."
+
+    if link_only:
+        product.mockup_url = url
+        product.save(update_fields=["mockup_url"])
+        return True, ""
 
     content, reason = download_image_with_reason(url, filename_from_url(url, f"{product.sku}-mockup"))
     if not content:

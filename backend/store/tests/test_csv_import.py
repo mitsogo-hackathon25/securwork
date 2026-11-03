@@ -13,7 +13,10 @@ from store.csv_import import (
     export_products_csv,
     import_parsed_rows,
     iter_import_parsed_rows,
-    normalize_column_key,
+    group_parsed_product_rows,
+    import_parsed_rows_chunk,
+    stage_parsed_import_rows,
+    load_staged_parsed_rows,
     parse_and_validate_csv,
     read_csv_upload_bytes,
     delete_staged_csv,
@@ -488,3 +491,24 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertEqual(complete2["created_products"], 0)
         self.assertEqual(batch2.items.count(), 0)
         self.assertEqual(Product.objects.filter(sku="PAD-01").count(), 1)
+
+    def test_staged_parsed_rows_and_chunk_import(self):
+        csv_text = """Codice Padre;Merceologica;Categoria;SCategoria;SKU;Colore;Taglia;Descrizione;Prezzo Unico
+P1;Abbigliamento;Kariban;Polo;P1-M;Blu;M;Polo;10,00
+P2;Abbigliamento;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
+"""
+        upload_id, _ = stage_csv_upload(csv_text.encode("utf-8"))
+        rows, errors = parse_and_validate_csv(csv_text.encode("utf-8"))
+        self.assertEqual(errors, [])
+        stage_parsed_import_rows(upload_id, rows)
+        loaded = load_staged_parsed_rows(upload_id)
+        self.assertEqual(len(loaded), len(rows))
+        batch = CsvImportBatch.objects.create(filename="chunk.csv", staging_upload_id=upload_id)
+        first = import_parsed_rows_chunk(loaded, 0, 1, import_batch=batch)
+        self.assertFalse(first["done"])
+        self.assertEqual(first["chunk_created_products"], 1)
+        second = import_parsed_rows_chunk(loaded, first["next_offset"], 10, import_batch=batch)
+        self.assertTrue(second["done"])
+        self.assertEqual(batch.items.count(), 2)
+        delete_staged_csv(upload_id)
+        self.assertIsNone(load_staged_parsed_rows(upload_id))

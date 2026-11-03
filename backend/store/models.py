@@ -243,6 +243,7 @@ class CsvImportBatch(models.Model):
     created_variants = models.PositiveIntegerField(default=0)
     skipped_products = models.PositiveIntegerField(default=0)
     error_detail = models.TextField(blank=True)
+    staging_upload_id = models.CharField(max_length=36, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

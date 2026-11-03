@@ -531,6 +531,7 @@
     "rollbackImportError": "Impossibile annullare l'import.",
     "confirmRollbackImport": "Rimuovere i {{count}} prodotti aggiunti nell'ultimo import? I prodotti collegati a ordini non possono essere eliminati.",
     "skipExistingHint": "I prodotti già in catalogo (stesso Codice Padre) vengono saltati al re-import.",
+    "chunkImportHint": "L'import avviene a blocchi (~20 prodotti per richiesta) così funziona anche con Cloudflare e listini grandi.",
     "progressRows": " righe",
     "progressProducts": " prodotti",
     "errorsFound_one": "{{count}} errore trovato",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import gzip
 import io
+import json
 import logging
 import re
 import uuid
@@ -82,11 +83,38 @@ def load_staged_csv(upload_id: str) -> bytes | None:
 def delete_staged_csv(upload_id: str) -> None:
     if not _UPLOAD_ID_RE.match(upload_id or ""):
         return
-    path = csv_import_staging_dir() / f"{upload_id}.csv"
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        logger.warning("Could not delete staged CSV %s", upload_id)
+    for suffix in (".csv", ".parsed.json.gz"):
+        path = csv_import_staging_dir() / f"{upload_id}{suffix}"
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not delete staged import file %s", path.name)
+
+
+def stage_parsed_import_rows(upload_id: str, parsed_rows: list[dict]) -> None:
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        raise ValueError("Invalid upload_id")
+    path = csv_import_staging_dir() / f"{upload_id}.parsed.json.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        json.dump(parsed_rows, handle, ensure_ascii=False)
+
+
+def load_staged_parsed_rows(upload_id: str) -> list[dict] | None:
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        return None
+    path = csv_import_staging_dir() / f"{upload_id}.parsed.json.gz"
+    if not path.is_file():
+        return None
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return data if isinstance(data, list) else None
+
+
+def group_parsed_product_rows(parsed_rows: list[dict]) -> list[list[dict]]:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in parsed_rows:
+        grouped[row["product_sku"].lower()].append(row)
+    return list(grouped.values())
 
 
 def _existing_product_names_it() -> set[str]:
@@ -2109,7 +2137,7 @@ def parse_and_validate_csv(
             supplier_variant_row_index[variant_key] = len(parsed_rows)
         parsed_rows.append(parsed_row)
 
-        if progress_callback and index % 500 == 0:
+        if progress_callback and index % 100 == 0:
             progress_callback(min(index - 1, estimated_rows), estimated_rows)
 
     if progress_callback:
@@ -2215,11 +2243,13 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     image_urls = _merge_image_url_lists(
         *(r.get("image_urls") or [] for r in rows),
     )
+    link_images_only = getattr(settings, "CSV_IMPORT_LINK_IMAGES_ONLY", True)
     for index, image_url in enumerate(image_urls):
         image, reason = attach_image_from_url(
             product,
             image_url,
             is_primary=(index == 0),
+            link_only=link_images_only,
         )
         if not image:
             raise ValueError(
@@ -2229,7 +2259,11 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
 
     mockup_url = first.get("mockup_url") or ""
     if mockup_url:
-        ok, reason = attach_mockup_from_url(product, mockup_url)
+        ok, reason = attach_mockup_from_url(
+            product,
+            mockup_url,
+            link_only=link_images_only,
+        )
         if not ok:
             raise ValueError(
                 f"Prodotto '{product.sku}': impossibile importare url_mockup "
@@ -2255,6 +2289,30 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     return variants_created, product
 
 
+def _import_one_product_group_with_batch(
+    rows: list[dict],
+    *,
+    import_batch=None,
+    catalog_skus: set[str] | None = None,
+) -> dict:
+    from .models import CsvImportBatchItem
+
+    with transaction.atomic():
+        variant_count, product = _import_one_product_group(rows)
+    if import_batch is not None:
+        CsvImportBatchItem.objects.create(
+            batch=import_batch,
+            product=product,
+            product_sku=product.sku,
+        )
+    if catalog_skus is not None:
+        catalog_skus.add(product.sku.strip().lower())
+    return {
+        "created_products": 1,
+        "created_variants": variant_count,
+    }
+
+
 def iter_import_parsed_rows(
     parsed_rows: list[dict],
     *,
@@ -2262,20 +2320,15 @@ def iter_import_parsed_rows(
     skip_existing_in_catalog: bool = False,
 ):
     """Yield progress events, then a final complete event with counts."""
-    from .models import CsvImportBatchItem
-
-    grouped: dict[str, list[dict]] = defaultdict(list)
-    for row in parsed_rows:
-        grouped[row["product_sku"].lower()].append(row)
-
-    total_products = len(grouped)
+    groups = group_parsed_product_rows(parsed_rows)
+    total_products = len(groups)
     created_products = 0
     created_variants = 0
     skipped_products = 0
     import_errors: list[dict] = []
     catalog_skus = _existing_product_skus()
 
-    for index, rows in enumerate(grouped.values(), start=1):
+    for index, rows in enumerate(groups, start=1):
         first = rows[0]
         parent_key = (first.get("product_sku") or "").strip().lower()
         if skip_existing_in_catalog and parent_key and parent_key in catalog_skus:
@@ -2290,17 +2343,13 @@ def iter_import_parsed_rows(
             continue
 
         try:
-            with transaction.atomic():
-                variant_count, product = _import_one_product_group(rows)
-            if import_batch is not None:
-                CsvImportBatchItem.objects.create(
-                    batch=import_batch,
-                    product=product,
-                    product_sku=product.sku,
-                )
-            catalog_skus.add(product.sku.strip().lower())
-            created_products += 1
-            created_variants += variant_count
+            result = _import_one_product_group_with_batch(
+                rows,
+                import_batch=import_batch,
+                catalog_skus=catalog_skus,
+            )
+            created_products += result["created_products"]
+            created_variants += result["created_variants"]
             yield {
                 "phase": "importing",
                 "current": index,
@@ -2328,6 +2377,62 @@ def iter_import_parsed_rows(
         "created_products": created_products,
         "created_variants": created_variants,
         "skipped_products": skipped_products,
+        "import_errors": import_errors,
+    }
+
+
+def import_parsed_rows_chunk(
+    parsed_rows: list[dict],
+    offset: int,
+    limit: int,
+    *,
+    import_batch=None,
+    skip_existing_in_catalog: bool = False,
+) -> dict:
+    """Import a slice of product groups (offset/limit). For chunked HTTP imports."""
+    groups = group_parsed_product_rows(parsed_rows)
+    total_products = len(groups)
+    offset = max(0, offset)
+    limit = max(1, limit)
+    slice_groups = groups[offset : offset + limit]
+
+    catalog_skus = _existing_product_skus()
+    chunk_created_products = 0
+    chunk_created_variants = 0
+    chunk_skipped_products = 0
+    import_errors: list[dict] = []
+
+    for rows in slice_groups:
+        first = rows[0]
+        parent_key = (first.get("product_sku") or "").strip().lower()
+        if skip_existing_in_catalog and parent_key and parent_key in catalog_skus:
+            chunk_skipped_products += 1
+            continue
+        try:
+            result = _import_one_product_group_with_batch(
+                rows,
+                import_batch=import_batch,
+                catalog_skus=catalog_skus,
+            )
+            chunk_created_products += result["created_products"]
+            chunk_created_variants += result["created_variants"]
+        except Exception as exc:
+            logger.exception("CSV import chunk failed for %s", parent_key)
+            import_errors.append({
+                "row": 0,
+                "field": "sku_prodotto",
+                "message": f"{first.get('product_sku') or parent_key}: {exc}",
+            })
+
+    next_offset = min(offset + limit, total_products)
+    return {
+        "total_products": total_products,
+        "offset": offset,
+        "next_offset": next_offset,
+        "done": next_offset >= total_products,
+        "chunk_created_products": chunk_created_products,
+        "chunk_created_variants": chunk_created_variants,
+        "chunk_skipped_products": chunk_skipped_products,
         "import_errors": import_errors,
     }
 
