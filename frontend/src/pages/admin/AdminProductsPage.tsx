@@ -21,7 +21,7 @@ import {
   type CsvImportValueOption,
 } from '../../api/admin'
 import { formatPrice } from '../../utils/format'
-import { formatApiError } from '../../utils/formatApiError'
+import { formatApiError, formatClientError } from '../../utils/formatApiError'
 import './Admin.css'
 
 export default function AdminProductsPage() {
@@ -162,7 +162,7 @@ export default function AdminProductsPage() {
     try {
       await exportProductsCsv()
     } catch (err: unknown) {
-      setImportDetail(formatApiError(err, 'Impossibile esportare i prodotti in CSV.'))
+      setImportDetail(formatClientError(err, 'Impossibile esportare i prodotti in CSV.'))
     } finally {
       setExporting(false)
     }

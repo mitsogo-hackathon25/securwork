@@ -61,3 +61,24 @@ export function formatApiError(err: unknown, fallback = 'Something went wrong.')
 
   return fallback
 }
+
+/** Prefer thrown Error.message (export/import helpers), then axios JSON bodies. */
+export function formatClientError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message.trim()
+  }
+  return formatApiError(err, fallback)
+}
+
+export async function readBlobApiDetail(blob: Blob, fallback: string): Promise<string> {
+  try {
+    const text = await blob.text()
+    const payload = JSON.parse(text) as { detail?: string }
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      return payload.detail.trim()
+    }
+  } catch {
+    /* not JSON */
+  }
+  return fallback
+}

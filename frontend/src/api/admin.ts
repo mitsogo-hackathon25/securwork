@@ -1,4 +1,5 @@
 import api from './client'
+import { readBlobApiDetail } from '../utils/formatApiError'
 import { sortByName } from '../utils/sortCategories'
 import type {
   AdminBrand,
@@ -96,7 +97,7 @@ const downloadCsvBlob = async (blob: Blob, filename: string) => {
   const lines = trimmed.split(/\r?\n/).filter((line) => line.trim().length > 0)
   if (lines.length < 2) {
     throw new Error(
-      'No product rows in this file (header only). Add products with variants in admin, redeploy the backend, then export again.',
+      'Export contains no product rows (header only). Add products with variants, then export again.',
     )
   }
 
@@ -118,20 +119,15 @@ export const exportProductsCsv = () =>
   api
     .get('/admin/products/export_csv/', {
       responseType: 'blob',
-      validateStatus: (status) => status < 500,
+      validateStatus: () => true,
     })
     .then(async (r) => {
-      if (r.status >= 400) {
-        const text = await (r.data as Blob).text()
-        try {
-          const payload = JSON.parse(text) as { detail?: string }
-          throw new Error(payload.detail || 'CSV export failed.')
-        } catch (err) {
-          if (err instanceof Error && !err.message.includes('JSON')) {
-            throw err
-          }
-          throw new Error('CSV export failed.')
-        }
+      if (r.status !== 200) {
+        const detail = await readBlobApiDetail(
+          r.data as Blob,
+          `CSV export failed (HTTP ${r.status}).`,
+        )
+        throw new Error(detail)
       }
       await downloadCsvBlob(r.data, 'securwork-products-export.csv')
     })

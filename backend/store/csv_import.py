@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
 import unicodedata
 from collections import defaultdict
@@ -14,6 +15,8 @@ from django.utils.text import slugify
 
 from .constants import CLOTHING_SIZES
 from .models import Brand, Category, Color, Product, ProductVariant
+
+logger = logging.getLogger(__name__)
 
 
 def _existing_product_names_it() -> set[str]:
@@ -755,57 +758,61 @@ def export_products_csv() -> str:
         .order_by("sku")
     )
     for product in products:
-        categoria, scategoria = _supplier_categories_for_product(product)
-        merceologica = (product.brand or "").strip()
-        descrizione = _translation(product, "name", "it") or _translation(product, "name", "en")
-        image_urls = product_image_export_urls(product)
-        foto = image_urls[0] if image_urls else ""
+        try:
+            categoria, scategoria = _supplier_categories_for_product(product)
+            merceologica = (product.brand or "").strip()
+            descrizione = _translation(product, "name", "it") or _translation(product, "name", "en")
+            image_urls = product_image_export_urls(product)
+            foto = image_urls[0] if image_urls else ""
 
-        variants = list(product.variants.all())
-        if not variants:
-            writer.writerow({
-                "Codice Padre": product.sku,
-                "Merceologica": merceologica,
-                "Categoria": categoria,
-                "SCategoria": scategoria,
-                "SKU": "",
-                "EAN": "",
-                "In Arrivo": "",
-                "Colore": "",
-                "Taglia": "",
-                "Descrizione": descrizione,
-                "Foto": foto,
-                "Unico": "1",
-                "Confezione": "",
-                "Imballo": "",
-                "Prezzo Unico": "",
-                "Prezzo Confezione": "",
-                "Prezzo Imballo": "",
-            })
+            variants = list(product.variants.all())
+            if not variants:
+                writer.writerow({
+                    "Codice Padre": product.sku,
+                    "Merceologica": merceologica,
+                    "Categoria": categoria,
+                    "SCategoria": scategoria,
+                    "SKU": "",
+                    "EAN": "",
+                    "In Arrivo": "",
+                    "Colore": "",
+                    "Taglia": "",
+                    "Descrizione": descrizione,
+                    "Foto": foto,
+                    "Unico": "1",
+                    "Confezione": "",
+                    "Imballo": "",
+                    "Prezzo Unico": "",
+                    "Prezzo Confezione": "",
+                    "Prezzo Imballo": "",
+                })
+                continue
+
+            for variant in variants:
+                price = variant.effective_price
+                price_str = _decimal_to_supplier_csv(price)
+                writer.writerow({
+                    "Codice Padre": product.sku,
+                    "Merceologica": merceologica,
+                    "Categoria": categoria,
+                    "SCategoria": scategoria,
+                    "SKU": variant.sku,
+                    "EAN": "",
+                    "In Arrivo": str(variant.stock_quantity),
+                    "Colore": variant.color or "",
+                    "Taglia": variant.size or "",
+                    "Descrizione": descrizione,
+                    "Foto": foto,
+                    "Unico": "1",
+                    "Confezione": "",
+                    "Imballo": "",
+                    "Prezzo Unico": price_str,
+                    "Prezzo Confezione": "",
+                    "Prezzo Imballo": "",
+                })
+        except Exception:
+            logger.exception("Skipping product %s during CSV export", product.sku)
             continue
-
-        for variant in variants:
-            price = variant.effective_price
-            price_str = _decimal_to_supplier_csv(price)
-            writer.writerow({
-                "Codice Padre": product.sku,
-                "Merceologica": merceologica,
-                "Categoria": categoria,
-                "SCategoria": scategoria,
-                "SKU": variant.sku,
-                "EAN": "",
-                "In Arrivo": str(variant.stock_quantity),
-                "Colore": variant.color or "",
-                "Taglia": variant.size or "",
-                "Descrizione": descrizione,
-                "Foto": foto,
-                "Unico": "1",
-                "Confezione": "",
-                "Imballo": "",
-                "Prezzo Unico": price_str,
-                "Prezzo Confezione": "",
-                "Prezzo Imballo": "",
-            })
     return buffer.getvalue()
 
 
