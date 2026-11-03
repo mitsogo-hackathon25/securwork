@@ -300,13 +300,25 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export_csv")
     def export_csv(self, request):
-        if not Product.objects.exists():
+        queryset = self.filter_queryset(self.get_queryset())
+        product_count = queryset.count()
+        variant_count = ProductVariant.objects.filter(product__in=queryset).count()
+
+        if product_count == 0:
             return Response(
-                {"detail": "Nessun prodotto nel catalogo. Aggiungi prodotti prima di esportare."},
+                {
+                    "detail": (
+                        "Nessun prodotto nel catalogo su questo server. "
+                        "Usa Import CSV per caricare un listino fornitore, "
+                        "oppure verifica che l’admin e l’export puntino allo stesso ambiente "
+                        "(locale vs produzione)."
+                    ),
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
         try:
-            content = export_products_csv()
+            content = export_products_csv(queryset)
         except Exception:
             logger.exception("Product CSV export failed")
             return Response(
@@ -318,8 +330,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "detail": (
-                        "Export vuoto: nessuna riga prodotto. "
-                        "Verifica che i prodotti abbiano varianti (taglia/colore)."
+                        f"Export vuoto ({product_count} prodotti, {variant_count} varianti in DB). "
+                        "Controlla i log del backend: alcuni prodotti potrebbero essere stati "
+                        "saltati per errori dati; assicurati che ogni prodotto abbia varianti."
                     ),
                 },
                 status=status.HTTP_404_NOT_FOUND,

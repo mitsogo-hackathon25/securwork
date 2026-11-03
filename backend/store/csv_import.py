@@ -747,16 +747,21 @@ def _bool_to_csv(value: bool) -> str:
     return "si" if value else "no"
 
 
-def export_products_csv() -> str:
-    """Export all products in supplier listino layout (one row per variant)."""
+def export_products_csv(products_queryset=None) -> str:
+    """Export products in supplier listino layout (one row per variant)."""
     buffer = io.StringIO()
     writer = _make_supplier_csv_writer(buffer)
     writer.writeheader()
 
-    products = (
-        Product.objects.prefetch_related("variants", "categories", "categories__parent", "images")
-        .order_by("sku")
-    )
+    if products_queryset is None:
+        products = (
+            Product.objects.prefetch_related("variants", "categories", "categories__parent", "images")
+            .order_by("sku")
+        )
+    else:
+        products = products_queryset.prefetch_related(
+            "variants", "categories", "categories__parent", "images",
+        ).order_by("sku")
     for product in products:
         try:
             categoria, scategoria = _supplier_categories_for_product(product)

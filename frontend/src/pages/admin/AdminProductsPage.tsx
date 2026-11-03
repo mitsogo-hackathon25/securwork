@@ -160,6 +160,16 @@ export default function AdminProductsPage() {
     setImportSuccess('')
     setExporting(true)
     try {
+      const fresh = await queryClient.fetchQuery({
+        queryKey: ['admin-products', params],
+        queryFn: () => fetchAdminProducts(params),
+      })
+      if ((fresh?.count ?? 0) === 0) {
+        setImportDetail(
+          'Nessun prodotto in elenco. Importa un listino CSV (Import) prima di esportare.',
+        )
+        return
+      }
       await exportProductsCsv()
     } catch (err: unknown) {
       setImportDetail(formatClientError(err, 'Impossibile esportare i prodotti in CSV.'))
