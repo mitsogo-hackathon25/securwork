@@ -484,7 +484,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
         url_path="import_csv_brands",
     )
     def import_csv_brands(self, request):
@@ -514,7 +514,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
         url_path="import_csv_columns",
     )
     def import_csv_columns(self, request):
@@ -544,7 +544,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
         url_path="import_csv_column_values",
     )
     def import_csv_column_values(self, request):
@@ -755,7 +755,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         response["X-Accel-Buffering"] = "no"
         return response
 
-    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser, JSONParser], url_path="import_csv")
     def import_csv(self, request):
         upload = request.FILES.get("file")
         if not upload:

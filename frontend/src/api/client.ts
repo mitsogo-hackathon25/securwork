@@ -1,12 +1,39 @@
-import axios, { AxiosHeaders } from 'axios'
+import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
 import i18n from '../i18n'
 import { SESSION_EXPIRED_EVENT, accountUrlWithNext, clearAuthTokens } from '../utils/auth'
 
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
 })
+
+function isJsonRequestBody(data: unknown): boolean {
+  if (data === undefined || data === null) return false
+  if (typeof FormData !== 'undefined' && data instanceof FormData) return false
+  if (typeof Blob !== 'undefined' && data instanceof Blob) return false
+  if (data instanceof ArrayBuffer) return false
+  return typeof data === 'object' || typeof data === 'string'
+}
+
+function applyRequestContentType(config: InternalAxiosRequestConfig) {
+  const method = (config.method || 'get').toLowerCase()
+  if (method === 'get' || method === 'head' || method === 'delete') return
+
+  const headers = AxiosHeaders.from(config.headers)
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    headers.delete('Content-Type')
+    headers.delete('content-type')
+    config.headers = headers
+    return
+  }
+
+  if (!isJsonRequestBody(config.data)) return
+
+  if (!headers.has('Content-Type') && !headers.has('content-type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  config.headers = headers
+}
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -85,13 +112,7 @@ api.interceptors.request.use((config) => {
   }
   if (!config.params) config.params = {}
   config.params.lang = i18n.language
-  // Multipart uploads: drop default application/json so the browser sets boundary.
-  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-    const headers = AxiosHeaders.from(config.headers)
-    headers.delete('Content-Type')
-    headers.delete('content-type')
-    config.headers = headers
-  }
+  applyRequestContentType(config)
   return config
 })
 

@@ -73,9 +73,7 @@ export const uploadCustomization = (payload: {
   form.append('preview', payload.preview)
   form.append('method', payload.method)
   form.append('design_data', JSON.stringify(payload.designData))
-  return api.post<LineItemCustomization>('/customizations/', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).then((r) => r.data)
+  return api.post<LineItemCustomization>('/customizations/', form).then((r) => r.data)
 }
 
 export const updateCartItem = (itemId: number, quantity: number) =>
