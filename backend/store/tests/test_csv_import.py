@@ -367,7 +367,7 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         )
         text = export_products_csv()
         lines = text.splitlines()
-        self.assertIn("Codice Padre;Merceologica;Categoria", lines[0])
+        self.assertIn("Codice Padre\tMerceologica\tCategoria", lines[0])
         self.assertGreaterEqual(len(lines), 2)
         row = lines[1]
         self.assertIn("AY 7439", row)

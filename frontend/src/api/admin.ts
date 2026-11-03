@@ -78,26 +78,30 @@ const downloadCsvBlob = async (blob: Blob, filename: string) => {
     throw new Error('The CSV file is empty.')
   }
 
-  if (blob.type.toLowerCase().includes('json')) {
-    const text = await blob.text()
+  const fullText = await blob.text()
+  const trimmed = fullText.trimStart().replace(/^\ufeff/, '')
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
     try {
-      const payload = JSON.parse(text) as { detail?: string }
-      throw new Error(payload.detail || 'CSV download failed.')
+      const payload = JSON.parse(trimmed) as { detail?: string }
+      throw new Error(payload.detail || 'CSV download failed. Sign in to admin and try again.')
     } catch (err) {
-      if (err instanceof Error && err.message !== 'CSV download failed.') {
+      if (err instanceof Error && !err.message.includes('JSON')) {
         throw err
       }
-      throw new Error('CSV download failed.')
+      throw new Error('CSV download failed. Sign in to admin and try again.')
     }
   }
 
-  const head = await blob.slice(0, 512).text()
-  const sample = head.trimStart().replace(/^\ufeff/, '')
-  if (sample.startsWith('{') || sample.startsWith('<!DOCTYPE') || sample.startsWith('<html')) {
-    throw new Error('CSV download failed. Sign in to admin and try again.')
+  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim().length > 0)
+  if (lines.length < 2) {
+    throw new Error(
+      'No product rows in this file (header only). Add products with variants in admin, redeploy the backend, then export again.',
+    )
   }
 
-  const url = window.URL.createObjectURL(blob)
+  const outBlob = new Blob([fullText], { type: 'text/csv;charset=utf-8' })
+  const url = window.URL.createObjectURL(outBlob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
@@ -112,8 +116,25 @@ export const downloadProductCsvTemplate = () =>
 
 export const exportProductsCsv = () =>
   api
-    .get('/admin/products/export_csv/', { responseType: 'blob' })
-    .then((r) => downloadCsvBlob(r.data, 'securwork-products-export.csv'))
+    .get('/admin/products/export_csv/', {
+      responseType: 'blob',
+      validateStatus: (status) => status < 500,
+    })
+    .then(async (r) => {
+      if (r.status >= 400) {
+        const text = await (r.data as Blob).text()
+        try {
+          const payload = JSON.parse(text) as { detail?: string }
+          throw new Error(payload.detail || 'CSV export failed.')
+        } catch (err) {
+          if (err instanceof Error && !err.message.includes('JSON')) {
+            throw err
+          }
+          throw new Error('CSV export failed.')
+        }
+      }
+      await downloadCsvBlob(r.data, 'securwork-products-export.csv')
+    })
 
 export const importProductsCsv = (file: File) => {
   const form = new FormData()

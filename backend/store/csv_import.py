@@ -477,7 +477,7 @@ SUPPLIER_EXPORT_HEADERS = [
     "Prezzo Imballo",
 ]
 
-SUPPLIER_CSV_DELIMITER = ";"
+SUPPLIER_CSV_DELIMITER = "\t"
 
 
 def _make_csv_writer(buffer: io.StringIO) -> csv.DictWriter:

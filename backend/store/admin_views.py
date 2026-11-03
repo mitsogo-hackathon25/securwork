@@ -1,4 +1,5 @@
 import json
+import logging
 import queue
 import threading
 import time
@@ -43,6 +44,8 @@ from .category_ordering import sort_categories
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
+
+logger = logging.getLogger(__name__)
 
 _PRODUCT_DELETE_BLOCKED_CODE = "product_delete_blocked"
 _PRODUCT_DELETE_BLOCKED_DETAIL = (
@@ -297,9 +300,33 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export_csv")
     def export_csv(self, request):
-        content = export_products_csv()
+        if not Product.objects.exists():
+            return Response(
+                {"detail": "Nessun prodotto nel catalogo. Aggiungi prodotti prima di esportare."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            content = export_products_csv()
+        except Exception:
+            logger.exception("Product CSV export failed")
+            return Response(
+                {"detail": "Esportazione CSV non riuscita. Riprova o contatta il supporto."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        data_lines = [ln for ln in content.splitlines() if ln.strip()]
+        if len(data_lines) < 2:
+            return Response(
+                {
+                    "detail": (
+                        "Export vuoto: nessuna riga prodotto. "
+                        "Verifica che i prodotti abbiano varianti (taglia/colore)."
+                    ),
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         response = HttpResponse(csv_download_bytes(content), content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="securwork-products-export.csv"'
+        response["X-Export-Row-Count"] = str(len(data_lines) - 1)
         return response
 
     @action(detail=False, methods=["post"], url_path="adjust_prices")
