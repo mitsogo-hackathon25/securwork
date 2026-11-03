@@ -8,6 +8,7 @@ from store.csv_import import (
     brand_filter_key,
     canonical_brand_key,
     canonical_filter_key,
+    export_products_csv,
     import_parsed_rows,
     normalize_column_key,
     parse_and_validate_csv,
@@ -336,3 +337,24 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertEqual(rows[0]["price"], Decimal("18.780"))
         self.assertEqual(rows[0]["stock"], 242)
         self.assertEqual(rows[1]["size"], "M")
+
+    def test_export_products_csv_uses_comma_columns_and_data_rows(self):
+        product = Product.objects.create(sku="EXP-01", brand="TestBrand", slug="exp-01")
+        product.set_current_language("it")
+        product.name = "Prodotto export"
+        product.save()
+        ProductVariant.objects.create(
+            product=product,
+            sku="EXP-01-M-BLU",
+            size="M",
+            color="Blu",
+            price=Decimal("19.90"),
+            stock_quantity=5,
+        )
+        text = export_products_csv()
+        header = text.splitlines()[0]
+        self.assertIn("sku_prodotto,marca", header)
+        self.assertNotIn("sku_prodotto;marca", header)
+        self.assertGreaterEqual(len(text.splitlines()), 2)
+        self.assertIn("EXP-01,TestBrand", text)
+        self.assertIn("19.90", text)

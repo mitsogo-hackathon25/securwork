@@ -29,6 +29,7 @@ from .csv_import import (
     BRAND_FILTER_NONE,
     canonical_brand_key,
     build_csv_template,
+    csv_download_bytes,
     export_products_csv,
     import_parsed_rows,
     iter_import_parsed_rows,
@@ -290,14 +291,14 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="csv_template")
     def csv_template(self, request):
         content = build_csv_template()
-        response = HttpResponse(content, content_type="text/csv; charset=utf-8")
+        response = HttpResponse(csv_download_bytes(content), content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="securwork-products-template.csv"'
         return response
 
     @action(detail=False, methods=["get"], url_path="export_csv")
     def export_csv(self, request):
         content = export_products_csv()
-        response = HttpResponse(content, content_type="text/csv; charset=utf-8")
+        response = HttpResponse(csv_download_bytes(content), content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="securwork-products-export.csv"'
         return response
 

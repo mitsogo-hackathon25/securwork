@@ -113,7 +113,10 @@ def product_image_export_urls(product: Product) -> list[str]:
         if image.external_url:
             urls.append(image.external_url)
         elif image.image:
-            urls.append(absolute_media_url(image.image.url))
+            try:
+                urls.append(absolute_media_url(image.image.url))
+            except (ValueError, OSError):
+                continue
     return urls
 
 

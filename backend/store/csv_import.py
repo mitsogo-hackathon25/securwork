@@ -454,6 +454,31 @@ CSV_HEADERS = [
     "url_mockup",
 ]
 
+CSV_DELIMITER = ","
+
+
+def _make_csv_writer(buffer: io.StringIO) -> csv.DictWriter:
+    return csv.DictWriter(
+        buffer,
+        fieldnames=CSV_HEADERS,
+        delimiter=CSV_DELIMITER,
+        quoting=csv.QUOTE_MINIMAL,
+        lineterminator="\r\n",
+    )
+
+
+def csv_download_bytes(content: str) -> bytes:
+    """UTF-8 with BOM so Excel (incl. IT locale) opens columns correctly."""
+    if not content.startswith("\ufeff"):
+        content = f"\ufeff{content}"
+    return content.encode("utf-8")
+
+
+def _decimal_to_csv(value: Decimal) -> str:
+    """Dot decimals when comma is the field separator (RFC-style CSV)."""
+    return f"{value:.2f}"
+
+
 # Accept legacy English / previous Italian headers and map them to Italian keys.
 HEADER_ALIASES = {
     "product_sku": "sku_prodotto",
@@ -643,7 +668,7 @@ TEMPLATE_EXAMPLE_ROWS = [
 
 def build_csv_template() -> str:
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=CSV_HEADERS, lineterminator="\n")
+    writer = _make_csv_writer(buffer)
     writer.writeheader()
     for row in TEMPLATE_EXAMPLE_ROWS:
         writer.writerow(row)
@@ -661,7 +686,7 @@ def _bool_to_csv(value: bool) -> str:
 def export_products_csv() -> str:
     """Export all products as CSV (one row per variant), matching import columns."""
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=CSV_HEADERS, lineterminator="\n")
+    writer = _make_csv_writer(buffer)
     writer.writeheader()
 
     products = (
@@ -673,7 +698,12 @@ def export_products_csv() -> str:
             product.categories.order_by("slug").values_list("slug", flat=True)
         )
         image_urls = product_image_export_urls(product)
-        mockup_url = absolute_media_url(product.mockup_front.url) if product.mockup_front else ""
+        mockup_url = ""
+        if product.mockup_front:
+            try:
+                mockup_url = absolute_media_url(product.mockup_front.url)
+            except (ValueError, OSError):
+                mockup_url = ""
         base = {
             "sku_prodotto": product.sku,
             "marca": product.brand or "",
@@ -684,16 +714,16 @@ def export_products_csv() -> str:
             "descrizione_it": _translation(product, "description", "it"),
             "descrizione_en": _translation(product, "description", "en"),
             "bestseller": _bool_to_csv(bool(product.is_bestseller)),
-            "costo_personalizzazione": f"{product.customization_fee:.2f}",
+            "costo_personalizzazione": _decimal_to_csv(product.customization_fee),
             "categoria": category_slugs,
             "ricamo_petto": _bool_to_csv(bool(product.embroidery_chest_enabled)),
-            "costo_ricamo_petto": f"{product.embroidery_chest_fee:.2f}",
+            "costo_ricamo_petto": _decimal_to_csv(product.embroidery_chest_fee),
             "ricamo_grande": _bool_to_csv(bool(product.embroidery_large_enabled)),
-            "costo_ricamo_grande": f"{product.embroidery_large_fee:.2f}",
+            "costo_ricamo_grande": _decimal_to_csv(product.embroidery_large_fee),
             "dtf_petto": _bool_to_csv(bool(product.dtf_chest_enabled)),
-            "costo_dtf_petto": f"{product.dtf_chest_fee:.2f}",
+            "costo_dtf_petto": _decimal_to_csv(product.dtf_chest_fee),
             "dtf_grande": _bool_to_csv(bool(product.dtf_large_enabled)),
-            "costo_dtf_grande": f"{product.dtf_large_fee:.2f}",
+            "costo_dtf_grande": _decimal_to_csv(product.dtf_large_fee),
             "url_immagini": ",".join(image_urls),
             "url_mockup": mockup_url,
         }
@@ -714,10 +744,12 @@ def export_products_csv() -> str:
                 **base,
                 "taglia": variant.size or "",
                 "colore": variant.color or "",
-                "prezzo": f"{variant.price:.2f}",
+                "prezzo": _decimal_to_csv(variant.price),
                 "scorte": str(variant.stock_quantity),
                 "sku_variante": variant.sku,
-                "prezzo_scontato": f"{variant.sale_price:.2f}" if variant.sale_price is not None else "",
+                "prezzo_scontato": _decimal_to_csv(variant.sale_price)
+                if variant.sale_price is not None
+                else "",
             })
     return buffer.getvalue()
 

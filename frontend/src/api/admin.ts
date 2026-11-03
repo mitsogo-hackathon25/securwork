@@ -73,7 +73,30 @@ export type CsvImportResult = {
   created_variants: number
 }
 
-const downloadCsvBlob = (blob: Blob, filename: string) => {
+const downloadCsvBlob = async (blob: Blob, filename: string) => {
+  if (blob.size === 0) {
+    throw new Error('The CSV file is empty.')
+  }
+
+  if (blob.type.toLowerCase().includes('json')) {
+    const text = await blob.text()
+    try {
+      const payload = JSON.parse(text) as { detail?: string }
+      throw new Error(payload.detail || 'CSV download failed.')
+    } catch (err) {
+      if (err instanceof Error && err.message !== 'CSV download failed.') {
+        throw err
+      }
+      throw new Error('CSV download failed.')
+    }
+  }
+
+  const head = await blob.slice(0, 512).text()
+  const sample = head.trimStart().replace(/^\ufeff/, '')
+  if (sample.startsWith('{') || sample.startsWith('<!DOCTYPE') || sample.startsWith('<html')) {
+    throw new Error('CSV download failed. Sign in to admin and try again.')
+  }
+
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
