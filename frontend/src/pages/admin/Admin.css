@@ -292,6 +292,12 @@
   transition: width 0.2s ease;
 }
 
+.admin-import-selected-summary {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .admin-import-progress-meta {
   display: inline-block;
   margin-top: 0.35rem;

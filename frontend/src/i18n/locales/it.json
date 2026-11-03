@@ -512,6 +512,8 @@
     "nextSelectValues": "Avanti: scegli valori",
     "backToColumns": "Indietro",
     "importSelectedValues": "Importa selezionati",
+    "selectedImportSummary": "{{products}} prodotti selezionati · {{rows}} righe variante",
+    "selectedImportCounting": "Conteggio prodotti selezionati…",
     "brandModalTitle": "Seleziona marche da importare",
     "brandModalHint": "File: {{file}}. Marche trovate nel CSV con conteggio prodotti padre e righe varianti.",
     "selectAllBrands": "Seleziona tutte",

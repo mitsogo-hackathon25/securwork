@@ -276,22 +276,40 @@ export function importProductsCsvWithProgress(
       }
     }
 
-    xhr.upload.onprogress = (e) => {
-      if (!onUploadProgress || !e.lengthComputable) return
-      onUploadProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
-    }
-
-    xhr.onprogress = () => {
+    const drainResponse = () => {
       const chunk = xhr.responseText.slice(lastParsedIndex)
+      if (!chunk) return
       lastParsedIndex = xhr.responseText.length
       buffer += chunk
       consumeBuffer()
     }
 
+    xhr.upload.onprogress = (e) => {
+      if (!onUploadProgress || !e.lengthComputable) return
+      onUploadProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+    }
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState >= 3) drainResponse()
+    }
+
+    xhr.onprogress = () => {
+      drainResponse()
+    }
+
+    const pollId = window.setInterval(() => {
+      if (xhr.readyState >= 4) {
+        window.clearInterval(pollId)
+        return
+      }
+      if (xhr.readyState >= 3) drainResponse()
+    }, 400)
+
+    const stopPoll = () => window.clearInterval(pollId)
+
     xhr.onload = () => {
-      buffer += xhr.responseText.slice(lastParsedIndex)
-      lastParsedIndex = xhr.responseText.length
-      consumeBuffer()
+      stopPoll()
+      drainResponse()
       if (settled) return
       if (xhr.status === 0) {
         failImport(
@@ -330,6 +348,7 @@ export function importProductsCsvWithProgress(
     }
 
     xhr.onerror = () => {
+      stopPoll()
       if (xhr.status === 413) {
         failImport(
           'File troppo grande per il limite upload (HTTP 413). Imposta nginx client_max_body_size 256M.',
@@ -342,8 +361,14 @@ export function importProductsCsvWithProgress(
         + 'Se status (failed) o 524: aumenta timeout nginx/gunicorn o usa filtro colonna.',
       )
     }
-    xhr.ontimeout = () => failImport('Timeout durante l\'import CSV.')
-    xhr.onabort = () => failImport('Import CSV annullato.')
+    xhr.ontimeout = () => {
+      stopPoll()
+      failImport('Timeout durante l\'import CSV.')
+    }
+    xhr.onabort = () => {
+      stopPoll()
+      failImport('Import CSV annullato.')
+    }
     xhr.send(form)
   }))
 }

@@ -254,6 +254,49 @@ export async function scanCsvColumnsFromFile(file: File): Promise<CsvScanColumn[
   return preview.columns
 }
 
+export async function countSelectedImportProducts(
+  file: File,
+  columnKey: string,
+  selectedKeys: string[],
+): Promise<{ productCount: number; rowCount: number }> {
+  if (selectedKeys.length === 0) {
+    return { productCount: 0, rowCount: 0 }
+  }
+  const selected = new Set(selectedKeys)
+  const text = await fileToCsvText(file)
+  const { rawHeaders, normHeaders, rows } = parseCsvTable(text)
+  const productSkus = new Set<string>()
+  let rowCount = 0
+
+  for (const cells of rows) {
+    const row = rowFromRecord(rawHeaders, normHeaders, cells)
+    if (!rowHasIdentity(row)) continue
+    const rawVal = columnCellRaw(row, columnKey)
+    const key = rawVal ? canonicalFilterKey(rawVal) : BRAND_FILTER_NONE
+    if (!selected.has(key)) continue
+    rowCount += 1
+    const sku = (row.sku_prodotto || row.sku_variante || '').toLowerCase()
+    if (sku) productSkus.add(sku)
+  }
+
+  return { productCount: productSkus.size, rowCount }
+}
+
+export function sumSelectedValueStats(
+  options: CsvScanValue[],
+  selectedKeys: string[],
+): { productCount: number; rowCount: number } {
+  const selected = new Set(selectedKeys)
+  let rowCount = 0
+  let productCount = 0
+  for (const option of options) {
+    if (!selected.has(option.key)) continue
+    rowCount += option.row_count
+    productCount += option.product_count
+  }
+  return { productCount, rowCount }
+}
+
 export async function scanCsvColumnValuesFromFile(
   file: File,
   columnKey: string,

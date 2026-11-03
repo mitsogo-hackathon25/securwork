@@ -22,6 +22,7 @@ import {
 import {
   CSV_IMPORT_ALL,
   CSV_FILTER_NONE,
+  countSelectedImportProducts,
   scanCsvColumnValuesFromFile,
   scanCsvImportPreview,
 } from '../../utils/csvImportScan'
@@ -59,6 +60,11 @@ export default function AdminProductsPage() {
     totalDataRows: number
     importableRows: number
   } | null>(null)
+  const [selectedImportStats, setSelectedImportStats] = useState<{
+    productCount: number
+    rowCount: number
+  } | null>(null)
+  const [selectedImportStatsLoading, setSelectedImportStatsLoading] = useState(false)
 
   const resetImportModalState = () => {
     setImportModalStep('column')
@@ -67,7 +73,45 @@ export default function AdminProductsPage() {
     setImportValueOptions([])
     setImportValueSelected([])
     setImportCsvStats(null)
+    setSelectedImportStats(null)
   }
+
+  useEffect(() => {
+    if (
+      importModalStep !== 'values'
+      || !pendingImportFile
+      || !importColumnSelected
+      || importColumnSelected === CSV_IMPORT_ALL
+    ) {
+      setSelectedImportStats(null)
+      return
+    }
+    if (importValueSelected.length === 0) {
+      setSelectedImportStats({ productCount: 0, rowCount: 0 })
+      return
+    }
+    let cancelled = false
+    setSelectedImportStatsLoading(true)
+    void countSelectedImportProducts(
+      pendingImportFile,
+      importColumnSelected,
+      importValueSelected,
+    )
+      .then((stats) => {
+        if (!cancelled) setSelectedImportStats(stats)
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedImportStatsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    importModalStep,
+    pendingImportFile,
+    importColumnSelected,
+    importValueSelected,
+  ])
 
   useEffect(() => {
     const onLanguageChanged = () => {
@@ -121,9 +165,31 @@ export default function AdminProductsPage() {
   }
 
   const importProgressPercent = (() => {
-    if (!importProgress?.total || importProgress.total <= 0) return 0
+    if (!importProgress) return 0
+    if (importProgress.phase === 'done') return 100
+    if (!importProgress.total || importProgress.total <= 0) return 0
     const current = importProgress.current ?? 0
-    return Math.min(100, Math.round((current / importProgress.total) * 100))
+    const pct = Math.round((current / importProgress.total) * 100)
+    if (current <= 0) return 0
+    return Math.min(100, Math.max(2, pct))
+  })()
+
+  const importProgressMeta = (() => {
+    if (!importProgress) return ''
+    const current = importProgress.current ?? 0
+    if (importProgress.phase === 'uploading' && importProgress.total === 100) {
+      return `${current}%`
+    }
+    if (importProgress.total && importProgress.total > 0) {
+      const suffix =
+        importProgress.phase === 'validating'
+          ? t('adminProducts.progressRows')
+          : importProgress.phase === 'importing'
+            ? t('adminProducts.progressProducts')
+            : ''
+      return `${current.toLocaleString()} / ${importProgress.total.toLocaleString()}${suffix}`
+    }
+    return ''
   })()
 
   const deactivateProduct = async (id: number, name: string) => {
@@ -470,7 +536,7 @@ export default function AdminProductsPage() {
             </div>
           </div>
         )}
-        {(importing || importProgress?.phase === 'done') && importProgress && (
+        {importing && importProgress && (
           <div className="admin-import-progress" aria-live="polite">
             <div className="admin-import-progress-label">
               {importProgress.message || t('adminProducts.importInProgress')}
@@ -484,13 +550,14 @@ export default function AdminProductsPage() {
                 style={{ width: `${importProgressPercent}%` }}
               />
             </div>
-            {importProgress.total ? (
-              <span className="admin-import-progress-meta">
-                {importProgress.current ?? 0} / {importProgress.total}
-                {importProgress.phase === 'validating' ? t('adminProducts.progressRows') : ''}
-                {importProgress.phase === 'importing' ? t('adminProducts.progressProducts') : ''}
-              </span>
+            {importProgressMeta ? (
+              <span className="admin-import-progress-meta">{importProgressMeta}</span>
             ) : null}
+          </div>
+        )}
+        {!importing && importProgress?.phase === 'done' && importProgress && (
+          <div className="admin-import-progress admin-import-progress--done" aria-live="polite">
+            <div className="admin-import-progress-label">{importProgress.message}</div>
           </div>
         )}
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
@@ -755,6 +822,14 @@ export default function AdminProductsPage() {
                     {t('adminProducts.deselectAllValues')}
                   </button>
                 </div>
+                <p className="admin-import-selected-summary" aria-live="polite">
+                  {selectedImportStatsLoading
+                    ? t('adminProducts.selectedImportCounting')
+                    : t('adminProducts.selectedImportSummary', {
+                      products: (selectedImportStats?.productCount ?? 0).toLocaleString(),
+                      rows: (selectedImportStats?.rowCount ?? 0).toLocaleString(),
+                    })}
+                </p>
                 <ul className="admin-import-brand-list">
                   {importValueOptions.map((value) => (
                     <li key={value.key}>

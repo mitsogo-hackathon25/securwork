@@ -512,6 +512,8 @@
     "nextSelectValues": "Next: choose values",
     "backToColumns": "Back",
     "importSelectedValues": "Import selected",
+    "selectedImportSummary": "{{products}} products selected · {{rows}} variant rows",
+    "selectedImportCounting": "Counting selected products…",
     "brandModalTitle": "Select brands to import",
     "brandModalHint": "File: {{file}}. Brands found in the CSV with parent product and variant row counts.",
     "selectAllBrands": "Select all",
