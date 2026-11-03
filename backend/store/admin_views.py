@@ -689,11 +689,31 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             thread = threading.Thread(target=run_parse, daemon=True)
             thread.start()
             while True:
-                item = progress_queue.get()
+                try:
+                    item = progress_queue.get(timeout=20)
+                except queue.Empty:
+                    yield self._ndjson_line({
+                        "phase": "validating",
+                        "message": "Validazione CSV in corso…",
+                    })
+                    continue
                 if item is None:
                     break
                 yield self._ndjson_line(item)
-            thread.join()
+            thread.join(timeout=600)
+            if thread.is_alive():
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Validazione CSV troppo lenta o interrotta. Riduci il file o usa un filtro colonna.",
+                    "errors": [{
+                        "row": 0,
+                        "field": "file",
+                        "message": "Timeout validazione CSV.",
+                    }],
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
 
             parsed_rows = parsed_holder[0] if parsed_holder else []
             errors = errors_holder[0] if errors_holder else []

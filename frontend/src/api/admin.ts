@@ -1,5 +1,6 @@
 import api from './client'
 import { buildCsvUploadForm } from './csvUpload'
+import i18n from '../i18n'
 import { postMultipartJson } from './multipartPost'
 import { readBlobApiDetail } from '../utils/formatApiError'
 import { sortByName } from '../utils/sortCategories'
@@ -215,17 +216,26 @@ export function importProductsCsvWithProgress(
       }
     : undefined).then((form) => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/admin/products/import_csv_stream/')
+    const qs = new URLSearchParams({ lang: i18n.language })
+    xhr.open('POST', `/api/admin/products/import_csv_stream/?${qs.toString()}`)
     xhr.withCredentials = true
+    xhr.timeout = 0
 
     const token = localStorage.getItem('access_token')
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     }
+    xhr.setRequestHeader('Accept', 'application/json')
 
     let lastParsedIndex = 0
     let buffer = ''
     let settled = false
+
+    const failImport = (message: string) => {
+      if (settled) return
+      settled = true
+      reject(new Error(message))
+    }
 
     const consumeBuffer = () => {
       const lines = buffer.split('\n')
@@ -283,18 +293,19 @@ export function importProductsCsvWithProgress(
       lastParsedIndex = xhr.responseText.length
       consumeBuffer()
       if (settled) return
+      if (xhr.status === 0) {
+        failImport(
+          'Connessione interrotta durante l\'import CSV. '
+          + 'Spesso è un timeout (nginx, Cloudflare ~100s, o gunicorn). '
+          + 'Sul server: proxy_read_timeout 600s, gunicorn --timeout 600, client_max_body_size 256M. '
+          + 'Prova un filtro colonna per importare meno righe.',
+        )
+        return
+      }
       if (xhr.status >= 200 && xhr.status < 300) {
-        reject(
-          Object.assign(new Error('Import terminato senza conferma dal server.'), {
-            response: {
-              data: {
-                detail:
-                  'Import terminato senza conferma dal server. '
-                  + 'Riprova: se il file è molto grande attendi il completamento o riduci il filtro.',
-                errors: [],
-              },
-            },
-          }),
+        failImport(
+          'Import terminato senza conferma dal server. '
+          + 'Riprova: se il file è molto grande attendi il completamento o riduci il filtro.',
         )
         return
       }
@@ -306,6 +317,7 @@ export function importProductsCsvWithProgress(
       try {
         const parsed = JSON.parse(xhr.responseText) as { detail?: string; errors?: CsvImportError[] }
         if (parsed.detail) detail = parsed.detail
+        settled = true
         reject(
           Object.assign(new Error(detail), {
             response: { data: parsed },
@@ -313,11 +325,25 @@ export function importProductsCsvWithProgress(
         )
         return
       } catch {
-        reject(new Error(detail))
+        failImport(detail)
       }
     }
 
-    xhr.onerror = () => reject(new Error('Errore di rete durante l\'import CSV.'))
+    xhr.onerror = () => {
+      if (xhr.status === 413) {
+        failImport(
+          'File troppo grande per il limite upload (HTTP 413). Imposta nginx client_max_body_size 256M.',
+        )
+        return
+      }
+      failImport(
+        'Errore di rete durante l\'import CSV. '
+        + 'Controlla in DevTools → Network la richiesta import_csv_stream. '
+        + 'Se status (failed) o 524: aumenta timeout nginx/gunicorn o usa filtro colonna.',
+      )
+    }
+    xhr.ontimeout = () => failImport('Timeout durante l\'import CSV.')
+    xhr.onabort = () => failImport('Import CSV annullato.')
     xhr.send(form)
   }))
 }
