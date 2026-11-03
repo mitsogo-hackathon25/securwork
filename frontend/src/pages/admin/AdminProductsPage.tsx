@@ -19,7 +19,12 @@ import {
   type CsvImportProgressEvent,
   type CsvImportValueOption,
 } from '../../api/admin'
-import { scanCsvColumnValuesFromFile, scanCsvColumnsFromFile } from '../../utils/csvImportScan'
+import {
+  CSV_IMPORT_ALL,
+  CSV_FILTER_NONE,
+  scanCsvColumnValuesFromFile,
+  scanCsvImportPreview,
+} from '../../utils/csvImportScan'
 import { formatPrice } from '../../utils/format'
 import { formatApiError, formatClientError } from '../../utils/formatApiError'
 import './Admin.css'
@@ -50,6 +55,10 @@ export default function AdminProductsPage() {
   const [importValueOptions, setImportValueOptions] = useState<CsvImportValueOption[]>([])
   const [importValueSelected, setImportValueSelected] = useState<string[]>([])
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
+  const [importCsvStats, setImportCsvStats] = useState<{
+    totalDataRows: number
+    importableRows: number
+  } | null>(null)
 
   const resetImportModalState = () => {
     setImportModalStep('column')
@@ -57,6 +66,7 @@ export default function AdminProductsPage() {
     setImportColumnSelected(null)
     setImportValueOptions([])
     setImportValueSelected([])
+    setImportCsvStats(null)
   }
 
   useEffect(() => {
@@ -196,7 +206,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  const runCsvImport = async (file: File, columnFilter: CsvImportColumnFilter) => {
+  const runCsvImport = async (file: File, columnFilter?: CsvImportColumnFilter) => {
     setImporting(true)
     setImportSuccess('')
     setImportErrors([])
@@ -249,10 +259,13 @@ export default function AdminProductsPage() {
     setPendingImportFile(file)
     resetImportModalState()
     try {
-      const columns = await scanCsvColumnsFromFile(file)
-      setImportColumnOptions(columns)
-      const marca = columns.find((c) => c.key === 'marca' || c.key === 'merceologica')
-      setImportColumnSelected(marca?.key ?? columns[0]?.key ?? null)
+      const preview = await scanCsvImportPreview(file)
+      setImportColumnOptions(preview.columns)
+      setImportCsvStats({
+        totalDataRows: preview.totalDataRows,
+        importableRows: preview.importableRows,
+      })
+      setImportColumnSelected(CSV_IMPORT_ALL)
       setImportModalStep('column')
       setImportModalOpen(true)
     } catch (err: unknown) {
@@ -274,6 +287,10 @@ export default function AdminProductsPage() {
       setImportDetail(t('adminProducts.selectOneColumn'))
       return
     }
+    if (importColumnSelected === CSV_IMPORT_ALL) {
+      setImportDetail(t('adminProducts.useImportAllButton'))
+      return
+    }
     setLoadingColumnValues(true)
     setImportDetail('')
     try {
@@ -292,6 +309,14 @@ export default function AdminProductsPage() {
     setImportValueSelected((prev) => (
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     ))
+  }
+
+  const confirmImportAll = async () => {
+    if (!pendingImportFile) return
+    const file = pendingImportFile
+    setImportModalOpen(false)
+    resetImportModalState()
+    await runCsvImport(file)
   }
 
   const confirmColumnImport = async () => {
@@ -670,8 +695,33 @@ export default function AdminProductsPage() {
                     ?? '',
                 })}
             </p>
+            {importModalStep === 'column' && importCsvStats && (
+              <p className="admin-import-row-stats">
+                {t('adminProducts.csvRowsDetected', {
+                  total: importCsvStats.totalDataRows.toLocaleString(),
+                  importable: importCsvStats.importableRows.toLocaleString(),
+                })}
+              </p>
+            )}
             {importModalStep === 'column' ? (
               <ul className="admin-import-brand-list">
+                <li key={CSV_IMPORT_ALL}>
+                  <label className="admin-import-brand-option admin-import-brand-option--all">
+                    <input
+                      type="radio"
+                      name="csv-import-column"
+                      checked={importColumnSelected === CSV_IMPORT_ALL}
+                      onChange={() => setImportColumnSelected(CSV_IMPORT_ALL)}
+                    />
+                    <span className="admin-import-brand-name">{t('adminProducts.importAllProducts')}</span>
+                    <span className="admin-import-brand-meta">
+                      {t('adminProducts.importAllProductsHint')}
+                    </span>
+                  </label>
+                </li>
+                <li className="admin-import-list-divider" aria-hidden="true">
+                  {t('adminProducts.orFilterByColumn')}
+                </li>
                 {importColumnOptions.map((col) => (
                   <li key={col.key}>
                     <label className="admin-import-brand-option">
@@ -715,8 +765,8 @@ export default function AdminProductsPage() {
                           onChange={() => toggleImportValue(value.key)}
                         />
                         <span className="admin-import-brand-name">
-                          {value.key === '__none__'
-                            ? t('adminProducts.filterValueEmpty')
+                          {value.key === CSV_FILTER_NONE
+                            ? t('adminProducts.filterValueNull')
                             : value.name}
                         </span>
                         <span className="admin-import-brand-meta">
@@ -735,14 +785,25 @@ export default function AdminProductsPage() {
                 {t('adminCommon.cancel')}
               </button>
               {importModalStep === 'column' ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={!importColumnSelected || loadingColumnValues}
-                  onClick={() => void goToValueStep()}
-                >
-                  {loadingColumnValues ? t('adminProducts.loadingValues') : t('adminProducts.nextSelectValues')}
-                </button>
+                importColumnSelected === CSV_IMPORT_ALL ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={importing}
+                    onClick={() => void confirmImportAll()}
+                  >
+                    {importing ? t('adminProducts.importInProgress') : t('adminProducts.startImportAll')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!importColumnSelected || loadingColumnValues}
+                    onClick={() => void goToValueStep()}
+                  >
+                    {loadingColumnValues ? t('adminProducts.loadingValues') : t('adminProducts.nextSelectValues')}
+                  </button>
+                )
               ) : (
                 <>
                   <button

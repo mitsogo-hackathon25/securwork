@@ -220,7 +220,7 @@ def brand_display_name(marca_raw: str) -> str:
 
 def filter_value_display_name(raw: str) -> str:
     cleaned = (raw or "").strip()
-    return cleaned if cleaned else "(vuoto)"
+    return cleaned if cleaned else "Null"
 
 
 def normalize_column_key(raw: str) -> str:

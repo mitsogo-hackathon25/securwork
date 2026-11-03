@@ -12,7 +12,19 @@ export type CsvScanValue = {
   row_count: number
 }
 
-const BRAND_FILTER_NONE = '__none__'
+export type CsvImportPreview = {
+  columns: CsvScanColumn[]
+  totalDataRows: number
+  importableRows: number
+}
+
+/** UI: import entire file without column filter */
+export const CSV_IMPORT_ALL = '__import_all__'
+
+/** Matches backend BRAND_FILTER_NONE — empty / missing column cell */
+export const CSV_FILTER_NONE = '__none__'
+
+const BRAND_FILTER_NONE = CSV_FILTER_NONE
 
 const HEADER_ALIASES: Record<string, string> = {
   codice_padre: 'sku_prodotto',
@@ -189,18 +201,13 @@ function rowHasIdentity(row: Record<string, string>): boolean {
   return Boolean(name && row.prezzo)
 }
 
-function filterDisplayName(raw: string): string {
+function filterDisplayName(raw: string, key: string): string {
+  if (key === BRAND_FILTER_NONE) return 'Null'
   const cleaned = raw.trim()
-  return cleaned || '(vuoto)'
+  return cleaned || 'Null'
 }
 
-export async function scanCsvColumnsFromFile(file: File): Promise<CsvScanColumn[]> {
-  const text = await fileToCsvText(file)
-  const { rawHeaders, normHeaders } = parseCsvTable(text)
-  if (!rawHeaders.length) {
-    throw new Error('Il CSV non ha una riga di intestazione.')
-  }
-
+function buildColumnList(rawHeaders: string[], normHeaders: string[]): CsvScanColumn[] {
   const columns: CsvScanColumn[] = []
   const seen = new Set<string>()
   for (let i = 0; i < rawHeaders.length; i += 1) {
@@ -210,16 +217,41 @@ export async function scanCsvColumnsFromFile(file: File): Promise<CsvScanColumn[
     const label = (rawHeaders[i] || '').trim() || norm
     columns.push({ key: norm, label })
   }
-
   if (isSupplierFormat(normHeaders) && !seen.has('marca')) {
     columns.push({ key: 'marca', label: 'marca (ricavata dal listino)' })
   }
-
   columns.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  return columns
+}
+
+export async function scanCsvImportPreview(file: File): Promise<CsvImportPreview> {
+  const text = await fileToCsvText(file)
+  const { rawHeaders, normHeaders, rows } = parseCsvTable(text)
+  if (!rawHeaders.length) {
+    throw new Error('Il CSV non ha una riga di intestazione.')
+  }
+
+  let importableRows = 0
+  for (const cells of rows) {
+    const row = rowFromRecord(rawHeaders, normHeaders, cells)
+    if (rowHasIdentity(row)) importableRows += 1
+  }
+
+  const columns = buildColumnList(rawHeaders, normHeaders)
   if (!columns.length) {
     throw new Error('Nessuna colonna riconosciuta nella prima riga del CSV.')
   }
-  return columns
+
+  return {
+    columns,
+    totalDataRows: rows.length,
+    importableRows,
+  }
+}
+
+export async function scanCsvColumnsFromFile(file: File): Promise<CsvScanColumn[]> {
+  const preview = await scanCsvImportPreview(file)
+  return preview.columns
 }
 
 export async function scanCsvColumnValuesFromFile(
@@ -241,7 +273,7 @@ export async function scanCsvColumnValuesFromFile(
     if (!rowHasIdentity(row)) continue
     const rawVal = columnCellRaw(row, columnKey)
     const key = rawVal ? canonicalFilterKey(rawVal) : BRAND_FILTER_NONE
-    if (!(key in labels)) labels[key] = filterDisplayName(rawVal)
+    if (!(key in labels)) labels[key] = filterDisplayName(rawVal, key)
     const productSku = (row.sku_prodotto || row.sku_variante || '').toLowerCase()
     if (!productIds[key]) productIds[key] = new Set()
     if (productSku) productIds[key].add(productSku)
@@ -254,7 +286,11 @@ export async function scanCsvColumnValuesFromFile(
   }
 
   return keys
-    .sort((a, b) => labels[a].localeCompare(labels[b], undefined, { sensitivity: 'base' }))
+    .sort((a, b) => {
+      if (a === BRAND_FILTER_NONE) return -1
+      if (b === BRAND_FILTER_NONE) return 1
+      return labels[a].localeCompare(labels[b], undefined, { sensitivity: 'base' })
+    })
     .map((key) => ({
       key,
       name: labels[key],
