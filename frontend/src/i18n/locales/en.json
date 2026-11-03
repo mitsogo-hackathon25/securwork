@@ -490,6 +490,7 @@
     "restoreDemoCatalog": "Restore demo catalog",
     "restoreDemoError": "Could not restore demo catalog.",
     "readColumnsError": "Could not read CSV columns.",
+    "readColumnValuesError": "Could not read values from the selected column.",
     "scanningCsv": "Reading CSV…",
     "columnModalTitle": "Choose a column",
     "columnModalHint": "File: {{file}}. Select exactly one column; the next step lists distinct values in that column.",

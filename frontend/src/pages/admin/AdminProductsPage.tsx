@@ -283,7 +283,7 @@ export default function AdminProductsPage() {
       setImportValueSelected(values.map((v) => v.key))
       setImportModalStep('values')
     } catch (err: unknown) {
-      setImportDetail(formatApiError(err, 'Impossibile leggere i valori dalla colonna.'))
+      setImportDetail(formatClientError(err, t('adminProducts.readColumnValuesError')))
     } finally {
       setLoadingColumnValues(false)
     }

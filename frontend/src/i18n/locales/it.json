@@ -490,6 +490,7 @@
     "restoreDemoCatalog": "Ripristina catalogo demo",
     "restoreDemoError": "Impossibile ripristinare il catalogo demo.",
     "readColumnsError": "Impossibile leggere le colonne dal CSV.",
+    "readColumnValuesError": "Impossibile leggere i valori dalla colonna.",
     "scanningCsv": "Lettura CSV…",
     "columnModalTitle": "Scegli una colonna",
     "columnModalHint": "File: {{file}}. Seleziona una sola colonna; al passo successivo vedrai i valori distinti.",

@@ -85,6 +85,12 @@ api.interceptors.request.use((config) => {
   }
   if (!config.params) config.params = {}
   config.params.lang = i18n.language
+  // Let the browser set multipart boundary (manual Content-Type breaks CSV uploads).
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (config.headers && 'Content-Type' in config.headers) {
+      delete config.headers['Content-Type']
+    }
+  }
   return config
 })
 

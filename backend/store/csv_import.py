@@ -23,7 +23,15 @@ ALLOWED_CSV_UPLOAD_SUFFIXES = (".csv", ".txt", ".tsv")
 
 def csv_upload_filename_ok(filename: str) -> bool:
     lower = (filename or "").lower().strip()
-    return any(lower.endswith(suffix) for suffix in ALLOWED_CSV_UPLOAD_SUFFIXES)
+    if any(lower.endswith(suffix) for suffix in ALLOWED_CSV_UPLOAD_SUFFIXES):
+        return True
+    blocked = (".xlsx", ".xls", ".pdf", ".zip")
+    if any(lower.endswith(suffix) for suffix in blocked):
+        return False
+    base = lower.rsplit("/", 1)[-1]
+    if "." not in base:
+        return True
+    return False
 
 
 def _existing_product_names_it() -> set[str]:
@@ -1228,18 +1236,55 @@ def _guess_csv_delimiter(header_line: str) -> str:
     return ","
 
 
-def _csv_reader(text: str) -> csv.DictReader:
-    sample = text[:8192]
-    dialect = None
+def _prepare_csv_text(text: str) -> str:
+    if not text:
+        return text
+    if text.startswith("\ufeff"):
+        text = text.lstrip("\ufeff")
+    lines = text.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return ""
+    return "\n".join(lines) + "\n"
+
+
+def _delimiter_field_count(line: str, delimiter: str) -> int:
     try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
-    except csv.Error:
-        pass
-    if dialect is None:
-        dialect = csv.excel
-        first_line = sample.splitlines()[0] if sample else ""
-        dialect.delimiter = _guess_csv_delimiter(first_line)
-    return csv.DictReader(io.StringIO(text), dialect=dialect)
+        return len(next(csv.reader([line], delimiter=delimiter)))
+    except (csv.Error, StopIteration):
+        return 0
+
+
+def _pick_csv_delimiter(text: str) -> str:
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return ","
+    header = lines[0]
+    best_delim = ","
+    best_count = 0
+    for delim in ("\t", ";", ",", "|"):
+        count = _delimiter_field_count(header, delim)
+        if count > best_count:
+            best_count = count
+            best_delim = delim
+    if best_count > 1:
+        return best_delim
+    return _guess_csv_delimiter(header)
+
+
+def _csv_reader(text: str) -> csv.DictReader:
+    text = _prepare_csv_text(text)
+    sample = text[:8192]
+    first_line = sample.splitlines()[0] if sample else ""
+    delimiter = _pick_csv_delimiter(text)
+    if _delimiter_field_count(first_line, delimiter) <= 1:
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+            delimiter = dialect.delimiter
+        except csv.Error:
+            pass
+    return csv.DictReader(io.StringIO(text), delimiter=delimiter)
 
 
 def _supplier_price_raw(row: dict) -> str:

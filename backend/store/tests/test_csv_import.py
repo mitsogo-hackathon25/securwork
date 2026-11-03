@@ -15,6 +15,7 @@ from store.csv_import import (
     scan_csv_brands,
     scan_csv_column_values,
     scan_csv_columns,
+    SUPPLIER_EXPORT_HEADERS,
 )
 from store.models import Category, Product, ProductVariant
 
@@ -263,8 +264,20 @@ P2;P2-L;Polo 2;Nero;L;12,50
         columns, errors = scan_csv_columns(raw)
         self.assertEqual(errors, [], errors)
         keys = {c["key"] for c in columns}
-        self.assertIn("codice_padre", keys)
+        self.assertIn("sku_prodotto", keys)
         self.assertIn("merceologica", keys)
+
+    def test_scan_csv_columns_supplier_tab_export(self):
+        header = SUPPLIER_EXPORT_HEADERS
+        row = "\t".join(header)
+        csv_text = row + "\r\nP1\tPayper\tPolo\t\tP1-M\t\t0\tBlu\tM\tPolo\t\t\t\t\t10,00\t\t\r\n"
+        columns, errors = scan_csv_columns(csv_text.encode("utf-8-sig"))
+        self.assertEqual(errors, [], errors)
+        keys = {c["key"] for c in columns}
+        self.assertIn("merceologica", keys)
+        self.assertIn("prezzo_unico", keys)
+        labels = {c["key"]: c["label"] for c in columns}
+        self.assertEqual(labels.get("sku_prodotto"), "Codice Padre")
 
     def test_scan_csv_columns_lists_headers(self):
         csv_text = """Codice Padre;Merceologica;Categoria;SKU;Colore;Taglia;Descrizione;Prezzo Unico

@@ -143,9 +143,7 @@ export const importProductsCsv = (file: File) => {
   const form = new FormData()
   form.append('file', file)
   return api
-    .post<CsvImportResult>('/admin/products/import_csv/', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    .post<CsvImportResult>('/admin/products/import_csv/', form)
     .then((r) => r.data)
 }
 
@@ -185,9 +183,7 @@ export const fetchCsvImportBrands = (file: File) => {
   const form = new FormData()
   form.append('file', file)
   return api
-    .post<{ brands: CsvImportBrandOption[] }>('/admin/products/import_csv_brands/', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    .post<{ brands: CsvImportBrandOption[] }>('/admin/products/import_csv_brands/', form)
     .then((r) => r.data)
 }
 
@@ -195,9 +191,7 @@ export const fetchCsvImportColumns = (file: File) => {
   const form = new FormData()
   form.append('file', file)
   return api
-    .post<{ columns: CsvImportColumnOption[] }>('/admin/products/import_csv_columns/', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    .post<{ columns: CsvImportColumnOption[] }>('/admin/products/import_csv_columns/', form)
     .then((r) => r.data)
 }
 
@@ -209,7 +203,6 @@ export const fetchCsvImportColumnValues = (file: File, column: string) => {
     .post<{ column: string; values: CsvImportValueOption[] }>(
       '/admin/products/import_csv_column_values/',
       form,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     )
     .then((r) => r.data)
 }
@@ -402,9 +395,7 @@ export const uploadProductImage = (productId: number, file: File, isPrimary = fa
   const form = new FormData()
   form.append('image', file)
   form.append('is_primary', String(isPrimary))
-  return api.post(`/admin/products/${productId}/upload_image/`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).then((r) => r.data)
+  return api.post(`/admin/products/${productId}/upload_image/`, form).then((r) => r.data)
 }
 
 export const addProductImageUrl = (productId: number, imageUrl: string, isPrimary = false) =>
@@ -422,9 +413,7 @@ export const setPrimaryImage = (productId: number, imageId: number) =>
 export const uploadProductMockup = (productId: number, file: File) => {
   const form = new FormData()
   form.append('mockup_front', file)
-  return api.post<AdminProduct>(`/admin/products/${productId}/upload_mockup/`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).then((r) => r.data)
+  return api.post<AdminProduct>(`/admin/products/${productId}/upload_mockup/`, form).then((r) => r.data)
 }
 
 export const removeProductMockup = (productId: number) =>
