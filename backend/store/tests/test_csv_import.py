@@ -267,6 +267,34 @@ P2;P2-L;Polo 2;Nero;L;12,50
         self.assertIn("sku_prodotto", keys)
         self.assertIn("merceologica", keys)
 
+    def test_scan_csv_columns_short_supplier_headers(self):
+        """Listino with Arrivo / Prezzo (not In Arrivo / Prezzo Unico)."""
+        header = (
+            "Codice Padre;Merceologica;Categoria;SCategoria;SKU;EAN;Arrivo;Colore;Taglia;"
+            "Descrizione;Foto;Unico;Confezione;Imballo;Prezzo;Prezzo Confezione;Prezzo Imballo"
+        )
+        csv_text = header + "\nP1;Payper;Polo;Maglieria;P1-M;123;0;Blu;M;Polo test;;1;;;10,50;;\n"
+        columns, errors = scan_csv_columns(csv_text.encode("utf-8"))
+        self.assertEqual(errors, [], errors)
+        keys = {c["key"] for c in columns}
+        labels = {c["key"]: c["label"] for c in columns}
+        self.assertIn("merceologica", keys)
+        self.assertIn("in_arrivo", keys)
+        self.assertEqual(labels.get("in_arrivo"), "Arrivo")
+        self.assertIn("prezzo", keys)
+        self.assertEqual(labels.get("prezzo"), "Prezzo")
+        self.assertEqual(labels.get("sku_prodotto"), "Codice Padre")
+
+    def test_parse_short_supplier_headers(self):
+        header = (
+            "Codice Padre;Merceologica;Categoria;SCategoria;SKU;EAN;Arrivo;Colore;Taglia;"
+            "Descrizione;Foto;Unico;Confezione;Imballo;Prezzo;Prezzo Confezione;Prezzo Imballo"
+        )
+        csv_text = header + "\nP1;Payper;Polo;Maglieria;P1-M;123;5;Blu;M;Polo test;;1;;;10,50;;\n"
+        rows, errors = parse_and_validate_csv(csv_text.encode("utf-8"))
+        self.assertEqual(errors, [], errors)
+        self.assertEqual(len(rows), 1)
+
     def test_scan_csv_columns_supplier_tab_export(self):
         header = SUPPLIER_EXPORT_HEADERS
         row = "\t".join(header)

@@ -650,10 +650,17 @@ HEADER_ALIASES = {
     "riferimento": "sku_variante",
     "ref": "sku_variante",
     "in_arrivo": "in_arrivo",
+    "arrivo": "in_arrivo",
+    "in_arrivo_qty": "in_arrivo",
+    "unico": "unico",
+    "confezione": "confezione",
+    "imballo": "imballo",
 }
 
 SUPPLIER_FORMAT_MARKERS = {
-    "codice_padre",
+    "sku_prodotto",
+    "sku_variante",
+    "prezzo",
     "prezzo_unico",
     "prezzo_confezione",
     "prezzo_imballo",
@@ -878,7 +885,16 @@ def _is_supplier_format(headers: list[str], raw_headers: list[str] | None = None
     if header_set & SUPPLIER_FORMAT_MARKERS:
         return True
     raw_keys = {_header_key(h) for h in (raw_headers or [])}
-    if raw_keys & {"prezzo_unico", "prezzo_confezione", "prezzo_imballo", "codice_padre"}:
+    if raw_keys & {
+        "prezzo_unico",
+        "prezzo_confezione",
+        "prezzo_imballo",
+        "codice_padre",
+        "arrivo",
+        "in_arrivo",
+    }:
+        return True
+    if "prezzo" in raw_keys and raw_keys & {"codice_padre", "merceologica", "scategoria"}:
         return True
     if raw_keys & {"foto", "immagine", "immagini"} and (
         "sku_variante" in header_set or "sku" in raw_keys
@@ -1629,7 +1645,7 @@ def parse_and_validate_csv(
         if not has_name:
             missing_headers.append("Descrizione")
         if not has_price:
-            missing_headers.append("Prezzo Unico")
+            missing_headers.append("Prezzo o Prezzo Unico")
     else:
         missing_headers = _missing_native_headers(normalized_headers)
     if missing_headers:

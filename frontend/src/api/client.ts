@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosHeaders } from 'axios'
 import i18n from '../i18n'
 import { SESSION_EXPIRED_EVENT, accountUrlWithNext, clearAuthTokens } from '../utils/auth'
 
@@ -85,11 +85,12 @@ api.interceptors.request.use((config) => {
   }
   if (!config.params) config.params = {}
   config.params.lang = i18n.language
-  // Let the browser set multipart boundary (manual Content-Type breaks CSV uploads).
+  // Multipart uploads: drop default application/json so the browser sets boundary.
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-    if (config.headers && 'Content-Type' in config.headers) {
-      delete config.headers['Content-Type']
-    }
+    const headers = AxiosHeaders.from(config.headers)
+    headers.delete('Content-Type')
+    headers.delete('content-type')
+    config.headers = headers
   }
   return config
 })
