@@ -39,6 +39,7 @@ from .csv_import import (
     iter_import_parsed_rows,
     normalize_column_key,
     parse_and_validate_csv,
+    read_csv_upload_bytes,
     scan_csv_brands,
     scan_csv_column_values,
     scan_csv_columns,
@@ -500,7 +501,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        brands, errors = scan_csv_brands(upload.read())
+        brands, errors = scan_csv_brands(
+            read_csv_upload_bytes(upload.read(), upload.name or ""),
+        )
         if errors:
             return Response(
                 {
@@ -538,7 +541,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        columns, errors = scan_csv_columns(upload.read())
+        columns, errors = scan_csv_columns(
+            read_csv_upload_bytes(upload.read(), upload.name or ""),
+        )
         if errors:
             return Response(
                 {
@@ -574,7 +579,10 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        values, errors = scan_csv_column_values(upload.read(), str(column))
+        values, errors = scan_csv_column_values(
+            read_csv_upload_bytes(upload.read(), upload.name or ""),
+            str(column),
+        )
         if errors:
             return Response(
                 {
@@ -608,7 +616,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        file_bytes = upload.read()
+        file_bytes = read_csv_upload_bytes(upload.read(), upload.name or "")
         estimated_rows = max(1, file_bytes.count(b"\n") - 1)
         column_value_filter = _parse_column_value_filter(request)
         brand_keys_filter = _parse_brand_keys_filter(request)
@@ -800,7 +808,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             )
 
         parsed_rows, errors = parse_and_validate_csv(
-            upload.read(),
+            read_csv_upload_bytes(upload.read(), upload.name or ""),
             brand_keys_filter=brand_keys_filter,
             column_value_filter=column_value_filter,
         )

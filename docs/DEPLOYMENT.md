@@ -120,12 +120,22 @@ npm run build
 
 ## 4. Nginx
 
+**CSV import:** supplier files are often 5–20 MB. Nginx defaults to **1 MB** (`client_max_body_size`), which returns **HTTP 413**. Set **256M** on the server block and on `location /api/`:
+
+```nginx
+client_max_body_size 256M;
+```
+
 ```bash
 cp /var/www/securwork/deploy/nginx/securwork.conf /etc/nginx/sites-available/securwork
 ln -s /etc/nginx/sites-available/securwork /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
+
+**Docker production:** add the same directive to `frontend/nginx.conf` (server + `location /api/`), rebuild the frontend image, and reload nginx inside the container.
+
+The app also **gzip-compresses** CSV on upload and parses columns **in the browser** so the column picker works even before nginx is fixed; the final import still needs gzip to fit a 1 MB limit or nginx raised to **256M**.
 
 ## 5. SSL
 

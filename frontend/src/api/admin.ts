@@ -1,4 +1,5 @@
 import api from './client'
+import { buildCsvUploadForm } from './csvUpload'
 import { postMultipartJson } from './multipartPost'
 import { readBlobApiDetail } from '../utils/formatApiError'
 import { sortByName } from '../utils/sortCategories'
@@ -140,9 +141,8 @@ export const restoreDemoCatalog = () =>
     )
     .then((r) => r.data)
 
-export const importProductsCsv = (file: File) => {
-  const form = new FormData()
-  form.append('file', file)
+export const importProductsCsv = async (file: File) => {
+  const form = await buildCsvUploadForm(file)
   return postMultipartJson<CsvImportResult>('/admin/products/import_csv/', form)
 }
 
@@ -178,28 +178,24 @@ export type CsvImportColumnFilter = {
   values: string[]
 }
 
-export const fetchCsvImportBrands = (file: File) => {
-  const form = new FormData()
-  form.append('file', file, file.name || 'import.csv')
+export const fetchCsvImportBrands = async (file: File) => {
+  const form = await buildCsvUploadForm(file)
   return postMultipartJson<{ brands: CsvImportBrandOption[] }>(
     '/admin/products/import_csv_brands/',
     form,
   )
 }
 
-export const fetchCsvImportColumns = (file: File) => {
-  const form = new FormData()
-  form.append('file', file, file.name || 'import.csv')
+export const fetchCsvImportColumns = async (file: File) => {
+  const form = await buildCsvUploadForm(file)
   return postMultipartJson<{ columns: CsvImportColumnOption[] }>(
     '/admin/products/import_csv_columns/',
     form,
   )
 }
 
-export const fetchCsvImportColumnValues = (file: File, column: string) => {
-  const form = new FormData()
-  form.append('file', file, file.name || 'import.csv')
-  form.append('column', column)
+export const fetchCsvImportColumnValues = async (file: File, column: string) => {
+  const form = await buildCsvUploadForm(file, { column })
   return postMultipartJson<{ column: string; values: CsvImportValueOption[] }>(
     '/admin/products/import_csv_column_values/',
     form,
@@ -212,13 +208,12 @@ export function importProductsCsvWithProgress(
   onUploadProgress?: (percent: number) => void,
   columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportResult> {
-  return new Promise((resolve, reject) => {
-    const form = new FormData()
-    form.append('file', file)
-    if (columnFilter && columnFilter.column && columnFilter.values.length > 0) {
-      form.append('filter_column', columnFilter.column)
-      form.append('filter_values', JSON.stringify(columnFilter.values))
-    }
+  return buildCsvUploadForm(file, columnFilter && columnFilter.column && columnFilter.values.length > 0
+    ? {
+        filter_column: columnFilter.column,
+        filter_values: JSON.stringify(columnFilter.values),
+      }
+    : undefined).then((form) => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/admin/products/import_csv_stream/')
     xhr.withCredentials = true
@@ -304,6 +299,10 @@ export function importProductsCsvWithProgress(
         return
       }
       let detail = xhr.responseText || `HTTP ${xhr.status}`
+      if (xhr.status === 413) {
+        detail =
+          'Upload blocked by server size limit (HTTP 413). Set nginx client_max_body_size 256M on /api/.'
+      }
       try {
         const parsed = JSON.parse(xhr.responseText) as { detail?: string; errors?: CsvImportError[] }
         if (parsed.detail) detail = parsed.detail
@@ -320,7 +319,7 @@ export function importProductsCsvWithProgress(
 
     xhr.onerror = () => reject(new Error('Errore di rete durante l\'import CSV.'))
     xhr.send(form)
-  })
+  }))
 }
 
 export type PriceAdjustResult = {

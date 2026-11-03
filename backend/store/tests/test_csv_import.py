@@ -1,3 +1,5 @@
+import gzip
+
 from decimal import Decimal
 
 from django.test import override_settings
@@ -12,6 +14,7 @@ from store.csv_import import (
     import_parsed_rows,
     normalize_column_key,
     parse_and_validate_csv,
+    read_csv_upload_bytes,
     scan_csv_brands,
     scan_csv_column_values,
     scan_csv_columns,
@@ -266,6 +269,11 @@ P2;P2-L;Polo 2;Nero;L;12,50
         keys = {c["key"] for c in columns}
         self.assertIn("sku_prodotto", keys)
         self.assertIn("merceologica", keys)
+
+    def test_read_csv_upload_gzip(self):
+        raw = b"sku_prodotto,marca\nx,y\n"
+        compressed = gzip.compress(raw)
+        self.assertEqual(read_csv_upload_bytes(compressed, "listino.csv.gz"), raw)
 
     def test_scan_csv_columns_short_supplier_headers(self):
         """Listino with Arrivo / Prezzo (not In Arrivo / Prezzo Unico)."""

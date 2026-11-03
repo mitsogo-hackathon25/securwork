@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import io
 import logging
 import re
@@ -23,6 +24,8 @@ ALLOWED_CSV_UPLOAD_SUFFIXES = (".csv", ".txt", ".tsv")
 
 def csv_upload_filename_ok(filename: str) -> bool:
     lower = (filename or "").lower().strip()
+    if lower.endswith(".gz"):
+        lower = lower[:-3]
     if any(lower.endswith(suffix) for suffix in ALLOWED_CSV_UPLOAD_SUFFIXES):
         return True
     blocked = (".xlsx", ".xls", ".pdf", ".zip")
@@ -32,6 +35,18 @@ def csv_upload_filename_ok(filename: str) -> bool:
     if "." not in base:
         return True
     return False
+
+
+def read_csv_upload_bytes(raw: bytes, filename: str = "") -> bytes:
+    """Accept raw CSV bytes or gzip-compressed uploads (smaller through nginx limits)."""
+    name = (filename or "").lower()
+    if name.endswith(".gz") or (len(raw) >= 2 and raw[:2] == b"\x1f\x8b"):
+        try:
+            return gzip.decompress(raw)
+        except OSError:
+            logger.exception("Failed to decompress gzip CSV upload")
+            return raw
+    return raw
 
 
 def _existing_product_names_it() -> set[str]:

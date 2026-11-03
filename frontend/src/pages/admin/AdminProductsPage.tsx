@@ -11,8 +11,6 @@ import {
   exportProductsCsv,
   restoreDemoCatalog,
   fetchAdminProducts,
-  fetchCsvImportColumnValues,
-  fetchCsvImportColumns,
   importProductsCsvWithProgress,
   updateAdminProduct,
   type CsvImportColumnFilter,
@@ -21,6 +19,7 @@ import {
   type CsvImportProgressEvent,
   type CsvImportValueOption,
 } from '../../api/admin'
+import { scanCsvColumnValuesFromFile, scanCsvColumnsFromFile } from '../../utils/csvImportScan'
 import { formatPrice } from '../../utils/format'
 import { formatApiError, formatClientError } from '../../utils/formatApiError'
 import './Admin.css'
@@ -250,7 +249,7 @@ export default function AdminProductsPage() {
     setPendingImportFile(file)
     resetImportModalState()
     try {
-      const { columns } = await fetchCsvImportColumns(file)
+      const columns = await scanCsvColumnsFromFile(file)
       setImportColumnOptions(columns)
       const marca = columns.find((c) => c.key === 'marca' || c.key === 'merceologica')
       setImportColumnSelected(marca?.key ?? columns[0]?.key ?? null)
@@ -278,7 +277,7 @@ export default function AdminProductsPage() {
     setLoadingColumnValues(true)
     setImportDetail('')
     try {
-      const { values } = await fetchCsvImportColumnValues(pendingImportFile, importColumnSelected)
+      const values = await scanCsvColumnValuesFromFile(pendingImportFile, importColumnSelected)
       setImportValueOptions(values)
       setImportValueSelected(values.map((v) => v.key))
       setImportModalStep('values')
