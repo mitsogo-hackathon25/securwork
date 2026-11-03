@@ -1,4 +1,5 @@
 import api from './client'
+import { postMultipartJson } from './multipartPost'
 import { readBlobApiDetail } from '../utils/formatApiError'
 import { sortByName } from '../utils/sortCategories'
 import type {
@@ -142,9 +143,7 @@ export const restoreDemoCatalog = () =>
 export const importProductsCsv = (file: File) => {
   const form = new FormData()
   form.append('file', file)
-  return api
-    .post<CsvImportResult>('/admin/products/import_csv/', form)
-    .then((r) => r.data)
+  return postMultipartJson<CsvImportResult>('/admin/products/import_csv/', form)
 }
 
 export type CsvImportProgressEvent = {
@@ -181,30 +180,30 @@ export type CsvImportColumnFilter = {
 
 export const fetchCsvImportBrands = (file: File) => {
   const form = new FormData()
-  form.append('file', file)
-  return api
-    .post<{ brands: CsvImportBrandOption[] }>('/admin/products/import_csv_brands/', form)
-    .then((r) => r.data)
+  form.append('file', file, file.name || 'import.csv')
+  return postMultipartJson<{ brands: CsvImportBrandOption[] }>(
+    '/admin/products/import_csv_brands/',
+    form,
+  )
 }
 
 export const fetchCsvImportColumns = (file: File) => {
   const form = new FormData()
-  form.append('file', file)
-  return api
-    .post<{ columns: CsvImportColumnOption[] }>('/admin/products/import_csv_columns/', form)
-    .then((r) => r.data)
+  form.append('file', file, file.name || 'import.csv')
+  return postMultipartJson<{ columns: CsvImportColumnOption[] }>(
+    '/admin/products/import_csv_columns/',
+    form,
+  )
 }
 
 export const fetchCsvImportColumnValues = (file: File, column: string) => {
   const form = new FormData()
-  form.append('file', file)
+  form.append('file', file, file.name || 'import.csv')
   form.append('column', column)
-  return api
-    .post<{ column: string; values: CsvImportValueOption[] }>(
-      '/admin/products/import_csv_column_values/',
-      form,
-    )
-    .then((r) => r.data)
+  return postMultipartJson<{ column: string; values: CsvImportValueOption[] }>(
+    '/admin/products/import_csv_column_values/',
+    form,
+  )
 }
 
 export function importProductsCsvWithProgress(

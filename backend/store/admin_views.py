@@ -484,7 +484,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser, JSONParser],
+        parser_classes=[MultiPartParser, FormParser],
         url_path="import_csv_brands",
     )
     def import_csv_brands(self, request):
@@ -514,14 +514,22 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser, JSONParser],
+        parser_classes=[MultiPartParser, FormParser],
         url_path="import_csv_columns",
     )
     def import_csv_columns(self, request):
         upload = request.FILES.get("file")
         if not upload:
+            content_type = (request.content_type or "").lower()
+            if "application/json" in content_type:
+                detail = (
+                    "Il file non è stato caricato (richiesta senza allegato). "
+                    "Aggiorna la pagina con Ctrl+Shift+R e riprova l'import."
+                )
+            else:
+                detail = "Carica un file CSV usando il campo file."
             return Response(
-                {"detail": "Carica un file CSV usando il campo file."},
+                {"detail": detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
@@ -544,7 +552,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser, JSONParser],
+        parser_classes=[MultiPartParser, FormParser],
         url_path="import_csv_column_values",
     )
     def import_csv_column_values(self, request):
@@ -755,7 +763,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         response["X-Accel-Buffering"] = "no"
         return response
 
-    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser, JSONParser], url_path="import_csv")
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser], url_path="import_csv")
     def import_csv(self, request):
         upload = request.FILES.get("file")
         if not upload:
