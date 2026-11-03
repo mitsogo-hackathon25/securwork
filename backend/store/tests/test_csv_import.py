@@ -492,6 +492,16 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertEqual(batch2.items.count(), 0)
         self.assertEqual(Product.objects.filter(sku="PAD-01").count(), 1)
 
+    def test_stage_parsed_rows_serializes_decimal_prices(self):
+        rows, errors = parse_and_validate_csv(SUPPLIER_CSV.encode("utf-8"))
+        self.assertEqual(errors, [])
+        upload_id, _ = stage_csv_upload(b"Codice Padre;SKU\n")
+        stage_parsed_import_rows(upload_id, rows)
+        loaded = load_staged_parsed_rows(upload_id)
+        self.assertIsNotNone(loaded)
+        self.assertIsInstance(loaded[0]["price"], Decimal)
+        delete_staged_csv(upload_id)
+
     def test_staged_parsed_rows_and_chunk_import(self):
         csv_text = """Codice Padre;Merceologica;Categoria;SCategoria;SKU;Colore;Taglia;Descrizione;Prezzo Unico
 P1;Abbigliamento;Kariban;Polo;P1-M;Blu;M;Polo;10,00

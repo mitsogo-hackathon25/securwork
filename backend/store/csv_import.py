@@ -96,7 +96,39 @@ def stage_parsed_import_rows(upload_id: str, parsed_rows: list[dict]) -> None:
         raise ValueError("Invalid upload_id")
     path = csv_import_staging_dir() / f"{upload_id}.parsed.json.gz"
     with gzip.open(path, "wt", encoding="utf-8") as handle:
-        json.dump(parsed_rows, handle, ensure_ascii=False)
+        json.dump(
+            parsed_rows,
+            handle,
+            ensure_ascii=False,
+            default=_parsed_row_json_default,
+        )
+
+
+_PARSED_ROW_DECIMAL_KEYS = (
+    "price",
+    "sale_price",
+    "customization_fee",
+    "embroidery_chest_fee",
+    "embroidery_large_fee",
+    "dtf_chest_fee",
+    "dtf_large_fee",
+)
+
+
+def _parsed_row_json_default(obj):
+    if isinstance(obj, Decimal):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+def _coerce_staged_parsed_row(row: dict) -> dict:
+    if not isinstance(row, dict):
+        return row
+    for key in _PARSED_ROW_DECIMAL_KEYS:
+        value = row.get(key)
+        if value is not None and not isinstance(value, Decimal):
+            row[key] = Decimal(str(value))
+    return row
 
 
 def load_staged_parsed_rows(upload_id: str) -> list[dict] | None:
@@ -107,7 +139,9 @@ def load_staged_parsed_rows(upload_id: str) -> list[dict] | None:
         return None
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         data = json.load(handle)
-    return data if isinstance(data, list) else None
+    if not isinstance(data, list):
+        return None
+    return [_coerce_staged_parsed_row(row) for row in data]
 
 
 def group_parsed_product_rows(parsed_rows: list[dict]) -> list[list[dict]]:

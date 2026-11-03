@@ -87,8 +87,7 @@ def attach_mockup_from_url(product: Product, image_url: str, *, link_only: bool 
         return False, "L'URL mockup deve iniziare con http:// o https://."
 
     if link_only:
-        product.mockup_url = url
-        product.save(update_fields=["mockup_url"])
+        # Bulk CSV: mockup_front is an ImageField; skip remote mockup during import.
         return True, ""
 
     content, reason = download_image_with_reason(url, filename_from_url(url, f"{product.sku}-mockup"))

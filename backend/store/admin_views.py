@@ -845,6 +845,16 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     )
     def import_csv_prepare(self, request):
         """Validate staged CSV once; store parsed rows for chunked import."""
+        try:
+            return self._import_csv_prepare_impl(request)
+        except Exception as exc:
+            logger.exception("import_csv_prepare failed")
+            return Response(
+                {"detail": f"Errore preparazione import: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _import_csv_prepare_impl(self, request):
         upload_id = (request.data.get("upload_id") or request.POST.get("upload_id") or "").strip()
         file_bytes = load_staged_csv(upload_id)
         if file_bytes is None:
@@ -899,7 +909,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
         try:
             stage_parsed_import_rows(upload_id, parsed_rows)
-        except OSError as exc:
+        except (OSError, TypeError, ValueError) as exc:
             logger.exception("Could not stage parsed CSV rows")
             return Response(
                 {"detail": f"Impossibile preparare l'import: {exc}"},
@@ -934,6 +944,16 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     )
     def import_csv_chunk(self, request):
         """Import the next slice of prepared product groups (short HTTP request)."""
+        try:
+            return self._import_csv_chunk_impl(request)
+        except Exception as exc:
+            logger.exception("import_csv_chunk failed")
+            return Response(
+                {"detail": f"Errore import blocco: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _import_csv_chunk_impl(self, request):
         upload_id = (request.data.get("upload_id") or request.POST.get("upload_id") or "").strip()
         batch_id = (request.data.get("batch_id") or request.POST.get("batch_id") or "").strip()
         offset = _parse_int_param(request, "offset", 0)

@@ -543,6 +543,8 @@ export function importProductsCsvWithProgress(
   onUploadProgress?: (percent: number) => void,
   columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportResult> {
+  const filterActive = Boolean(columnFilter?.column && columnFilter.values.length > 0)
+
   return stageCsvImportFile(file, onUploadProgress).then(async (staged) => {
     onEvent({
       phase: 'uploading',
@@ -552,17 +554,19 @@ export function importProductsCsvWithProgress(
     })
     onEvent({
       phase: 'validating',
-      current: 0,
-      total: staged.estimated_rows || 1,
-      message: 'Validazione CSV…',
+      message: filterActive
+        ? 'Validazione CSV (solo prodotti selezionati)…'
+        : 'Validazione CSV…',
     })
 
     const prepared = await prepareCsvImport(staged.upload_id, file, columnFilter)
     onEvent({
       phase: 'validated',
-      current: prepared.variant_rows,
-      total: prepared.variant_rows,
-      message: prepared.detail,
+      current: prepared.total_products,
+      total: prepared.total_products,
+      message: filterActive
+        ? `Pronti ${prepared.total_products} prodotti selezionati (${prepared.variant_rows} righe varianti).`
+        : prepared.detail,
       batch_id: prepared.batch_id,
     })
 
