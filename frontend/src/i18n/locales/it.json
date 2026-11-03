@@ -484,7 +484,7 @@
     "importing": "Importazione…",
     "addProduct": "Aggiungi prodotto",
     "importExportTitle": "Import / export massivo",
-    "importHint": "L'export scarica tutti i prodotti (una riga per taglia/colore). Usa il modello o modifica un export. Dopo la scelta del file, seleziona una colonna del CSV, poi i valori da importare (es. Merceologica o Categoria per i listini fornitore). Supportato anche Codice Padre, SKU, Foto, Prezzo Unico, ecc.",
+    "importHint": "L'export usa il layout fornitore (Codice Padre, Merceologica, Categoria, SCategoria, SKU, …) con colonne separate (;). Il modello interno resta in formato SecurWork.",
     "scanningCsv": "Lettura CSV…",
     "columnModalTitle": "Scegli una colonna",
     "columnModalHint": "File: {{file}}. Seleziona una sola colonna; al passo successivo vedrai i valori distinti.",

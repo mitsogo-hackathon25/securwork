@@ -456,12 +456,45 @@ CSV_HEADERS = [
 
 CSV_DELIMITER = ","
 
+# Supplier listino layout (Codice Padre, Merceologica, …) — semicolon-separated for IT Excel.
+SUPPLIER_EXPORT_HEADERS = [
+    "Codice Padre",
+    "Merceologica",
+    "Categoria",
+    "SCategoria",
+    "SKU",
+    "EAN",
+    "In Arrivo",
+    "Colore",
+    "Taglia",
+    "Descrizione",
+    "Foto",
+    "Unico",
+    "Confezione",
+    "Imballo",
+    "Prezzo Unico",
+    "Prezzo Confezione",
+    "Prezzo Imballo",
+]
+
+SUPPLIER_CSV_DELIMITER = ";"
+
 
 def _make_csv_writer(buffer: io.StringIO) -> csv.DictWriter:
     return csv.DictWriter(
         buffer,
         fieldnames=CSV_HEADERS,
         delimiter=CSV_DELIMITER,
+        quoting=csv.QUOTE_MINIMAL,
+        lineterminator="\r\n",
+    )
+
+
+def _make_supplier_csv_writer(buffer: io.StringIO) -> csv.DictWriter:
+    return csv.DictWriter(
+        buffer,
+        fieldnames=SUPPLIER_EXPORT_HEADERS,
+        delimiter=SUPPLIER_CSV_DELIMITER,
         quoting=csv.QUOTE_MINIMAL,
         lineterminator="\r\n",
     )
@@ -478,6 +511,34 @@ def _decimal_to_csv(value: Decimal) -> str:
     """Dot decimals when comma is the field separator (RFC-style CSV)."""
     return f"{value:.2f}"
 
+
+def _decimal_to_supplier_csv(value: Decimal) -> str:
+    """Italian listino prices (comma decimal, semicolon-separated columns)."""
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _category_display_name(category: Category | None, lang: str = "it") -> str:
+    if not category:
+        return ""
+    return category.safe_translation_getter("name", language_code=lang, any_language=True) or category.slug
+
+
+def _supplier_categories_for_product(product: Product) -> tuple[str, str]:
+    cats = list(product.categories.select_related("parent").order_by("slug"))
+    if not cats:
+        return ("ABBIGLIAMENTO", "")
+
+    leaf = next((c for c in cats if c.parent_id), None)
+    if leaf and leaf.parent:
+        parent_name = _category_display_name(leaf.parent)
+        child_name = _category_display_name(leaf)
+        macro = parent_name or "ABBIGLIAMENTO"
+        return (macro.upper(), child_name.upper() if child_name else "")
+
+    cat = cats[0]
+    child_name = _category_display_name(cat)
+    macro = "PROFESSIONALE" if cat.section == Category.Section.PROFESSIONAL else "ABBIGLIAMENTO"
+    return (macro, child_name.upper() if child_name else "")
 
 # Accept legacy English / previous Italian headers and map them to Italian keys.
 HEADER_ALIASES = {
@@ -684,72 +745,66 @@ def _bool_to_csv(value: bool) -> str:
 
 
 def export_products_csv() -> str:
-    """Export all products as CSV (one row per variant), matching import columns."""
+    """Export all products in supplier listino layout (one row per variant)."""
     buffer = io.StringIO()
-    writer = _make_csv_writer(buffer)
+    writer = _make_supplier_csv_writer(buffer)
     writer.writeheader()
 
     products = (
-        Product.objects.prefetch_related("variants", "categories", "images")
+        Product.objects.prefetch_related("variants", "categories", "categories__parent", "images")
         .order_by("sku")
     )
     for product in products:
-        category_slugs = ",".join(
-            product.categories.order_by("slug").values_list("slug", flat=True)
-        )
+        categoria, scategoria = _supplier_categories_for_product(product)
+        merceologica = (product.brand or "").strip()
+        descrizione = _translation(product, "name", "it") or _translation(product, "name", "en")
         image_urls = product_image_export_urls(product)
-        mockup_url = ""
-        if product.mockup_front:
-            try:
-                mockup_url = absolute_media_url(product.mockup_front.url)
-            except (ValueError, OSError):
-                mockup_url = ""
-        base = {
-            "sku_prodotto": product.sku,
-            "marca": product.brand or "",
-            "nome_it": _translation(product, "name", "it"),
-            "nome_en": _translation(product, "name", "en"),
-            "descrizione_breve_it": _translation(product, "short_description", "it"),
-            "descrizione_breve_en": _translation(product, "short_description", "en"),
-            "descrizione_it": _translation(product, "description", "it"),
-            "descrizione_en": _translation(product, "description", "en"),
-            "bestseller": _bool_to_csv(bool(product.is_bestseller)),
-            "costo_personalizzazione": _decimal_to_csv(product.customization_fee),
-            "categoria": category_slugs,
-            "ricamo_petto": _bool_to_csv(bool(product.embroidery_chest_enabled)),
-            "costo_ricamo_petto": _decimal_to_csv(product.embroidery_chest_fee),
-            "ricamo_grande": _bool_to_csv(bool(product.embroidery_large_enabled)),
-            "costo_ricamo_grande": _decimal_to_csv(product.embroidery_large_fee),
-            "dtf_petto": _bool_to_csv(bool(product.dtf_chest_enabled)),
-            "costo_dtf_petto": _decimal_to_csv(product.dtf_chest_fee),
-            "dtf_grande": _bool_to_csv(bool(product.dtf_large_enabled)),
-            "costo_dtf_grande": _decimal_to_csv(product.dtf_large_fee),
-            "url_immagini": ",".join(image_urls),
-            "url_mockup": mockup_url,
-        }
+        foto = image_urls[0] if image_urls else ""
+
         variants = list(product.variants.all())
         if not variants:
             writer.writerow({
-                **base,
-                "taglia": "",
-                "colore": "",
-                "prezzo": "",
-                "scorte": "",
-                "sku_variante": "",
-                "prezzo_scontato": "",
+                "Codice Padre": product.sku,
+                "Merceologica": merceologica,
+                "Categoria": categoria,
+                "SCategoria": scategoria,
+                "SKU": "",
+                "EAN": "",
+                "In Arrivo": "",
+                "Colore": "",
+                "Taglia": "",
+                "Descrizione": descrizione,
+                "Foto": foto,
+                "Unico": "1",
+                "Confezione": "",
+                "Imballo": "",
+                "Prezzo Unico": "",
+                "Prezzo Confezione": "",
+                "Prezzo Imballo": "",
             })
             continue
+
         for variant in variants:
+            price = variant.effective_price
+            price_str = _decimal_to_supplier_csv(price)
             writer.writerow({
-                **base,
-                "taglia": variant.size or "",
-                "colore": variant.color or "",
-                "prezzo": _decimal_to_csv(variant.price),
-                "scorte": str(variant.stock_quantity),
-                "sku_variante": variant.sku,
-                "prezzo_scontato": _decimal_to_csv(variant.sale_price)
-                if variant.sale_price is not None
-                else "",
+                "Codice Padre": product.sku,
+                "Merceologica": merceologica,
+                "Categoria": categoria,
+                "SCategoria": scategoria,
+                "SKU": variant.sku,
+                "EAN": "",
+                "In Arrivo": str(variant.stock_quantity),
+                "Colore": variant.color or "",
+                "Taglia": variant.size or "",
+                "Descrizione": descrizione,
+                "Foto": foto,
+                "Unico": "1",
+                "Confezione": "",
+                "Imballo": "",
+                "Prezzo Unico": price_str,
+                "Prezzo Confezione": "",
+                "Prezzo Imballo": "",
             })
     return buffer.getvalue()
 

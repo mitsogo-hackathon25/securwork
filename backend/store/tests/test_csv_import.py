@@ -338,23 +338,41 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertEqual(rows[0]["stock"], 242)
         self.assertEqual(rows[1]["size"], "M")
 
-    def test_export_products_csv_uses_comma_columns_and_data_rows(self):
-        product = Product.objects.create(sku="EXP-01", brand="TestBrand", slug="exp-01")
+    def test_export_products_csv_supplier_listino_layout(self):
+        parent = Category.objects.create(slug="abbigliamento-export", section=Category.Section.WORKWEAR)
+        parent.set_current_language("it")
+        parent.name = "Abbigliamento"
+        parent.save()
+        child = Category.objects.create(
+            slug="polo-promo-export",
+            section=Category.Section.WORKWEAR,
+            parent=parent,
+        )
+        child.set_current_language("it")
+        child.name = "Polo"
+        child.save()
+
+        product = Product.objects.create(sku="AY 7439", brand="PROMOSOLUTION", slug="ay-7439")
         product.set_current_language("it")
-        product.name = "Prodotto export"
+        product.name = "Polo promozionale"
         product.save()
+        product.categories.add(child)
         ProductVariant.objects.create(
             product=product,
-            sku="EXP-01-M-BLU",
-            size="M",
-            color="Blu",
-            price=Decimal("19.90"),
-            stock_quantity=5,
+            sku="AY 7439-XS-ACQUAMARINA",
+            size="XS",
+            color="ACQUAMARINA",
+            price=Decimal("12.50"),
+            stock_quantity=10,
         )
         text = export_products_csv()
-        header = text.splitlines()[0]
-        self.assertIn("sku_prodotto,marca", header)
-        self.assertNotIn("sku_prodotto;marca", header)
-        self.assertGreaterEqual(len(text.splitlines()), 2)
-        self.assertIn("EXP-01,TestBrand", text)
-        self.assertIn("19.90", text)
+        lines = text.splitlines()
+        self.assertIn("Codice Padre;Merceologica;Categoria", lines[0])
+        self.assertGreaterEqual(len(lines), 2)
+        row = lines[1]
+        self.assertIn("AY 7439", row)
+        self.assertIn("PROMOSOLUTION", row)
+        self.assertIn("ABBIGLIAMENTO", row)
+        self.assertIn("POLO", row)
+        self.assertIn("AY 7439-XS-ACQUAMARINA", row)
+        self.assertIn("12,50", row)

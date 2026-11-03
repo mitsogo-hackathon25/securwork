@@ -484,7 +484,7 @@
     "importing": "Importing…",
     "addProduct": "Add product",
     "importExportTitle": "Bulk import / export",
-    "importHint": "Export downloads all products (one row per size/color). Use the template or edit an export and re-import new products. After you choose a file, pick one CSV column, then select which values in that column to import (e.g. Merceologica or Categoria for supplier lists). Supplier columns Codice Padre, SKU, Descrizione, Foto, Prezzo Unico are supported.",
+    "importHint": "Export uses the supplier list layout (Codice Padre, Merceologica, Categoria, SCategoria, SKU, …) with separate columns (;). The template file stays in SecurWork’s native format.",
     "scanningCsv": "Reading CSV…",
     "columnModalTitle": "Choose a column",
     "columnModalHint": "File: {{file}}. Select exactly one column; the next step lists distinct values in that column.",
