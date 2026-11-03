@@ -29,6 +29,13 @@ export function formatApiError(err: unknown, fallback = 'Something went wrong.')
       const parts = record.detail.filter((item): item is string => typeof item === 'string')
       if (parts.length) detail = parts.join(' ')
     }
+    if (!detail && Array.isArray(record.errors)) {
+      const first = record.errors[0]
+      if (first && typeof first === 'object' && first !== null && 'message' in first) {
+        const msg = (first as { message?: unknown }).message
+        if (typeof msg === 'string') detail = msg
+      }
+    }
   }
 
   if (isAuthFailure(status, detail)) {
@@ -62,12 +69,17 @@ export function formatApiError(err: unknown, fallback = 'Something went wrong.')
   return fallback
 }
 
-/** Prefer thrown Error.message (export/import helpers), then axios JSON bodies. */
+/** Prefer axios JSON `detail` / `errors`, then thrown Error.message (export helpers). */
 export function formatClientError(err: unknown, fallback: string): string {
+  const fromApi = formatApiError(err, fallback)
+  if (fromApi !== fallback) return fromApi
   if (err instanceof Error && err.message.trim()) {
-    return err.message.trim()
+    const msg = err.message.trim()
+    if (!/^Request failed with status code \d+$/.test(msg)) {
+      return msg
+    }
   }
-  return formatApiError(err, fallback)
+  return fallback
 }
 
 export async function readBlobApiDetail(blob: Blob, fallback: string): Promise<string> {

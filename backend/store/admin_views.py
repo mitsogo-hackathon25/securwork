@@ -1,10 +1,12 @@
 import json
 import logging
+import os
 import queue
 import threading
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.core.management import call_command
 from django.db import close_old_connections, transaction
 from django.db.models import Count, Prefetch, ProtectedError
 from django.db.utils import DatabaseError, OperationalError
@@ -32,6 +34,7 @@ from .csv_import import (
     build_csv_template,
     csv_download_bytes,
     export_products_csv,
+    csv_upload_filename_ok,
     import_parsed_rows,
     iter_import_parsed_rows,
     normalize_column_key,
@@ -451,6 +454,30 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         deleted_ids, blocked = _delete_catalog_products(Product.objects.all())
         return _bulk_delete_response(deleted_ids, blocked, [])
 
+    @action(detail=False, methods=["post"], url_path="restore_demo_catalog")
+    def restore_demo_catalog(self, request):
+        """Recreate DEMO/SW- sample products (e.g. after delete all)."""
+        admin_password = os.environ.get("ADMIN_PASSWORD", "SecurWork_Admin_2026!")
+        try:
+            call_command("seed_data", admin_password=admin_password, verbosity=0)
+            call_command("seed_catalog", verbosity=0)
+        except Exception:
+            logger.exception("restore_demo_catalog failed")
+            return Response(
+                {"detail": "Impossibile caricare il catalogo demo."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        product_count = Product.objects.count()
+        variant_count = ProductVariant.objects.count()
+        return Response({
+            "detail": (
+                f"Catalogo demo ripristinato: {product_count} prodotti, "
+                f"{variant_count} varianti. Ora puoi esportare il CSV."
+            ),
+            "product_count": product_count,
+            "variant_count": variant_count,
+        })
+
     def _ndjson_line(self, payload: dict) -> str:
         return json.dumps(payload, ensure_ascii=False) + "\n"
 
@@ -468,9 +495,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
-        if not name.endswith(".csv"):
+        if not csv_upload_filename_ok(name):
             return Response(
-                {"detail": "Sono accettati solo file .csv."},
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         brands, errors = scan_csv_brands(upload.read())
@@ -498,9 +525,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
-        if not name.endswith(".csv"):
+        if not csv_upload_filename_ok(name):
             return Response(
-                {"detail": "Sono accettati solo file .csv."},
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         columns, errors = scan_csv_columns(upload.read())
@@ -534,9 +561,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
-        if not name.endswith(".csv"):
+        if not csv_upload_filename_ok(name):
             return Response(
-                {"detail": "Sono accettati solo file .csv."},
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         values, errors = scan_csv_column_values(upload.read(), str(column))
@@ -567,9 +594,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
-        if not name.endswith(".csv"):
+        if not csv_upload_filename_ok(name):
             return Response(
-                {"detail": "Sono accettati solo file .csv."},
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -737,9 +764,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = (upload.name or "").lower()
-        if not name.endswith(".csv"):
+        if not csv_upload_filename_ok(name):
             return Response(
-                {"detail": "Sono accettati solo file .csv."},
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

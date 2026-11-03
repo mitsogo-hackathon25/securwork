@@ -256,6 +256,16 @@ P2;P2-L;Polo 2;Nero;L;12,50
         self.assertEqual(errors, [], errors)
         self.assertGreaterEqual(len(values), 2)
 
+    def test_scan_csv_columns_utf16_supplier(self):
+        header = "Codice Padre;Merceologica;Categoria;SKU;Colore;Taglia\r\n"
+        body = "P1;Payper;Polo;P1-M;Blu;M\r\n"
+        raw = (header + body).encode("utf-16-le")
+        columns, errors = scan_csv_columns(raw)
+        self.assertEqual(errors, [], errors)
+        keys = {c["key"] for c in columns}
+        self.assertIn("codice_padre", keys)
+        self.assertIn("merceologica", keys)
+
     def test_scan_csv_columns_lists_headers(self):
         csv_text = """Codice Padre;Merceologica;Categoria;SKU;Colore;Taglia;Descrizione;Prezzo Unico
 P1;Payper;Polo;P1-M;Blu;M;Polo;10,00

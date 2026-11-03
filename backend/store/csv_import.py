@@ -18,6 +18,13 @@ from .models import Brand, Category, Color, Product, ProductVariant
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_CSV_UPLOAD_SUFFIXES = (".csv", ".txt", ".tsv")
+
+
+def csv_upload_filename_ok(filename: str) -> bool:
+    lower = (filename or "").lower().strip()
+    return any(lower.endswith(suffix) for suffix in ALLOWED_CSV_UPLOAD_SUFFIXES)
+
 
 def _existing_product_names_it() -> set[str]:
     names: set[str] = set()
@@ -1183,22 +1190,55 @@ def _resolve_category_ids(
 
 
 def _decode_csv_bytes(file_bytes: bytes) -> tuple[str | None, dict | None]:
-    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+    if file_bytes[:2] == b"PK":
+        return None, {
+            "row": 0,
+            "field": "file",
+            "message": (
+                "Il file sembra un Excel (.xlsx). Apri il listino in Excel o Numbers e "
+                "salva come «CSV UTF-8 (delimitato da virgola)» o «CSV (delimitato da punto e virgola)»."
+            ),
+        }
+    if len(file_bytes) >= 2 and file_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        encodings = ("utf-16", "utf-16-le", "utf-16-be")
+    else:
+        encodings = ("utf-8-sig", "utf-8", "cp1252", "latin-1", "utf-16-le", "utf-16")
+    for encoding in encodings:
         try:
-            return file_bytes.decode(encoding), None
+            text = file_bytes.decode(encoding)
+            if text.strip():
+                return text, None
         except UnicodeDecodeError:
             continue
-    return None, {"row": 0, "field": "file", "message": "Il CSV deve essere UTF-8 o Windows-1252."}
+    return None, {
+        "row": 0,
+        "field": "file",
+        "message": "Impossibile leggere il file. Salva il listino come CSV UTF-8 o Windows (1252).",
+    }
+
+
+def _guess_csv_delimiter(header_line: str) -> str:
+    tab_count = header_line.count("\t")
+    semi_count = header_line.count(";")
+    comma_count = header_line.count(",")
+    if tab_count >= semi_count and tab_count >= comma_count and tab_count > 0:
+        return "\t"
+    if semi_count > comma_count:
+        return ";"
+    return ","
 
 
 def _csv_reader(text: str) -> csv.DictReader:
     sample = text[:8192]
+    dialect = None
     try:
         dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
     except csv.Error:
+        pass
+    if dialect is None:
         dialect = csv.excel
-        if sample.count(";") > sample.count(","):
-            dialect.delimiter = ";"
+        first_line = sample.splitlines()[0] if sample else ""
+        dialect.delimiter = _guess_csv_delimiter(first_line)
     return csv.DictReader(io.StringIO(text), dialect=dialect)
 
 
@@ -1414,6 +1454,15 @@ def scan_csv_columns(file_bytes: bytes) -> tuple[list[dict], list[dict]]:
             "label": "marca (ricavata dal listino)",
         })
     columns.sort(key=lambda c: c["label"].lower())
+    if not columns:
+        return [], [{
+            "row": 0,
+            "field": "file",
+            "message": (
+                "Nessuna colonna riconosciuta. Controlla la prima riga del file "
+                "(Codice Padre, Merceologica, …) e il separatore (; , o tab)."
+            ),
+        }]
     return columns, []
 
 

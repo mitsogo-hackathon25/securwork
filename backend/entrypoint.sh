@@ -28,8 +28,8 @@ python manage.py collectstatic --noinput 2>/dev/null || true
 
 if [ "${SEED_DATA:-true}" = "true" ]; then
     echo "==> Seeding data..."
-    python manage.py seed_data --admin-password="${ADMIN_PASSWORD:-SecurWork_Admin_2026!}" 2>/dev/null || true
-    python manage.py seed_catalog 2>/dev/null || true
+    python manage.py seed_data --admin-password="${ADMIN_PASSWORD:-SecurWork_Admin_2026!}" || echo "WARNING: seed_data failed — run manually inside backend container"
+    python manage.py seed_catalog || echo "WARNING: seed_catalog failed — run manually inside backend container"
 fi
 
 echo "==> Starting server..."

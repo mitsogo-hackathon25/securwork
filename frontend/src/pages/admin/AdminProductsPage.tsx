@@ -9,6 +9,7 @@ import {
   deleteAdminProduct,
   downloadProductCsvTemplate,
   exportProductsCsv,
+  restoreDemoCatalog,
   fetchAdminProducts,
   fetchCsvImportColumnValues,
   fetchCsvImportColumns,
@@ -33,6 +34,7 @@ export default function AdminProductsPage() {
   const [page, setPage] = useState(1)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [restoringDemo, setRestoringDemo] = useState(false)
   const [importSuccess, setImportSuccess] = useState('')
   const [importErrors, setImportErrors] = useState<CsvImportError[]>([])
   const [importDetail, setImportDetail] = useState('')
@@ -154,6 +156,25 @@ export default function AdminProductsPage() {
     }
   }
 
+  const productCount = data?.count ?? 0
+  const catalogEmpty = !isLoading && productCount === 0
+
+  const handleRestoreDemoCatalog = async () => {
+    setImportDetail('')
+    setImportSuccess('')
+    setImportErrors([])
+    setRestoringDemo(true)
+    try {
+      const result = await restoreDemoCatalog()
+      setImportSuccess(result.detail)
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      setImportDetail(formatClientError(err, t('adminProducts.restoreDemoError')))
+    } finally {
+      setRestoringDemo(false)
+    }
+  }
+
   const handleExportCsv = async () => {
     setImportDetail('')
     setImportErrors([])
@@ -165,9 +186,7 @@ export default function AdminProductsPage() {
         queryFn: () => fetchAdminProducts(params),
       })
       if ((fresh?.count ?? 0) === 0) {
-        setImportDetail(
-          'Nessun prodotto in elenco. Importa un listino CSV (Import) prima di esportare.',
-        )
+        setImportDetail(t('adminProducts.exportNeedsProducts'))
         return
       }
       await exportProductsCsv()
@@ -238,7 +257,7 @@ export default function AdminProductsPage() {
       setImportModalStep('column')
       setImportModalOpen(true)
     } catch (err: unknown) {
-      setImportDetail(formatApiError(err, 'Impossibile leggere le colonne dal CSV.'))
+      setImportDetail(formatClientError(err, t('adminProducts.readColumnsError')))
       setPendingImportFile(null)
     } finally {
       setScanningCsv(false)
@@ -376,7 +395,8 @@ export default function AdminProductsPage() {
           <button
             type="button"
             className="btn btn-secondary"
-            disabled={exporting}
+            disabled={exporting || catalogEmpty}
+            title={catalogEmpty ? t('adminProducts.exportNeedsProducts') : undefined}
             onClick={handleExportCsv}
           >
             {exporting ? t('adminProducts.exporting') : t('adminProducts.exportCsv')}
@@ -403,6 +423,29 @@ export default function AdminProductsPage() {
       <section className="admin-card admin-import-panel">
         <h2>{t('adminProducts.importExportTitle')}</h2>
         <p className="admin-hint">{t('adminProducts.importHint')}</p>
+        {catalogEmpty && (
+          <div className="admin-alert admin-alert-warning">
+            <p>{t('adminProducts.emptyCatalog')}</p>
+            <div className="admin-empty-catalog-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={importing || scanningCsv}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {t('adminProducts.importCsv')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={restoringDemo}
+                onClick={handleRestoreDemoCatalog}
+              >
+                {restoringDemo ? t('common.loading') : t('adminProducts.restoreDemoCatalog')}
+              </button>
+            </div>
+          </div>
+        )}
         {(importing || importProgress?.phase === 'done') && importProgress && (
           <div className="admin-import-progress" aria-live="polite">
             <div className="admin-import-progress-label">

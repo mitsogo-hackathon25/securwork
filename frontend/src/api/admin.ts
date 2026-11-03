@@ -132,6 +132,13 @@ export const exportProductsCsv = () =>
       await downloadCsvBlob(r.data, 'securwork-products-export.csv')
     })
 
+export const restoreDemoCatalog = () =>
+  api
+    .post<{ detail: string; product_count: number; variant_count: number }>(
+      '/admin/products/restore_demo_catalog/',
+    )
+    .then((r) => r.data)
+
 export const importProductsCsv = (file: File) => {
   const form = new FormData()
   form.append('file', file)
