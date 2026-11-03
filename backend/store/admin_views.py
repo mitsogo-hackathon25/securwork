@@ -40,12 +40,15 @@ from .csv_import import (
     normalize_column_key,
     parse_and_validate_csv,
     read_csv_upload_bytes,
+    delete_staged_csv,
+    load_staged_csv,
     scan_csv_brands,
     scan_csv_column_values,
     scan_csv_columns,
+    stage_csv_upload,
 )
 from .category_ordering import sort_categories
-from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
+from .models import Brand, Category, Color, CsvImportBatch, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
 
@@ -111,6 +114,18 @@ def _parse_brand_keys_filter(request) -> set[str] | None:
     if keys is None:
         return None
     return _normalize_filter_value_keys(keys)
+
+
+def _parse_skip_existing_in_catalog(request) -> bool:
+    """When true, existing Codice Padre rows are skipped instead of failing validation."""
+    raw = request.data.get("skip_existing")
+    if raw is None:
+        raw = request.POST.get("skip_existing")
+    if raw is None or raw == "":
+        return True
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
 def _parse_column_value_filter(request) -> tuple[str, set[str]] | None:
@@ -482,6 +497,339 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     def _ndjson_line(self, payload: dict) -> str:
         return json.dumps(payload, ensure_ascii=False) + "\n"
 
+    def _resolve_csv_import_filters(self, request):
+        column_value_filter = _parse_column_value_filter(request)
+        brand_keys_filter = _parse_brand_keys_filter(request)
+        if column_value_filter is not None:
+            col_key, value_keys = column_value_filter
+            if not col_key:
+                return None, Response(
+                    {"detail": "Seleziona una colonna per filtrare l'import."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not value_keys:
+                return None, Response(
+                    {"detail": "Seleziona almeno un valore da importare."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            brand_keys_filter = None
+        elif brand_keys_filter is not None and not brand_keys_filter:
+            return None, Response(
+                {"detail": "Seleziona almeno una marca da importare."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return (column_value_filter, brand_keys_filter), None
+
+    def _iter_csv_import_events(
+        self,
+        file_bytes: bytes,
+        *,
+        column_value_filter,
+        brand_keys_filter,
+        staged_upload_id: str | None = None,
+        skip_existing_in_catalog: bool = True,
+        import_filename: str = "",
+    ):
+        estimated_rows = max(1, file_bytes.count(b"\n") - 1)
+        import_batch: CsvImportBatch | None = None
+        try:
+            progress_queue: queue.Queue = queue.Queue()
+            parsed_holder: list[list[dict]] = []
+            errors_holder: list[list[dict]] = []
+
+            def on_validate(current: int, total: int) -> None:
+                progress_queue.put({
+                    "phase": "validating",
+                    "current": current,
+                    "total": total,
+                    "message": "Validazione righe CSV…",
+                })
+
+            def run_parse() -> None:
+                try:
+                    parsed, errors = parse_and_validate_csv(
+                        file_bytes,
+                        progress_callback=on_validate,
+                        progress_total=estimated_rows,
+                        brand_keys_filter=brand_keys_filter,
+                        column_value_filter=column_value_filter,
+                        skip_existing_in_catalog=skip_existing_in_catalog,
+                    )
+                    parsed_holder.append(parsed)
+                    errors_holder.append(errors)
+                except Exception as exc:
+                    parsed_holder.append([])
+                    errors_holder.append([{
+                        "row": 0,
+                        "field": "file",
+                        "message": f"Errore durante la lettura del CSV: {exc}",
+                    }])
+                finally:
+                    progress_queue.put(None)
+
+            yield self._ndjson_line({
+                "phase": "uploading",
+                "current": 100,
+                "total": 100,
+                "message": "File ricevuto, avvio validazione…",
+            })
+            yield self._ndjson_line({
+                "phase": "validating",
+                "current": 0,
+                "total": estimated_rows,
+                "message": "Validazione righe CSV…",
+            })
+
+            thread = threading.Thread(target=run_parse, daemon=True)
+            thread.start()
+            while True:
+                try:
+                    item = progress_queue.get(timeout=20)
+                except queue.Empty:
+                    yield self._ndjson_line({
+                        "phase": "validating",
+                        "message": "Validazione CSV in corso…",
+                    })
+                    continue
+                if item is None:
+                    break
+                yield self._ndjson_line(item)
+            thread.join(timeout=600)
+            if thread.is_alive():
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Validazione CSV troppo lenta o interrotta. Riduci il file o usa un filtro colonna.",
+                    "errors": [{
+                        "row": 0,
+                        "field": "file",
+                        "message": "Timeout validazione CSV.",
+                    }],
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
+
+            parsed_rows = parsed_holder[0] if parsed_holder else []
+            errors = errors_holder[0] if errors_holder else []
+            if errors:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Validazione CSV non riuscita. Correggi gli errori sotto e riprova.",
+                    "errors": errors[:300],
+                    "error_count": len(errors),
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
+
+            if not parsed_rows:
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": "Nessuna riga da importare. Verifica il filtro colonne/valori e il file CSV.",
+                    "errors": [{
+                        "row": 0,
+                        "field": "file",
+                        "message": "Nessuna riga valida da importare.",
+                    }],
+                    "created_products": 0,
+                    "created_variants": 0,
+                })
+                return
+
+            yield self._ndjson_line({
+                "phase": "validated",
+                "current": len(parsed_rows),
+                "total": len(parsed_rows),
+                "message": f"{len(parsed_rows)} righe varianti pronte per l'import.",
+            })
+
+            import_batch = CsvImportBatch.objects.create(
+                filename=(import_filename or "")[:255],
+                status=CsvImportBatch.Status.IN_PROGRESS,
+            )
+            batch_id = str(import_batch.id)
+
+            try:
+                for event in iter_import_parsed_rows(
+                    parsed_rows,
+                    import_batch=import_batch,
+                    skip_existing_in_catalog=skip_existing_in_catalog,
+                ):
+                    phase = event.get("phase")
+                    if phase == "skipped":
+                        yield self._ndjson_line({**event, "batch_id": batch_id})
+                    elif phase == "importing":
+                        yield self._ndjson_line({**event, "batch_id": batch_id})
+                    elif phase == "complete":
+                        products = event["created_products"]
+                        variants = event["created_variants"]
+                        skipped = event.get("skipped_products", 0)
+                        import_errors = event.get("import_errors") or []
+                        import_batch.created_products = products
+                        import_batch.created_variants = variants
+                        import_batch.skipped_products = skipped
+                        if import_errors:
+                            import_batch.status = CsvImportBatch.Status.PARTIAL
+                            import_batch.error_detail = import_errors[0].get("message", "")[:2000]
+                        elif products == 0 and skipped > 0:
+                            import_batch.status = CsvImportBatch.Status.COMPLETED
+                        else:
+                            import_batch.status = CsvImportBatch.Status.COMPLETED
+                        import_batch.save(
+                            update_fields=[
+                                "created_products",
+                                "created_variants",
+                                "skipped_products",
+                                "status",
+                                "error_detail",
+                            ],
+                        )
+                        detail_parts = [
+                            f"Importati {products} prodott{'o' if products == 1 else 'i'} "
+                            f"con {variants} variant{'e' if variants == 1 else 'i'}.",
+                        ]
+                        if skipped:
+                            detail_parts.append(
+                                f"Saltati {skipped} già presenti nel catalogo.",
+                            )
+                        if import_errors:
+                            detail_parts.append(
+                                f"{len(import_errors)} prodott{'o' if len(import_errors) == 1 else 'i'} "
+                                "non importati per errore.",
+                            )
+                        yield self._ndjson_line({
+                            "phase": "done",
+                            "detail": " ".join(detail_parts),
+                            "errors": import_errors[:50],
+                            "error_count": len(import_errors),
+                            "created_products": products,
+                            "created_variants": variants,
+                            "skipped_products": skipped,
+                            "batch_id": batch_id,
+                            "can_rollback": products > 0,
+                            "import_partial": bool(import_errors),
+                        })
+            except ValueError as exc:
+                if import_batch is not None:
+                    import_batch.created_products = import_batch.items.count()
+                    import_batch.status = CsvImportBatch.Status.FAILED
+                    import_batch.error_detail = str(exc)[:2000]
+                    import_batch.save(update_fields=["created_products", "status", "error_detail"])
+                created_in_batch = import_batch.items.count() if import_batch else 0
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": str(exc),
+                    "errors": [{"row": 0, "field": "url_immagini", "message": str(exc)}],
+                    "created_products": created_in_batch,
+                    "created_variants": import_batch.created_variants if import_batch else 0,
+                    "batch_id": batch_id if import_batch else None,
+                    "can_rollback": created_in_batch > 0,
+                })
+            except Exception as exc:
+                if import_batch is not None:
+                    import_batch.created_products = import_batch.items.count()
+                    import_batch.status = CsvImportBatch.Status.PARTIAL
+                    import_batch.error_detail = str(exc)[:2000]
+                    import_batch.save(update_fields=["created_products", "status", "error_detail"])
+                created_in_batch = import_batch.items.count() if import_batch else 0
+                yield self._ndjson_line({
+                    "phase": "failed",
+                    "detail": f"Import interrotto: {exc}",
+                    "errors": [{"row": 0, "field": "file", "message": str(exc)}],
+                    "created_products": created_in_batch,
+                    "created_variants": import_batch.created_variants if import_batch else 0,
+                    "batch_id": batch_id if import_batch else None,
+                    "can_rollback": created_in_batch > 0,
+                })
+        finally:
+            if staged_upload_id:
+                delete_staged_csv(staged_upload_id)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="import_csv_stage",
+    )
+    def import_csv_stage(self, request):
+        """Upload CSV once; returns upload_id for import_csv_stream (shorter second request)."""
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "Carica un file CSV usando il campo file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (upload.name or "").lower()
+        if not csv_upload_filename_ok(name):
+            return Response(
+                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        file_bytes = read_csv_upload_bytes(upload.read(), upload.name or "")
+        upload_id, estimated_rows = stage_csv_upload(file_bytes)
+        return Response({"upload_id": upload_id, "estimated_rows": estimated_rows})
+
+    @action(detail=False, methods=["post"], url_path="rollback_import_batch")
+    def rollback_import_batch(self, request):
+        """Delete all products created in a CSV import batch (undo partial import)."""
+        batch_id = (request.data.get("batch_id") or request.POST.get("batch_id") or "").strip()
+        if not batch_id:
+            return Response(
+                {"detail": "Manca batch_id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        batch = CsvImportBatch.objects.filter(pk=batch_id).first()
+        if batch is None:
+            return Response(
+                {"detail": "Import batch non trovato."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if batch.status == CsvImportBatch.Status.ROLLED_BACK:
+            return Response({
+                "detail": "Questo import è già stato annullato.",
+                "deleted": [],
+                "blocked": [],
+                "batch_id": str(batch.id),
+            })
+
+        product_ids = list(batch.items.values_list("product_id", flat=True))
+        if not product_ids:
+            batch.status = CsvImportBatch.Status.ROLLED_BACK
+            batch.save(update_fields=["status"])
+            return Response({
+                "detail": "Nessun prodotto da rimuovere per questo import.",
+                "deleted": [],
+                "blocked": [],
+                "batch_id": str(batch.id),
+            })
+
+        products = Product.objects.filter(pk__in=product_ids)
+        deleted_ids, blocked = _delete_catalog_products(products)
+        batch.status = CsvImportBatch.Status.ROLLED_BACK
+        batch.save(update_fields=["status"])
+
+        if blocked and not deleted_ids:
+            detail = (
+                f"Nessun prodotto rimosso: {len(blocked)} collegati a ordini e non eliminabili."
+            )
+        elif blocked:
+            detail = (
+                f"Rimossi {len(deleted_ids)} prodotti da questo import. "
+                f"{len(blocked)} non eliminabili (ordini collegati)."
+            )
+        else:
+            detail = (
+                f"Annullato import: eliminati {len(deleted_ids)} "
+                f"prodott{'o' if len(deleted_ids) == 1 else 'i'} aggiunti in questo batch."
+            )
+
+        return Response({
+            "detail": detail,
+            "deleted": deleted_ids,
+            "blocked": blocked,
+            "batch_id": str(batch.id),
+        })
+
     @action(
         detail=False,
         methods=["post"],
@@ -603,188 +951,60 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         url_path="import_csv_stream",
     )
     def import_csv_stream(self, request):
-        upload = request.FILES.get("file")
-        if not upload:
-            return Response(
-                {"detail": "Carica un file CSV usando il campo file."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        name = (upload.name or "").lower()
-        if not csv_upload_filename_ok(name):
-            return Response(
-                {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        upload_id = (request.data.get("upload_id") or request.POST.get("upload_id") or "").strip()
+        staged_upload_id: str | None = None
+        file_bytes: bytes | None = None
 
-        file_bytes = read_csv_upload_bytes(upload.read(), upload.name or "")
-        estimated_rows = max(1, file_bytes.count(b"\n") - 1)
-        column_value_filter = _parse_column_value_filter(request)
-        brand_keys_filter = _parse_brand_keys_filter(request)
-        if column_value_filter is not None:
-            col_key, value_keys = column_value_filter
-            if not col_key:
+        if upload_id:
+            file_bytes = load_staged_csv(upload_id)
+            if file_bytes is None:
                 return Response(
-                    {"detail": "Seleziona una colonna per filtrare l'import."},
+                    {
+                        "detail": (
+                            "Upload CSV non trovato o scaduto. "
+                            "Riprova: seleziona di nuovo il file e avvia l'import."
+                        ),
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if not value_keys:
+            staged_upload_id = upload_id
+        else:
+            upload = request.FILES.get("file")
+            if not upload:
                 return Response(
-                    {"detail": "Seleziona almeno un valore da importare."},
+                    {"detail": "Carica un file CSV o invia upload_id dopo import_csv_stage."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            brand_keys_filter = None
-        elif brand_keys_filter is not None and not brand_keys_filter:
-            return Response(
-                {"detail": "Seleziona almeno una marca da importare."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            name = (upload.name or "").lower()
+            if not csv_upload_filename_ok(name):
+                return Response(
+                    {"detail": "Sono accettati file .csv, .txt o .tsv (listino esportato da Excel)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            file_bytes = read_csv_upload_bytes(upload.read(), upload.name or "")
 
-        def event_stream():
-            progress_queue: queue.Queue = queue.Queue()
-            parsed_holder: list[list[dict]] = []
-            errors_holder: list[list[dict]] = []
-
-            def on_validate(current: int, total: int) -> None:
-                progress_queue.put({
-                    "phase": "validating",
-                    "current": current,
-                    "total": total,
-                    "message": "Validazione righe CSV…",
-                })
-
-            def run_parse() -> None:
-                try:
-                    parsed, errors = parse_and_validate_csv(
-                        file_bytes,
-                        progress_callback=on_validate,
-                        progress_total=estimated_rows,
-                        brand_keys_filter=brand_keys_filter,
-                        column_value_filter=column_value_filter,
-                    )
-                    parsed_holder.append(parsed)
-                    errors_holder.append(errors)
-                except Exception as exc:
-                    parsed_holder.append([])
-                    errors_holder.append([{
-                        "row": 0,
-                        "field": "file",
-                        "message": f"Errore durante la lettura del CSV: {exc}",
-                    }])
-                finally:
-                    progress_queue.put(None)
-
-            yield self._ndjson_line({
-                "phase": "uploading",
-                "current": 100,
-                "total": 100,
-                "message": "File ricevuto, avvio validazione…",
-            })
-            yield self._ndjson_line({
-                "phase": "validating",
-                "current": 0,
-                "total": estimated_rows,
-                "message": "Validazione righe CSV…",
-            })
-
-            thread = threading.Thread(target=run_parse, daemon=True)
-            thread.start()
-            while True:
-                try:
-                    item = progress_queue.get(timeout=20)
-                except queue.Empty:
-                    yield self._ndjson_line({
-                        "phase": "validating",
-                        "message": "Validazione CSV in corso…",
-                    })
-                    continue
-                if item is None:
-                    break
-                yield self._ndjson_line(item)
-            thread.join(timeout=600)
-            if thread.is_alive():
-                yield self._ndjson_line({
-                    "phase": "failed",
-                    "detail": "Validazione CSV troppo lenta o interrotta. Riduci il file o usa un filtro colonna.",
-                    "errors": [{
-                        "row": 0,
-                        "field": "file",
-                        "message": "Timeout validazione CSV.",
-                    }],
-                    "created_products": 0,
-                    "created_variants": 0,
-                })
-                return
-
-            parsed_rows = parsed_holder[0] if parsed_holder else []
-            errors = errors_holder[0] if errors_holder else []
-            if errors:
-                yield self._ndjson_line({
-                    "phase": "failed",
-                    "detail": "Validazione CSV non riuscita. Correggi gli errori sotto e riprova.",
-                    "errors": errors[:300],
-                    "error_count": len(errors),
-                    "created_products": 0,
-                    "created_variants": 0,
-                })
-                return
-
-            if not parsed_rows:
-                yield self._ndjson_line({
-                    "phase": "failed",
-                    "detail": "Nessuna riga da importare. Verifica il filtro colonne/valori e il file CSV.",
-                    "errors": [{
-                        "row": 0,
-                        "field": "file",
-                        "message": "Nessuna riga valida da importare.",
-                    }],
-                    "created_products": 0,
-                    "created_variants": 0,
-                })
-                return
-
-            yield self._ndjson_line({
-                "phase": "validated",
-                "current": len(parsed_rows),
-                "total": len(parsed_rows),
-                "message": f"{len(parsed_rows)} righe varianti pronte per l'import.",
-            })
-
-            try:
-                for event in iter_import_parsed_rows(parsed_rows):
-                    if event["phase"] == "importing":
-                        yield self._ndjson_line(event)
-                    elif event["phase"] == "complete":
-                        products = event["created_products"]
-                        variants = event["created_variants"]
-                        yield self._ndjson_line({
-                            "phase": "done",
-                            "detail": (
-                                f"Importati {products} prodott{'o' if products == 1 else 'i'} "
-                                f"con {variants} variant{'e' if variants == 1 else 'i'}."
-                            ),
-                            "errors": [],
-                            "created_products": products,
-                            "created_variants": variants,
-                        })
-            except ValueError as exc:
-                yield self._ndjson_line({
-                    "phase": "failed",
-                    "detail": str(exc),
-                    "errors": [{"row": 0, "field": "url_immagini", "message": str(exc)}],
-                    "created_products": 0,
-                    "created_variants": 0,
-                })
-            except Exception as exc:
-                yield self._ndjson_line({
-                    "phase": "failed",
-                    "detail": f"Import interrotto: {exc}",
-                    "errors": [{"row": 0, "field": "file", "message": str(exc)}],
-                    "created_products": 0,
-                    "created_variants": 0,
-                })
+        filters, error_response = self._resolve_csv_import_filters(request)
+        if error_response is not None:
+            if staged_upload_id:
+                delete_staged_csv(staged_upload_id)
+            return error_response
+        column_value_filter, brand_keys_filter = filters
+        skip_existing = _parse_skip_existing_in_catalog(request)
+        filename = (
+            request.data.get("filename")
+            or request.POST.get("filename")
+            or ""
+        ).strip()
 
         response = StreamingHttpResponse(
-            event_stream(),
+            self._iter_csv_import_events(
+                file_bytes,
+                column_value_filter=column_value_filter,
+                brand_keys_filter=brand_keys_filter,
+                staged_upload_id=staged_upload_id,
+                skip_existing_in_catalog=skip_existing,
+                import_filename=filename,
+            ),
             content_type="application/x-ndjson; charset=utf-8",
         )
         response["Cache-Control"] = "no-cache"
@@ -831,6 +1051,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             read_csv_upload_bytes(upload.read(), upload.name or ""),
             brand_keys_filter=brand_keys_filter,
             column_value_filter=column_value_filter,
+            skip_existing_in_catalog=_parse_skip_existing_in_catalog(request),
         )
         if errors:
             return Response(

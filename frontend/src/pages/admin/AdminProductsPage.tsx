@@ -12,11 +12,13 @@ import {
   restoreDemoCatalog,
   fetchAdminProducts,
   importProductsCsvWithProgress,
+  rollbackCsvImportBatch,
   updateAdminProduct,
   type CsvImportColumnFilter,
   type CsvImportColumnOption,
   type CsvImportError,
   type CsvImportProgressEvent,
+  type CsvImportResult,
   type CsvImportValueOption,
 } from '../../api/admin'
 import {
@@ -44,6 +46,9 @@ export default function AdminProductsPage() {
   const [importErrors, setImportErrors] = useState<CsvImportError[]>([])
   const [importDetail, setImportDetail] = useState('')
   const [importProgress, setImportProgress] = useState<CsvImportProgressEvent | null>(null)
+  const [importBatchId, setImportBatchId] = useState<string | null>(null)
+  const [importBatchCreated, setImportBatchCreated] = useState(0)
+  const [rollbackImportBusy, setRollbackImportBusy] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [deleteAllBusy, setDeleteAllBusy] = useState(false)
@@ -184,7 +189,7 @@ export default function AdminProductsPage() {
       const suffix =
         importProgress.phase === 'validating'
           ? t('adminProducts.progressRows')
-          : importProgress.phase === 'importing'
+          : importProgress.phase === 'importing' || importProgress.phase === 'skipped'
             ? t('adminProducts.progressProducts')
             : ''
       return `${current.toLocaleString()} / ${importProgress.total.toLocaleString()}${suffix}`
@@ -277,11 +282,21 @@ export default function AdminProductsPage() {
     setImportSuccess('')
     setImportErrors([])
     setImportDetail('')
+    setImportBatchId(null)
+    setImportBatchCreated(0)
     setImportProgress({ phase: 'uploading', current: 0, total: 100, message: 'Caricamento file…' })
     try {
       const result = await importProductsCsvWithProgress(
         file,
-        (event) => setImportProgress(event),
+        (event) => {
+          setImportProgress(event)
+          if (event.batch_id) setImportBatchId(event.batch_id)
+          if (event.phase === 'done' || event.phase === 'failed') {
+            setImportBatchCreated(event.created_products ?? 0)
+          } else if (event.phase === 'importing' && event.batch_id) {
+            setImportBatchId(event.batch_id)
+          }
+        },
         (percent) => setImportProgress({
           phase: 'uploading',
           current: percent,
@@ -291,12 +306,24 @@ export default function AdminProductsPage() {
         columnFilter,
       )
       setImportSuccess(result.detail)
+      if (result.batch_id) setImportBatchId(result.batch_id)
+      setImportBatchCreated(result.created_products)
+      if (result.errors?.length) {
+        setImportErrors(result.errors)
+        if (result.import_partial) {
+          setImportDetail(result.detail)
+        }
+      }
       setImportProgress({ phase: 'done', current: 100, total: 100, message: result.detail })
       queryClient.invalidateQueries({ queryKey: ['admin-products'] })
     } catch (err: unknown) {
       const responseData = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { detail?: string; errors?: CsvImportError[] } } }).response?.data
+        ? (err as { response?: { data?: CsvImportResult & { errors?: CsvImportError[] } } }).response?.data
         : undefined
+      if (responseData?.batch_id) {
+        setImportBatchId(responseData.batch_id)
+        setImportBatchCreated(responseData.created_products ?? 0)
+      }
       if (responseData?.errors?.length) {
         setImportDetail(responseData.detail || 'Validazione CSV non riuscita.')
         setImportErrors(responseData.errors)
@@ -399,6 +426,25 @@ export default function AdminProductsPage() {
     setImportModalOpen(false)
     resetImportModalState()
     await runCsvImport(file, { column, values })
+  }
+
+  const handleRollbackLastImport = async () => {
+    if (!importBatchId || importBatchCreated <= 0) return
+    if (!window.confirm(t('adminProducts.confirmRollbackImport', { count: importBatchCreated }))) return
+    setRollbackImportBusy(true)
+    setImportDetail('')
+    try {
+      const result = await rollbackCsvImportBatch(importBatchId)
+      setImportSuccess(result.detail)
+      setImportBatchId(null)
+      setImportBatchCreated(0)
+      setImportErrors([])
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      setImportDetail(formatApiError(err, t('adminProducts.rollbackImportError')))
+    } finally {
+      setRollbackImportBusy(false)
+    }
   }
 
   const handleDeleteAll = async () => {
@@ -513,6 +559,7 @@ export default function AdminProductsPage() {
       <section className="admin-card admin-import-panel">
         <h2>{t('adminProducts.importExportTitle')}</h2>
         <p className="admin-hint">{t('adminProducts.importHint')}</p>
+        <p className="admin-hint">{t('adminProducts.skipExistingHint')}</p>
         {catalogEmpty && (
           <div className="admin-alert admin-alert-warning">
             <p>{t('adminProducts.emptyCatalog')}</p>
@@ -561,6 +608,19 @@ export default function AdminProductsPage() {
           </div>
         )}
         {importSuccess && <p className="admin-alert admin-alert-success">{importSuccess}</p>}
+        {importBatchId && importBatchCreated > 0 && !importing && (
+          <div className="admin-import-rollback">
+            <p className="admin-hint">{t('adminProducts.rollbackImportHint', { count: importBatchCreated })}</p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={rollbackImportBusy}
+              onClick={handleRollbackLastImport}
+            >
+              {rollbackImportBusy ? t('adminProducts.rollbackImportBusy') : t('adminProducts.rollbackImport')}
+            </button>
+          </div>
+        )}
         {importDetail && !importSuccess && (
           <p className="admin-alert admin-alert-error">{importDetail}</p>
         )}

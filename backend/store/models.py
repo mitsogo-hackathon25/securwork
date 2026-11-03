@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django.db import models
@@ -220,3 +221,45 @@ class Color(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)[:120] or "color"
         super().save(*args, **kwargs)
+
+
+class CsvImportBatch(models.Model):
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        PARTIAL = "partial", "Partial"
+        FAILED = "failed", "Failed"
+        ROLLED_BACK = "rolled_back", "Rolled back"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    filename = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.IN_PROGRESS,
+    )
+    created_products = models.PositiveIntegerField(default=0)
+    created_variants = models.PositiveIntegerField(default=0)
+    skipped_products = models.PositiveIntegerField(default=0)
+    error_detail = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Import {self.id} ({self.status})"
+
+
+class CsvImportBatchItem(models.Model):
+    batch = models.ForeignKey(
+        CsvImportBatch,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    product_sku = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("batch", "product")]

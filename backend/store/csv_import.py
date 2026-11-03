@@ -6,11 +6,14 @@ import gzip
 import io
 import logging
 import re
+import uuid
 import unicodedata
 from collections import defaultdict
 from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
+from django.conf import settings
 from django.db import transaction
 from django.utils.text import slugify
 
@@ -47,6 +50,43 @@ def read_csv_upload_bytes(raw: bytes, filename: str = "") -> bytes:
             logger.exception("Failed to decompress gzip CSV upload")
             return raw
     return raw
+
+
+_UPLOAD_ID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
+
+
+def csv_import_staging_dir():
+    path = Path(settings.MEDIA_ROOT) / "csv_import_staging"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def stage_csv_upload(file_bytes: bytes) -> tuple[str, int]:
+    """Persist decoded CSV for a follow-up stream import (avoids one long HTTP request)."""
+    upload_id = str(uuid.uuid4())
+    path = csv_import_staging_dir() / f"{upload_id}.csv"
+    path.write_bytes(file_bytes)
+    estimated_rows = max(1, file_bytes.count(b"\n") - 1)
+    return upload_id, estimated_rows
+
+
+def load_staged_csv(upload_id: str) -> bytes | None:
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        return None
+    path = csv_import_staging_dir() / f"{upload_id}.csv"
+    if not path.is_file():
+        return None
+    return path.read_bytes()
+
+
+def delete_staged_csv(upload_id: str) -> None:
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        return
+    path = csv_import_staging_dir() / f"{upload_id}.csv"
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not delete staged CSV %s", upload_id)
 
 
 def _existing_product_names_it() -> set[str]:
@@ -1636,6 +1676,7 @@ def parse_and_validate_csv(
     progress_total: int | None = None,
     brand_keys_filter: set[str] | None = None,
     column_value_filter: tuple[str, set[str]] | None = None,
+    skip_existing_in_catalog: bool = False,
 ) -> tuple[list[dict], list[dict]]:
     """Return (parsed_rows, errors). parsed_rows is empty when errors exist."""
     errors: list[dict] = []
@@ -1757,17 +1798,18 @@ def parse_and_validate_csv(
             parent_key = product_sku.lower()
             if parent_key in existing_skus and parent_key not in reported_existing_parent_skus:
                 reported_existing_parent_skus.add(parent_key)
-                errors.append({
-                    "row": row_num,
-                    "field": "sku_prodotto",
-                    "message": (
-                        f"Il Codice Padre '{product_sku}' esiste già nel catalogo. "
-                        "Rimuovilo dal CSV o elimina/disattiva il prodotto esistente."
-                    ),
-                })
+                if not skip_existing_in_catalog:
+                    errors.append({
+                        "row": row_num,
+                        "field": "sku_prodotto",
+                        "message": (
+                            f"Il Codice Padre '{product_sku}' esiste già nel catalogo. "
+                            "Rimuovilo dal CSV o elimina/disattiva il prodotto esistente."
+                        ),
+                    })
         elif name_it and product_sku:
             name_key = name_it.strip().lower()
-            if name_key in existing_names_it:
+            if name_key in existing_names_it and not skip_existing_in_catalog:
                 errors.append({
                     "row": row_num,
                     "field": "nome_it",
@@ -2110,8 +2152,8 @@ def parse_and_validate_csv(
     return parsed_rows, []
 
 
-def _import_one_product_group(rows: list[dict]) -> tuple[int, int]:
-    """Create one product and its variants. Returns (variants_created, 1 product)."""
+def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
+    """Create one product and its variants. Returns (variants_created, product)."""
     first = rows[0]
     brand_name = ensure_brand(first["brand"])
     base_slug = slugify(first["name_it"])[:240] or slugify(first["product_sku"])[:240] or "product"
@@ -2210,11 +2252,18 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, int]:
         )
         variants_created += 1
 
-    return variants_created, 1
+    return variants_created, product
 
 
-def iter_import_parsed_rows(parsed_rows: list[dict]):
+def iter_import_parsed_rows(
+    parsed_rows: list[dict],
+    *,
+    import_batch=None,
+    skip_existing_in_catalog: bool = False,
+):
     """Yield progress events, then a final complete event with counts."""
+    from .models import CsvImportBatchItem
+
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in parsed_rows:
         grouped[row["product_sku"].lower()].append(row)
@@ -2222,25 +2271,64 @@ def iter_import_parsed_rows(parsed_rows: list[dict]):
     total_products = len(grouped)
     created_products = 0
     created_variants = 0
+    skipped_products = 0
+    import_errors: list[dict] = []
+    catalog_skus = _existing_product_skus()
 
     for index, rows in enumerate(grouped.values(), start=1):
         first = rows[0]
-        with transaction.atomic():
-            variant_count, _product_count = _import_one_product_group(rows)
-        created_products += 1
-        created_variants += variant_count
-        yield {
-            "phase": "importing",
-            "current": index,
-            "total": total_products,
-            "message": f"Importazione prodotto {index} di {total_products}…",
-            "product_sku": first.get("product_sku") or "",
-        }
+        parent_key = (first.get("product_sku") or "").strip().lower()
+        if skip_existing_in_catalog and parent_key and parent_key in catalog_skus:
+            skipped_products += 1
+            yield {
+                "phase": "skipped",
+                "current": index,
+                "total": total_products,
+                "message": f"Già in catalogo: {first.get('product_sku') or parent_key}",
+                "product_sku": first.get("product_sku") or "",
+            }
+            continue
+
+        try:
+            with transaction.atomic():
+                variant_count, product = _import_one_product_group(rows)
+            if import_batch is not None:
+                CsvImportBatchItem.objects.create(
+                    batch=import_batch,
+                    product=product,
+                    product_sku=product.sku,
+                )
+            catalog_skus.add(product.sku.strip().lower())
+            created_products += 1
+            created_variants += variant_count
+            yield {
+                "phase": "importing",
+                "current": index,
+                "total": total_products,
+                "message": f"Importazione prodotto {index} di {total_products}…",
+                "product_sku": first.get("product_sku") or "",
+            }
+        except Exception as exc:
+            logger.exception("CSV import failed for product group %s", parent_key)
+            import_errors.append({
+                "row": 0,
+                "field": "sku_prodotto",
+                "message": f"{first.get('product_sku') or parent_key}: {exc}",
+            })
+            yield {
+                "phase": "importing",
+                "current": index,
+                "total": total_products,
+                "message": f"Errore su {first.get('product_sku') or parent_key}, si continua…",
+                "product_sku": first.get("product_sku") or "",
+            }
 
     yield {
         "phase": "complete",
         "created_products": created_products,
         "created_variants": created_variants,
+        "skipped_products": skipped_products,
+        "import_errors": import_errors,
     }
 
 

@@ -12,15 +12,19 @@ from store.csv_import import (
     canonical_filter_key,
     export_products_csv,
     import_parsed_rows,
+    iter_import_parsed_rows,
     normalize_column_key,
     parse_and_validate_csv,
     read_csv_upload_bytes,
+    delete_staged_csv,
+    load_staged_csv,
     scan_csv_brands,
     scan_csv_column_values,
     scan_csv_columns,
+    stage_csv_upload,
     SUPPLIER_EXPORT_HEADERS,
 )
-from store.models import Category, Product, ProductVariant
+from store.models import Category, CsvImportBatch, Product, ProductVariant
 
 
 NATIVE_CSV = """sku_prodotto,marca,categoria,nome_it,nome_en,descrizione_it,descrizione_en,taglia,colore,prezzo,scorte,sku_variante
@@ -270,6 +274,15 @@ P2;P2-L;Polo 2;Nero;L;12,50
         self.assertIn("sku_prodotto", keys)
         self.assertIn("merceologica", keys)
 
+    def test_stage_csv_upload_roundtrip(self):
+        raw = b"Codice Padre;SKU;Descrizione;Prezzo\nP1;P1-M;Test;10,00\n"
+        upload_id, rows = stage_csv_upload(raw)
+        self.assertGreater(rows, 0)
+        loaded = load_staged_csv(upload_id)
+        self.assertEqual(loaded, raw)
+        delete_staged_csv(upload_id)
+        self.assertIsNone(load_staged_csv(upload_id))
+
     def test_read_csv_upload_gzip(self):
         raw = b"sku_prodotto,marca\nx,y\n"
         compressed = gzip.compress(raw)
@@ -435,3 +448,43 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertIn("POLO", row)
         self.assertIn("AY 7439-XS-ACQUAMARINA", row)
         self.assertIn("12,50", row)
+
+    def test_skip_existing_in_catalog_allows_duplicate_parent_sku(self):
+        Product.objects.create(sku="PAD-01", slug="pad-01-existing", brand="X")
+        rows, errors = parse_and_validate_csv(
+            SUPPLIER_CSV.encode("utf-8"),
+            skip_existing_in_catalog=True,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(len(rows), 2)
+
+    def test_iter_import_skips_existing_and_records_batch_items(self):
+        rows, errors = parse_and_validate_csv(SUPPLIER_CSV.encode("utf-8"))
+        self.assertEqual(errors, [])
+        batch = CsvImportBatch.objects.create(filename="supplier.csv")
+        events = list(
+            iter_import_parsed_rows(rows, import_batch=batch, skip_existing_in_catalog=False),
+        )
+        complete = events[-1]
+        self.assertEqual(complete["phase"], "complete")
+        self.assertEqual(complete["created_products"], 1)
+        self.assertEqual(batch.items.count(), 1)
+
+        rows_retry, errors_retry = parse_and_validate_csv(
+            SUPPLIER_CSV.encode("utf-8"),
+            skip_existing_in_catalog=True,
+        )
+        self.assertEqual(errors_retry, [])
+        batch2 = CsvImportBatch.objects.create(filename="retry.csv")
+        events2 = list(
+            iter_import_parsed_rows(
+                rows_retry,
+                import_batch=batch2,
+                skip_existing_in_catalog=True,
+            ),
+        )
+        complete2 = events2[-1]
+        self.assertEqual(complete2["skipped_products"], 1)
+        self.assertEqual(complete2["created_products"], 0)
+        self.assertEqual(batch2.items.count(), 0)
+        self.assertEqual(Product.objects.filter(sku="PAD-01").count(), 1)

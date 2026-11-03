@@ -75,6 +75,10 @@ export type CsvImportResult = {
   errors: CsvImportError[]
   created_products: number
   created_variants: number
+  skipped_products?: number
+  batch_id?: string
+  can_rollback?: boolean
+  import_partial?: boolean
 }
 
 const downloadCsvBlob = async (blob: Blob, filename: string) => {
@@ -148,7 +152,7 @@ export const importProductsCsv = async (file: File) => {
 }
 
 export type CsvImportProgressEvent = {
-  phase: 'uploading' | 'validating' | 'validated' | 'importing' | 'done' | 'failed'
+  phase: 'uploading' | 'validating' | 'validated' | 'importing' | 'skipped' | 'done' | 'failed'
   current?: number
   total?: number
   message?: string
@@ -158,6 +162,10 @@ export type CsvImportProgressEvent = {
   error_count?: number
   created_products?: number
   created_variants?: number
+  skipped_products?: number
+  batch_id?: string
+  can_rollback?: boolean
+  import_partial?: boolean
 }
 
 export type CsvImportBrandOption = {
@@ -203,18 +211,18 @@ export const fetchCsvImportColumnValues = async (file: File, column: string) => 
   )
 }
 
-export function importProductsCsvWithProgress(
-  file: File,
+function appendCsvImportFilters(form: FormData, columnFilter?: CsvImportColumnFilter) {
+  if (columnFilter?.column && columnFilter.values.length > 0) {
+    form.append('filter_column', columnFilter.column)
+    form.append('filter_values', JSON.stringify(columnFilter.values))
+  }
+}
+
+function applyCsvImportStreamXhr(
+  form: FormData,
   onEvent: (event: CsvImportProgressEvent) => void,
-  onUploadProgress?: (percent: number) => void,
-  columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportResult> {
-  return buildCsvUploadForm(file, columnFilter && columnFilter.column && columnFilter.values.length > 0
-    ? {
-        filter_column: columnFilter.column,
-        filter_values: JSON.stringify(columnFilter.values),
-      }
-    : undefined).then((form) => new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const qs = new URLSearchParams({ lang: i18n.language })
     xhr.open('POST', `/api/admin/products/import_csv_stream/?${qs.toString()}`)
@@ -230,6 +238,8 @@ export function importProductsCsvWithProgress(
     let lastParsedIndex = 0
     let buffer = ''
     let settled = false
+    let lastBatchId: string | undefined
+    let lastCanRollback = false
 
     const failImport = (message: string) => {
       if (settled) return
@@ -245,6 +255,8 @@ export function importProductsCsvWithProgress(
         if (!trimmed) continue
         try {
           const event = JSON.parse(trimmed) as CsvImportProgressEvent
+          if (event.batch_id) lastBatchId = event.batch_id
+          if (event.can_rollback) lastCanRollback = true
           onEvent(event)
           if (event.phase === 'done' && !settled) {
             settled = true
@@ -253,6 +265,10 @@ export function importProductsCsvWithProgress(
               errors: event.errors || [],
               created_products: event.created_products ?? 0,
               created_variants: event.created_variants ?? 0,
+              skipped_products: event.skipped_products,
+              batch_id: event.batch_id ?? lastBatchId,
+              can_rollback: event.can_rollback ?? lastCanRollback,
+              import_partial: event.import_partial,
             })
           } else if (event.phase === 'failed' && !settled) {
             settled = true
@@ -263,15 +279,17 @@ export function importProductsCsvWithProgress(
               data: {
                 detail: event.detail || 'Import non riuscito.',
                 errors: event.errors || [],
-                created_products: 0,
-                created_variants: 0,
+                created_products: event.created_products ?? 0,
+                created_variants: event.created_variants ?? 0,
                 error_count: event.error_count,
+                batch_id: event.batch_id ?? lastBatchId,
+                can_rollback: event.can_rollback ?? lastCanRollback,
               },
             }
             reject(err)
           }
         } catch {
-          // ignore malformed partial chunks
+          /* partial chunk */
         }
       }
     }
@@ -284,18 +302,10 @@ export function importProductsCsvWithProgress(
       consumeBuffer()
     }
 
-    xhr.upload.onprogress = (e) => {
-      if (!onUploadProgress || !e.lengthComputable) return
-      onUploadProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
-    }
-
     xhr.onreadystatechange = () => {
       if (xhr.readyState >= 3) drainResponse()
     }
-
-    xhr.onprogress = () => {
-      drainResponse()
-    }
+    xhr.onprogress = () => drainResponse()
 
     const pollId = window.setInterval(() => {
       if (xhr.readyState >= 4) {
@@ -304,7 +314,6 @@ export function importProductsCsvWithProgress(
       }
       if (xhr.readyState >= 3) drainResponse()
     }, 400)
-
     const stopPoll = () => window.clearInterval(pollId)
 
     xhr.onload = () => {
@@ -313,52 +322,35 @@ export function importProductsCsvWithProgress(
       if (settled) return
       if (xhr.status === 0) {
         failImport(
-          'Connessione interrotta durante l\'import CSV. '
-          + 'Spesso è un timeout (nginx, Cloudflare ~100s, o gunicorn). '
-          + 'Sul server: proxy_read_timeout 600s, gunicorn --timeout 600, client_max_body_size 256M. '
-          + 'Prova un filtro colonna per importare meno righe.',
+          'Connessione interrotta durante l\'import. '
+          + 'Se usi Cloudflare (proxy arancione), il limite è ~100 secondi: passa l\'API in DNS only '
+          + 'oppure aumenta timeout nginx/gunicorn (600s). Prova anche un filtro colonna.',
         )
         return
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        failImport(
-          'Import terminato senza conferma dal server. '
-          + 'Riprova: se il file è molto grande attendi il completamento o riduci il filtro.',
-        )
+        failImport('Import terminato senza conferma dal server.')
         return
       }
       let detail = xhr.responseText || `HTTP ${xhr.status}`
-      if (xhr.status === 413) {
-        detail =
-          'Upload blocked by server size limit (HTTP 413). Set nginx client_max_body_size 256M on /api/.'
+      if (xhr.status === 524) {
+        detail = 'Timeout Cloudflare (524). Disattiva il proxy per www.securwork.it o importa a batch con filtro colonna.'
       }
       try {
-        const parsed = JSON.parse(xhr.responseText) as { detail?: string; errors?: CsvImportError[] }
+        const parsed = JSON.parse(xhr.responseText) as { detail?: string }
         if (parsed.detail) detail = parsed.detail
-        settled = true
-        reject(
-          Object.assign(new Error(detail), {
-            response: { data: parsed },
-          }),
-        )
-        return
       } catch {
-        failImport(detail)
+        /* plain text */
       }
+      failImport(detail)
     }
 
     xhr.onerror = () => {
       stopPoll()
-      if (xhr.status === 413) {
-        failImport(
-          'File troppo grande per il limite upload (HTTP 413). Imposta nginx client_max_body_size 256M.',
-        )
-        return
-      }
       failImport(
-        'Errore di rete durante l\'import CSV. '
-        + 'Controlla in DevTools → Network la richiesta import_csv_stream. '
-        + 'Se status (failed) o 524: aumenta timeout nginx/gunicorn o usa filtro colonna.',
+        'Connessione interrotta (import_csv_stream). '
+        + 'Il file viene caricato in un passo separato; se fallisce qui, di solito è timeout proxy durante validazione/import. '
+        + 'Controlla DevTools → Network (524 o failed).',
       )
     }
     xhr.ontimeout = () => {
@@ -370,8 +362,99 @@ export function importProductsCsvWithProgress(
       failImport('Import CSV annullato.')
     }
     xhr.send(form)
-  }))
+  })
 }
+
+function stageCsvImportFile(
+  file: File,
+  onUploadProgress?: (percent: number) => void,
+): Promise<{ upload_id: string; estimated_rows: number }> {
+  return buildCsvUploadForm(file).then(
+    (form) =>
+      new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        const qs = new URLSearchParams({ lang: i18n.language })
+        xhr.open('POST', `/api/admin/products/import_csv_stage/?${qs.toString()}`)
+        xhr.withCredentials = true
+        xhr.responseType = 'json'
+        xhr.timeout = 0
+
+        const token = localStorage.getItem('access_token')
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+        }
+
+        xhr.upload.onprogress = (e) => {
+          if (!onUploadProgress || !e.lengthComputable) return
+          onUploadProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+        }
+
+        xhr.onload = () => {
+          if (xhr.status === 413) {
+            reject(new Error('File troppo grande (HTTP 413). Imposta nginx client_max_body_size 256M.'))
+            return
+          }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const data = xhr.response as { upload_id?: string; estimated_rows?: number }
+            if (data?.upload_id) {
+              resolve({
+                upload_id: data.upload_id,
+                estimated_rows: data.estimated_rows ?? 0,
+              })
+              return
+            }
+          }
+          let detail = `HTTP ${xhr.status}`
+          try {
+            const parsed = xhr.response as { detail?: string }
+            if (parsed?.detail) detail = parsed.detail
+          } catch {
+            /* ignore */
+          }
+          reject(new Error(detail || 'Caricamento CSV fallito.'))
+        }
+
+        xhr.onerror = () => {
+          reject(
+            new Error(
+              'Caricamento CSV fallito (rete). Controlla import_csv_stage in DevTools (413, failed).',
+            ),
+          )
+        }
+        xhr.send(form)
+      }),
+  )
+}
+
+export function importProductsCsvWithProgress(
+  file: File,
+  onEvent: (event: CsvImportProgressEvent) => void,
+  onUploadProgress?: (percent: number) => void,
+  columnFilter?: CsvImportColumnFilter,
+): Promise<CsvImportResult> {
+  return stageCsvImportFile(file, onUploadProgress).then((staged) => {
+    onEvent({
+      phase: 'uploading',
+      current: 100,
+      total: 100,
+      message: 'File caricato sul server, avvio validazione…',
+    })
+    const form = new FormData()
+    form.append('upload_id', staged.upload_id)
+    form.append('filename', file.name)
+    form.append('skip_existing', '1')
+    appendCsvImportFilters(form, columnFilter)
+    return applyCsvImportStreamXhr(form, onEvent)
+  })
+}
+
+export const rollbackCsvImportBatch = (batchId: string) =>
+  api
+    .post<BulkDeleteResult & { batch_id: string }>(
+      '/admin/products/rollback_import_batch/',
+      { batch_id: batchId },
+    )
+    .then((r) => r.data)
 
 export type PriceAdjustResult = {
   detail: string
