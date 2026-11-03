@@ -30,7 +30,11 @@ export function postMultipartJson<T>(apiPath: string, form: FormData): Promise<T
         return
       }
       let detail = `HTTP ${xhr.status}`
-      if (data && typeof data === 'object' && typeof (data as ApiErrorBody).detail === 'string') {
+      if (xhr.status === 413) {
+        detail =
+          'CSV file is too large for the server upload limit (HTTP 413). '
+          + 'Ask your host to set nginx client_max_body_size to at least 256M on /api/, then redeploy.'
+      } else if (data && typeof data === 'object' && typeof (data as ApiErrorBody).detail === 'string') {
         detail = (data as ApiErrorBody).detail as string
       }
       reject(

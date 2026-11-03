@@ -264,6 +264,11 @@ SECURWORK_COMPANY_PHONE = config("SECURWORK_COMPANY_PHONE", default="+39 [PLACEH
 SECURWORK_MAP_LAT = config("SECURWORK_MAP_LAT", default="45.4642")
 SECURWORK_MAP_LNG = config("SECURWORK_MAP_LNG", default="9.1900")
 
+# Supplier CSV import (nginx must allow the same size — deploy/nginx/securwork.conf)
+_DATA_UPLOAD_MAX = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=256 * 1024 * 1024, cast=int)
+DATA_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX
+FILE_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX
+
 # Security (production)
 if not DEBUG:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)

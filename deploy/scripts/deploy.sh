@@ -31,6 +31,12 @@ echo "==> Permissions"
 chown -R www-data:www-data "${APP_DIR}"
 chmod -R 755 "${APP_DIR}/backend/media"
 
+echo "==> Nginx (upload limits for CSV import)"
+if [ -f "${APP_DIR}/deploy/nginx/securwork.conf" ]; then
+  cp "${APP_DIR}/deploy/nginx/securwork.conf" /etc/nginx/sites-available/securwork
+  ln -sf /etc/nginx/sites-available/securwork /etc/nginx/sites-enabled/securwork
+fi
+
 echo "==> Restart services"
 systemctl restart securwork
 nginx -t && systemctl reload nginx
