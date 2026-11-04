@@ -57,7 +57,10 @@ from .models import Brand, Category, Color, CsvImportBatch, Product, ProductImag
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
 from .toptex_client import TOPTEX_USAGE_RIGHTS, TopTexAPIError, TopTexClient, TopTexConfigError
-from .toptex_import import prepare_toptex_import_staging
+from .toptex_import import (
+    fetch_and_stage_toptex_catalog_usage_right,
+    prepare_toptex_import_staging_from_sync_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1028,12 +1031,73 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
+        parser_classes=[JSONParser],
+        url_path="toptex_sync_catalog_step",
+    )
+    def toptex_sync_catalog_step(self, request):
+        """
+        Fetch one TopTex usage_right catalog slice and append to staged catalog (short HTTP).
+        """
+        import uuid as uuid_mod
+
+        from .csv_import import _UPLOAD_ID_RE
+
+        try:
+            usage_right = (request.data.get("usage_right") or "").strip()
+            if usage_right not in TOPTEX_USAGE_RIGHTS:
+                return Response(
+                    {
+                        "detail": (
+                            f"usage_right obbligatorio: "
+                            f"{', '.join(TOPTEX_USAGE_RIGHTS)}"
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            sync_id = (request.data.get("sync_id") or "").strip()
+            if sync_id and not _UPLOAD_ID_RE.match(sync_id):
+                return Response(
+                    {"detail": "sync_id non valido."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not sync_id:
+                sync_id = str(uuid_mod.uuid4())
+            count = fetch_and_stage_toptex_catalog_usage_right(sync_id, usage_right)
+            from .toptex_import import load_toptex_catalog_staging
+
+            staged = load_toptex_catalog_staging(sync_id) or {}
+            return Response({
+                "sync_id": sync_id,
+                "usage_right": usage_right,
+                "catalog_items": count,
+                "staged_usage_rights": sorted(staged.keys()),
+                "detail": f"TopTex {usage_right}: {count} articoli catalogo.",
+            })
+        except TopTexConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except TopTexAPIError as exc:
+            code = status.HTTP_502_BAD_GATEWAY
+            if exc.status and 400 <= exc.status < 500:
+                code = status.HTTP_400_BAD_REQUEST
+            return Response({"detail": str(exc)}, status=code)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("toptex_sync_catalog_step failed")
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=False,
+        methods=["post"],
         parser_classes=[JSONParser, FormParser],
         url_path="toptex_sync_prepare",
     )
     def toptex_sync_prepare(self, request):
         """
-        Fetch TopTex catalog for all configured usage_right values, stage rows, start import batch.
+        Build parsed import rows from staged TopTex catalog and start import batch.
         """
         try:
             return self._toptex_sync_prepare_impl(request)
@@ -1046,15 +1110,38 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(exc)}, status=code)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except (OperationalError, DatabaseError) as exc:
+            logger.exception("toptex_sync_prepare database error")
+            db_response = _import_batch_create_error_response(exc, staging_upload_id=None)
+            if db_response is not None:
+                return db_response
+            return Response(
+                {"detail": f"Errore database: {exc}", "code": "database_error"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except Exception as exc:
             logger.exception("toptex_sync_prepare failed")
             return Response(
-                {"detail": f"Errore sincronizzazione TopTex: {exc}"},
+                {
+                    "detail": f"Errore sincronizzazione TopTex: {exc}",
+                    "code": "toptex_sync_prepare_error",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def _toptex_sync_prepare_impl(self, request):
-        sync_id, parsed_rows, usage_stats = prepare_toptex_import_staging()
+        sync_id = (request.data.get("sync_id") or request.POST.get("sync_id") or "").strip()
+        if not sync_id:
+            return Response(
+                {
+                    "detail": (
+                        "Manca sync_id. Esegui prima i tre passi catalogo TopTex "
+                        "(toptex_sync_catalog_step per ogni usage_right)."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        sync_id, parsed_rows, usage_stats = prepare_toptex_import_staging_from_sync_id(sync_id)
         total_products = len(group_parsed_product_rows(parsed_rows))
         try:
             import_batch = CsvImportBatch.objects.create(

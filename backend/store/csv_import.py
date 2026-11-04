@@ -83,7 +83,7 @@ def load_staged_csv(upload_id: str) -> bytes | None:
 def delete_staged_csv(upload_id: str) -> None:
     if not _UPLOAD_ID_RE.match(upload_id or ""):
         return
-    for suffix in (".csv", ".parsed.json.gz"):
+    for suffix in (".csv", ".parsed.json.gz", ".toptex_catalog.json.gz"):
         path = csv_import_staging_dir() / f"{upload_id}{suffix}"
         try:
             path.unlink(missing_ok=True)

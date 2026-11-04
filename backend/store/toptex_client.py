@@ -147,7 +147,7 @@ class TopTexClient:
         catalog_ref = (catalog_ref or "").strip()
         if not catalog_ref:
             return []
-        page_size = str(getattr(settings, "TOPTEX_API_PAGE_SIZE", 100))
+        page_size = str(max(1, int(getattr(settings, "TOPTEX_API_PAGE_SIZE", 100))))
         max_pages = int(getattr(settings, "TOPTEX_MAX_CATALOG_PAGES", 500))
         items: list[dict[str, Any]] = []
         page_number = 1

@@ -1,6 +1,8 @@
 """Map TopTex catalog JSON to SecurWork CSV-import row format."""
 from __future__ import annotations
 
+import gzip
+import json
 import logging
 import uuid
 from decimal import Decimal, InvalidOperation
@@ -12,11 +14,14 @@ from .csv_import import (
     _merge_image_url_lists,
     _normalize_http_url,
     _normalize_price_string,
+    csv_import_staging_dir,
     stage_parsed_import_rows,
 )
-from .toptex_client import TopTexAPIError, TopTexClient
+from .toptex_client import TOPTEX_USAGE_RIGHTS, TopTexAPIError, TopTexClient, TopTexConfigError
 
 logger = logging.getLogger(__name__)
+
+TOPTEX_CATALOG_STAGING_SUFFIX = ".toptex_catalog.json.gz"
 
 
 def _localized(value: Any, lang: str, fallback: str = "en") -> str:
@@ -347,6 +352,8 @@ def merge_toptex_catalog_items(
     buckets: dict[str, list[dict[str, Any]]] = {}
     for usage_right, items in items_by_usage_right.items():
         for item in items:
+            if not isinstance(item, dict):
+                continue
             ref = (item.get("catalogReference") or "").strip().lower()
             if not ref:
                 continue
@@ -357,7 +364,8 @@ def merge_toptex_catalog_items(
         base = dict(group[0])
         all_colors: list[dict[str, Any]] = []
         for part in group:
-            all_colors.extend(part.get("colors") or [])
+            if isinstance(part.get("colors"), list):
+                all_colors.extend(part.get("colors") or [])
         base["colors"] = all_colors
         merged.append(base)
     return merged
@@ -383,16 +391,73 @@ def apply_toptex_stock_to_product_rows(
             row["stock"] = stock_by_sku[sku]
 
 
-def build_parsed_rows_from_toptex(
+def _validate_toptex_sync_id(sync_id: str) -> None:
+    from .csv_import import _UPLOAD_ID_RE
+
+    if not _UPLOAD_ID_RE.match(sync_id or ""):
+        raise ValueError("sync_id non valido")
+
+
+def toptex_catalog_staging_path(sync_id: str):
+    _validate_toptex_sync_id(sync_id)
+    return csv_import_staging_dir() / f"{sync_id}{TOPTEX_CATALOG_STAGING_SUFFIX}"
+
+
+def load_toptex_catalog_staging(sync_id: str) -> dict[str, list[dict]] | None:
+    path = toptex_catalog_staging_path(sync_id)
+    if not path.is_file():
+        return None
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        return None
+    return {
+        str(key): [row for row in value if isinstance(row, dict)]
+        for key, value in data.items()
+        if isinstance(value, list)
+    }
+
+
+def save_toptex_catalog_staging(sync_id: str, by_right: dict[str, list[dict]]) -> None:
+    path = toptex_catalog_staging_path(sync_id)
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        json.dump(by_right, handle, ensure_ascii=False)
+
+
+def delete_toptex_catalog_staging(sync_id: str) -> None:
+    try:
+        toptex_catalog_staging_path(sync_id).unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not delete TopTex catalog staging %s", sync_id)
+
+
+def fetch_and_stage_toptex_catalog_usage_right(
+    sync_id: str,
+    usage_right: str,
     client: TopTexClient | None = None,
-    *,
-    lang: str | None = None,
-    usage_rights: tuple[str, ...] | None = None,
-) -> tuple[list[dict], dict[str, int]]:
-    lang = lang or getattr(settings, "TOPTEX_LANG", "it") or "it"
+) -> int:
+    if usage_right not in TOPTEX_USAGE_RIGHTS:
+        raise ValueError(
+            f"usage_right must be one of: {', '.join(TOPTEX_USAGE_RIGHTS)}",
+        )
+    _validate_toptex_sync_id(sync_id)
+    lang = getattr(settings, "TOPTEX_LANG", "it") or "it"
     client = client or TopTexClient()
     client.authenticate()
-    by_right = client.fetch_products_all_usage_rights(usage_rights)
+    items = client.fetch_products_all_for_usage_right(usage_right, lang=lang)
+    by_right = load_toptex_catalog_staging(sync_id) or {}
+    by_right[usage_right] = items
+    save_toptex_catalog_staging(sync_id, by_right)
+    return len(items)
+
+
+def build_parsed_rows_from_catalog_rights(
+    by_right: dict[str, list[dict[str, Any]]],
+    *,
+    client: TopTexClient | None = None,
+    lang: str | None = None,
+) -> tuple[list[dict], dict[str, int]]:
+    lang = lang or getattr(settings, "TOPTEX_LANG", "it") or "it"
     stats = {right: len(items) for right, items in by_right.items()}
     merged_items = merge_toptex_catalog_items(by_right)
     markup = Decimal(str(getattr(settings, "TOPTEX_PRICE_MARKUP_PERCENT", 0)))
@@ -407,10 +472,16 @@ def build_parsed_rows_from_toptex(
         "TOPTEX_FETCH_INVENTORY_IN_PREPARE",
         False,
     ):
+        client = client or TopTexClient()
+        if not client._token:
+            client.authenticate()
         stock_by_sku = build_stock_by_sku_from_inventory(client, catalog_refs)
 
     price_by_sku: dict[str, Decimal] = {}
-    if getattr(settings, "TOPTEX_FETCH_PRICES", True):
+    if getattr(settings, "TOPTEX_FETCH_PRICES", False):
+        client = client or TopTexClient()
+        if not client._token:
+            client.authenticate()
         price_by_sku = build_price_by_sku_from_price_api(
             client,
             catalog_refs,
@@ -420,13 +491,23 @@ def build_parsed_rows_from_toptex(
     parsed_rows: list[dict] = []
     seen_variants: set[tuple[str, str]] = set()
     for item in merged_items:
-        for row in toptex_item_to_parsed_rows(
-            item,
-            lang=lang,
-            markup_percent=markup,
-            stock_by_sku=stock_by_sku,
-            price_by_sku=price_by_sku,
-        ):
+        if not isinstance(item, dict):
+            continue
+        try:
+            row_iter = toptex_item_to_parsed_rows(
+                item,
+                lang=lang,
+                markup_percent=markup,
+                stock_by_sku=stock_by_sku,
+                price_by_sku=price_by_sku,
+            )
+        except Exception:
+            logger.exception(
+                "TopTex skip item %s",
+                item.get("catalogReference"),
+            )
+            continue
+        for row in row_iter:
             key = (row["product_sku"].lower(), row["variant_sku"].lower())
             if key in seen_variants:
                 idx = next(
@@ -445,16 +526,71 @@ def build_parsed_rows_from_toptex(
     return parsed_rows, stats
 
 
+def build_parsed_rows_from_toptex(
+    client: TopTexClient | None = None,
+    *,
+    lang: str | None = None,
+    usage_rights: tuple[str, ...] | None = None,
+) -> tuple[list[dict], dict[str, int]]:
+    lang = lang or getattr(settings, "TOPTEX_LANG", "it") or "it"
+    client = client or TopTexClient()
+    client.authenticate()
+    by_right = client.fetch_products_all_usage_rights(usage_rights)
+    return build_parsed_rows_from_catalog_rights(by_right, client=client, lang=lang)
+
+
+def prepare_toptex_import_staging_from_sync_id(
+    sync_id: str,
+) -> tuple[str, list[dict], dict[str, int]]:
+    """Build parsed import rows from staged TopTex catalog slices (no catalog HTTP)."""
+    by_right = load_toptex_catalog_staging(sync_id)
+    if not by_right:
+        raise ValueError(
+            "Catalogo TopTex non trovato o scaduto. "
+            "Ripeti la sincronizzazione (passi usage_right).",
+        )
+    missing = [r for r in TOPTEX_USAGE_RIGHTS if r not in by_right]
+    if missing and len(by_right) < len(TOPTEX_USAGE_RIGHTS):
+        logger.warning("TopTex catalog staging missing usage_rights: %s", missing)
+    try:
+        parsed_rows, stats = build_parsed_rows_from_catalog_rights(by_right)
+    except Exception as exc:
+        raise ValueError(f"Preparazione catalogo TopTex: {exc}") from exc
+    if not parsed_rows:
+        raise ValueError(
+            "Nessuna variante importabile da TopTex. "
+            "Verifica usage_right, lang e prodotti active.",
+        )
+    try:
+        stage_parsed_import_rows(sync_id, parsed_rows)
+    except OSError as exc:
+        raise ValueError(
+            f"Impossibile salvare staging import (verifica permessi MEDIA): {exc}",
+        ) from exc
+    delete_toptex_catalog_staging(sync_id)
+    return sync_id, parsed_rows, stats
+
+
 def prepare_toptex_import_staging(
     client: TopTexClient | None = None,
 ) -> tuple[str, list[dict], dict[str, int]]:
     """Fetch TopTex (all usage rights), convert to parsed rows, stage on disk."""
-    parsed_rows, stats = build_parsed_rows_from_toptex(client=client)
+    try:
+        parsed_rows, stats = build_parsed_rows_from_toptex(client=client)
+    except (TopTexAPIError, TopTexConfigError):
+        raise
+    except Exception as exc:
+        raise ValueError(f"Preparazione catalogo TopTex: {exc}") from exc
     if not parsed_rows:
         raise ValueError(
             "Nessuna variante importabile da TopTex. "
             "Verifica usage_right, lang e prodotti active.",
         )
     sync_id = str(uuid.uuid4())
-    stage_parsed_import_rows(sync_id, parsed_rows)
+    try:
+        stage_parsed_import_rows(sync_id, parsed_rows)
+    except OSError as exc:
+        raise ValueError(
+            f"Impossibile salvare staging import (verifica permessi MEDIA): {exc}",
+        ) from exc
     return sync_id, parsed_rows, stats

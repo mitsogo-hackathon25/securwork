@@ -2,7 +2,7 @@ import api from './client'
 import { buildCsvUploadForm } from './csvUpload'
 import i18n from '../i18n'
 import { postMultipartJson } from './multipartPost'
-import { readBlobApiDetail } from '../utils/formatApiError'
+import { formatApiError, readBlobApiDetail } from '../utils/formatApiError'
 import { sortByName } from '../utils/sortCategories'
 import type {
   AdminBrand,
@@ -268,15 +268,43 @@ async function prepareCsvImport(
   return postMultipartJson<CsvImportPrepareResult>('/admin/products/import_csv_prepare/', form)
 }
 
-async function prepareTopTexSync(): Promise<CsvImportPrepareResult> {
-  const qs = new URLSearchParams({ lang: i18n.language })
-  return api
-    .post<CsvImportPrepareResult>(
-      `/admin/products/toptex_sync_prepare/?${qs.toString()}`,
-      {},
+const TOPTEX_USAGE_RIGHTS = ['b2b_b2c', 'b2b_uniquement', 'b2c_uniquement'] as const
+
+export type TopTexCatalogStepResult = {
+  sync_id: string
+  usage_right: string
+  catalog_items: number
+  staged_usage_rights: string[]
+  detail: string
+}
+
+async function fetchTopTexCatalogStep(
+  usageRight: string,
+  syncId?: string,
+): Promise<TopTexCatalogStepResult> {
+  try {
+    const response = await api.post<TopTexCatalogStepResult>(
+      '/admin/products/toptex_sync_catalog_step/',
+      { usage_right: usageRight, ...(syncId ? { sync_id: syncId } : {}) },
       { timeout: 0 },
     )
-    .then((r) => r.data)
+    return response.data
+  } catch (err: unknown) {
+    throw new Error(formatApiError(err, 'Download catalogo TopTex non riuscito.'))
+  }
+}
+
+async function prepareTopTexSync(syncId: string): Promise<CsvImportPrepareResult> {
+  try {
+    const response = await api.post<CsvImportPrepareResult>(
+      '/admin/products/toptex_sync_prepare/',
+      { sync_id: syncId },
+      { timeout: 0 },
+    )
+    return response.data
+  } catch (err: unknown) {
+    throw new Error(formatApiError(err, 'Sincronizzazione TopTex non riuscita.'))
+  }
 }
 
 async function importCsvImportChunk(
@@ -661,12 +689,29 @@ export function importProductsCsvWithProgress(
 export function importProductsTopTexWithProgress(
   onEvent: (event: CsvImportProgressEvent) => void,
 ): Promise<CsvImportResult> {
-  onEvent({
-    phase: 'validating',
-    message: 'TopTex: autenticazione e catalogo (b2b_b2c, b2b_uniquement, b2c_uniquement)…',
-  })
-
-  return prepareTopTexSync().then(async (prepared) => {
+  return (async () => {
+    let syncId = ''
+    for (let index = 0; index < TOPTEX_USAGE_RIGHTS.length; index += 1) {
+      const usageRight = TOPTEX_USAGE_RIGHTS[index]
+      onEvent({
+        phase: 'validating',
+        message: `TopTex: catalogo ${usageRight} (${index + 1}/${TOPTEX_USAGE_RIGHTS.length})…`,
+      })
+      const step = await fetchTopTexCatalogStep(usageRight, syncId || undefined)
+      syncId = step.sync_id
+      onEvent({
+        phase: 'validating',
+        message: step.detail,
+      })
+    }
+    if (!syncId) {
+      throw new Error('TopTex sync: sync_id mancante dopo download catalogo.')
+    }
+    onEvent({
+      phase: 'validating',
+      message: 'TopTex: preparazione righe import…',
+    })
+    const prepared = await prepareTopTexSync(syncId)
     onEvent({
       phase: 'validated',
       current: prepared.total_products,
@@ -675,7 +720,7 @@ export function importProductsTopTexWithProgress(
       batch_id: prepared.batch_id,
     })
     return runPreparedImportChunks(prepared, 'TopTex API', onEvent)
-  })
+  })()
 }
 
 export const rollbackCsvImportBatch = (batchId: string) =>
