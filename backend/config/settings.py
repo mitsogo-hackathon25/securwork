@@ -294,6 +294,8 @@ TOPTEX_FETCH_INVENTORY_IN_PREPARE = config(
     default=False,
     cast=bool,
 )
+TOPTEX_IMPORT_CHUNK_SIZE = config("TOPTEX_IMPORT_CHUNK_SIZE", default=3, cast=int)
+TOPTEX_MAX_IMAGES_PER_PRODUCT = config("TOPTEX_MAX_IMAGES_PER_PRODUCT", default=5, cast=int)
 
 # Security (production)
 if not DEBUG:

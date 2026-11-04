@@ -86,6 +86,7 @@ def attach_toptex_image_from_url(
     is_primary: bool = False,
     alt_text: str = "",
     sort_order: int | None = None,
+    client: "TopTexClient | None" = None,
 ) -> tuple[ProductImage | None, str]:
     """Download packshot using TopTex API credentials, then store in media/."""
     from .image_utils import _content_file_from_bytes
@@ -95,9 +96,9 @@ def attach_toptex_image_from_url(
     if not url.startswith(("http://", "https://")):
         return None, "L'URL deve iniziare con http:// o https://."
 
-    client = TopTexClient()
+    toptex = client or TopTexClient()
     try:
-        data, content_type = client.download_url(url)
+        data, content_type = toptex.download_url(url)
     except TopTexAPIError as exc:
         content, reason = download_image_with_reason(url, filename_from_url(url, product.sku))
         if content:

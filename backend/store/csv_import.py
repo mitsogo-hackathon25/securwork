@@ -2258,13 +2258,22 @@ def parse_and_validate_csv(
     return parsed_rows, []
 
 
-def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
+def _import_one_product_group(
+    rows: list[dict],
+    *,
+    toptex_client=None,
+    toptex_stock_by_sku: dict[str, int] | None = None,
+) -> tuple[int, Product]:
     """Create one product and its variants. Returns (variants_created, product)."""
     first = rows[0]
     if first.get("_toptex_source"):
         from .toptex_import import apply_toptex_stock_to_product_rows
 
-        apply_toptex_stock_to_product_rows(rows)
+        apply_toptex_stock_to_product_rows(
+            rows,
+            client=toptex_client,
+            stock_by_sku=toptex_stock_by_sku,
+        )
     brand_name = ensure_brand(first["brand"])
     base_slug = slugify(first["name_it"])[:240] or slugify(first["product_sku"])[:240] or "product"
     slug = base_slug
@@ -2332,7 +2341,8 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     link_images_only = getattr(settings, "CSV_IMPORT_LINK_IMAGES_ONLY", True)
     toptex_source = bool(first.get("_toptex_source"))
     download_toptex = toptex_source and getattr(settings, "TOPTEX_DOWNLOAD_IMAGES", True)
-    for index, image_url in enumerate(image_urls):
+    max_images = max(1, int(getattr(settings, "TOPTEX_MAX_IMAGES_PER_PRODUCT", 5)))
+    for index, image_url in enumerate(image_urls[:max_images]):
         safe_url = (image_url or "").strip()
         if len(safe_url) > DB_EXTERNAL_URL_MAX:
             logger.warning(
@@ -2346,6 +2356,7 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
                 product,
                 safe_url,
                 is_primary=(index == 0),
+                client=toptex_client,
             )
         else:
             image, reason = attach_image_from_url(
@@ -2397,11 +2408,17 @@ def _import_one_product_group_with_batch(
     *,
     import_batch=None,
     catalog_skus: set[str] | None = None,
+    toptex_client=None,
+    toptex_stock_by_sku: dict[str, int] | None = None,
 ) -> dict:
     from .models import CsvImportBatchItem
 
     with transaction.atomic():
-        variant_count, product = _import_one_product_group(rows)
+        variant_count, product = _import_one_product_group(
+            rows,
+            toptex_client=toptex_client,
+            toptex_stock_by_sku=toptex_stock_by_sku,
+        )
     if import_batch is not None:
         CsvImportBatchItem.objects.create(
             batch=import_batch,
@@ -2499,6 +2516,10 @@ def import_parsed_rows_chunk(
     limit = max(1, limit)
     slice_groups = groups[offset : offset + limit]
 
+    from .toptex_import import build_toptex_chunk_context
+
+    toptex_client, toptex_stock_by_sku = build_toptex_chunk_context(slice_groups)
+
     catalog_skus = _existing_product_skus()
     chunk_created_products = 0
     chunk_created_variants = 0
@@ -2516,6 +2537,8 @@ def import_parsed_rows_chunk(
                 rows,
                 import_batch=import_batch,
                 catalog_skus=catalog_skus,
+                toptex_client=toptex_client,
+                toptex_stock_by_sku=toptex_stock_by_sku,
             )
             chunk_created_products += result["created_products"]
             chunk_created_variants += result["created_variants"]

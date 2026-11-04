@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -93,3 +94,15 @@ class TopTexImportTests(SimpleTestCase):
     def test_inventory_stock_skips_price_tier_quantity(self):
         item = {"sku": "X", "prices": [{"quantity": 1, "price": 6}], "stock": 42}
         self.assertEqual(_inventory_stock_value(item), 42)
+
+    @override_settings(TOPTEX_FETCH_INVENTORY=False)
+    @patch("store.toptex_import.TopTexClient.authenticate")
+    def test_build_toptex_chunk_context_one_auth(self, auth_mock):
+        from store.toptex_import import build_toptex_chunk_context
+
+        client, stock = build_toptex_chunk_context([
+            [{"_toptex_source": True, "product_sku": "B1", "variant_sku": "V1"}],
+        ])
+        self.assertIsNotNone(client)
+        auth_mock.assert_called_once()
+        self.assertEqual(stock, {})

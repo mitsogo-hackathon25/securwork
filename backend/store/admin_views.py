@@ -1156,6 +1156,8 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 return db_response
             raise
         chunk_size = _csv_import_chunk_size(request)
+        toptex_chunk_cap = max(1, int(getattr(settings, "TOPTEX_IMPORT_CHUNK_SIZE", 3)))
+        chunk_size = min(chunk_size, toptex_chunk_cap)
         rights_summary = ", ".join(
             f"{right}={usage_stats.get(right, 0)}"
             for right in TOPTEX_USAGE_RIGHTS

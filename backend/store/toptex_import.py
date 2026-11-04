@@ -374,9 +374,17 @@ def merge_toptex_catalog_items(
 def apply_toptex_stock_to_product_rows(
     rows: list[dict[str, Any]],
     client: TopTexClient | None = None,
+    *,
+    stock_by_sku: dict[str, int] | None = None,
 ) -> None:
-    """Fetch /v3/products/inventory for one Codice Padre (during chunked import)."""
+    """Apply stock from prefetch map or fetch /v3/products/inventory for one Codice Padre."""
     if not rows or not getattr(settings, "TOPTEX_FETCH_INVENTORY", True):
+        return
+    if stock_by_sku is not None:
+        for row in rows:
+            sku = (row.get("variant_sku") or "").strip().lower()
+            if sku in stock_by_sku:
+                row["stock"] = stock_by_sku[sku]
         return
     catalog_ref = (rows[0].get("product_sku") or "").strip()
     if not catalog_ref:
@@ -389,6 +397,30 @@ def apply_toptex_stock_to_product_rows(
         sku = (row.get("variant_sku") or "").strip().lower()
         if sku in stock_by_sku:
             row["stock"] = stock_by_sku[sku]
+
+
+def build_toptex_chunk_context(
+    product_groups: list[list[dict[str, Any]]],
+) -> tuple[TopTexClient | None, dict[str, int]]:
+    """
+    One TopTex auth (+ optional batched inventory) per import_csv_chunk request.
+    """
+    if not any(rows and rows[0].get("_toptex_source") for rows in product_groups):
+        return None, {}
+    client = TopTexClient()
+    client.authenticate()
+    stock_by_sku: dict[str, int] = {}
+    if getattr(settings, "TOPTEX_FETCH_INVENTORY", True):
+        refs: list[str] = []
+        for rows in product_groups:
+            if not rows or not rows[0].get("_toptex_source"):
+                continue
+            ref = (rows[0].get("product_sku") or "").strip()
+            if ref and ref not in refs:
+                refs.append(ref)
+        if refs:
+            stock_by_sku = build_stock_by_sku_from_inventory(client, refs)
+    return client, stock_by_sku
 
 
 def _validate_toptex_sync_id(sync_id: str) -> None:
