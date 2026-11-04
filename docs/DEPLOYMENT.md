@@ -149,6 +149,14 @@ The app also **gzip-compresses** CSV on upload and parses columns **in the brows
 
 Packshots are **downloaded server-side** with TopTex auth when `TOPTEX_DOWNLOAD_IMAGES=true` (default), so the storefront can display them. Set `TOPTEX_*` in `.env`. Pagination walks `page=` until empty or `totalPages`. Prepare can take several minutes on a full catalog—use DNS-only / long nginx timeouts if Cloudflare returns 524.
 
+**Required migrations:** TopTex sync (and CSV chunked import rollback) need `store_csvimportbatch`. After deploy run:
+
+```bash
+python manage.py migrate
+```
+
+If sync returns **503** with `database_migration_required`, the production DB is missing migrations **0009** / **0010**. Diagnostic: `POST /api/admin/products/toptex_connection_test/` (staff auth) checks TopTex credentials only.
+
 **Cloudflare:** if `www.securwork.it` uses the **orange cloud** (proxied), Cloudflare cuts idle connections after **~100 seconds** → browser shows *failed* or **524** on `import_csv_stream` even when nginx/gunicorn allow 600s. Fix: in Cloudflare DNS set **www** (and optionally `@`) to **DNS only** (grey cloud), or import in smaller chunks via the column filter. Enterprise plans can raise the proxy timeout; Free/Pro cannot rely on 600s nginx alone.
 
 ## 5. SSL

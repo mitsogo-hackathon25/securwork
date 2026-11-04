@@ -56,7 +56,7 @@ from .category_ordering import sort_categories
 from .models import Brand, Category, Color, CsvImportBatch, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
-from .toptex_client import TOPTEX_USAGE_RIGHTS, TopTexAPIError, TopTexConfigError
+from .toptex_client import TOPTEX_USAGE_RIGHTS, TopTexAPIError, TopTexClient, TopTexConfigError
 from .toptex_import import prepare_toptex_import_staging
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,11 @@ _PRODUCT_DELETE_DB_ERROR_DETAIL = (
     "Se il problema persiste, esegui `python manage.py migrate` sul server."
 )
 _PRODUCT_DELETE_DB_ERROR_CODE = "product_delete_database_error"
+_IMPORT_BATCH_MIGRATION_DETAIL = (
+    "Il database non è aggiornato: manca la tabella import batch (CsvImportBatch). "
+    "Sul server esegui: python manage.py migrate"
+)
+_IMPORT_BATCH_MIGRATION_CODE = "database_migration_required"
 
 _DELETE_ALL_CONFIRM = "Stilpromo@2026"
 _DELETE_SQLITE_MAX_ATTEMPTS = 10
@@ -151,6 +156,38 @@ def _csv_import_chunk_size(request) -> int:
     configured = getattr(settings, "CSV_IMPORT_CHUNK_SIZE", 20)
     size = _parse_int_param(request, "chunk_size", configured)
     return max(1, min(100, size))
+
+
+def _import_batch_create_error_response(
+    exc: Exception,
+    *,
+    staging_upload_id: str | None = None,
+) -> Response | None:
+    """Map missing CsvImportBatch table (migrate not run) to a clear API response."""
+    if not isinstance(exc, (OperationalError, DatabaseError)):
+        return None
+    if staging_upload_id:
+        delete_staged_csv(staging_upload_id)
+    message = str(exc).lower()
+    if (
+        "csvimportbatch" in message
+        or "no such table" in message
+        or "does not exist" in message
+    ):
+        return Response(
+            {
+                "detail": _IMPORT_BATCH_MIGRATION_DETAIL,
+                "code": _IMPORT_BATCH_MIGRATION_CODE,
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response(
+        {
+            "detail": f"Errore database durante creazione import batch: {exc}",
+            "code": "database_error",
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
 
 
 def _parse_column_value_filter(request) -> tuple[str, set[str]] | None:
@@ -919,11 +956,18 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             )
 
         total_products = len(group_parsed_product_rows(parsed_rows))
-        import_batch = CsvImportBatch.objects.create(
-            filename=(filename or "")[:255],
-            staging_upload_id=upload_id,
-            status=CsvImportBatch.Status.IN_PROGRESS,
-        )
+        try:
+            import_batch = CsvImportBatch.objects.create(
+                filename=(filename or "")[:255],
+                staging_upload_id=upload_id,
+                status=CsvImportBatch.Status.IN_PROGRESS,
+            )
+        except (OperationalError, DatabaseError) as exc:
+            logger.exception("import_csv_prepare batch create failed")
+            db_response = _import_batch_create_error_response(exc, staging_upload_id=upload_id)
+            if db_response is not None:
+                return db_response
+            raise
         chunk_size = _csv_import_chunk_size(request)
 
         return Response({
@@ -937,6 +981,49 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 f"Import a blocchi da {chunk_size}."
             ),
         })
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[JSONParser],
+        url_path="toptex_connection_test",
+    )
+    def toptex_connection_test(self, request):
+        """Quick TopTex auth + one catalog page (diagnose 500 / config issues)."""
+        try:
+            client = TopTexClient()
+            client.ensure_configured()
+            client.authenticate()
+            data = client.get(
+                "/v3/products/all",
+                {
+                    "usage_right": "b2b_b2c",
+                    "lang": getattr(settings, "TOPTEX_LANG", "it") or "it",
+                    "display_prices": "1",
+                },
+            )
+            from .toptex_client import extract_toptex_list_payload, _catalog_total_pages
+
+            items = extract_toptex_list_payload(data)
+            return Response({
+                "detail": "Connessione TopTex OK.",
+                "catalog_items_page1": len(items),
+                "total_pages": _catalog_total_pages(data),
+                "response_keys": sorted(data.keys())[:30],
+            })
+        except TopTexConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except TopTexAPIError as exc:
+            code = status.HTTP_502_BAD_GATEWAY
+            if exc.status and 400 <= exc.status < 500:
+                code = status.HTTP_400_BAD_REQUEST
+            return Response({"detail": str(exc)}, status=code)
+        except Exception as exc:
+            logger.exception("toptex_connection_test failed")
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(
         detail=False,
@@ -969,11 +1056,18 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     def _toptex_sync_prepare_impl(self, request):
         sync_id, parsed_rows, usage_stats = prepare_toptex_import_staging()
         total_products = len(group_parsed_product_rows(parsed_rows))
-        import_batch = CsvImportBatch.objects.create(
-            filename="TopTex API",
-            staging_upload_id=sync_id,
-            status=CsvImportBatch.Status.IN_PROGRESS,
-        )
+        try:
+            import_batch = CsvImportBatch.objects.create(
+                filename="TopTex API",
+                staging_upload_id=sync_id,
+                status=CsvImportBatch.Status.IN_PROGRESS,
+            )
+        except (OperationalError, DatabaseError) as exc:
+            logger.exception("toptex_sync_prepare batch create failed")
+            db_response = _import_batch_create_error_response(exc, staging_upload_id=sync_id)
+            if db_response is not None:
+                return db_response
+            raise
         chunk_size = _csv_import_chunk_size(request)
         rights_summary = ", ".join(
             f"{right}={usage_stats.get(right, 0)}"

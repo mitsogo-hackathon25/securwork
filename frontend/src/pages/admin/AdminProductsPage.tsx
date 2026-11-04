@@ -392,7 +392,7 @@ export default function AdminProductsPage() {
         setImportErrors(responseData.errors)
       } else if (responseData?.detail) {
         setImportDetail(responseData.detail)
-      } else if (err instanceof Error && err.message) {
+      } else if (err instanceof Error && err.message && !err.message.startsWith('Request failed with status code')) {
         setImportDetail(err.message)
       } else {
         setImportDetail(formatApiError(err, t('adminProducts.topTexSyncError')))
