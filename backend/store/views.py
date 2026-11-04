@@ -41,7 +41,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductFilter(filters.FilterSet):
-    category = filters.CharFilter(field_name="categories__slug")
+    category = filters.CharFilter(method="filter_category")
     section = filters.CharFilter(field_name="categories__section")
     brand = filters.CharFilter(field_name="brand", lookup_expr="iexact")
     min_price = filters.NumberFilter(field_name="variants__price", lookup_expr="gte")
@@ -57,6 +57,19 @@ class ProductFilter(filters.FilterSet):
     class Meta:
         model = Product
         fields = ["category", "section", "brand", "size", "color", "in_stock", "on_sale"]
+
+    def filter_category(self, queryset, name, value):
+        slug = (value or "").strip()
+        if not slug:
+            return queryset
+        cat = Category.objects.filter(slug=slug, is_active=True).first()
+        if cat is None:
+            return queryset.filter(categories__slug=slug).distinct()
+        slugs = {cat.slug}
+        slugs.update(
+            Category.objects.filter(parent=cat, is_active=True).values_list("slug", flat=True),
+        )
+        return queryset.filter(categories__slug__in=slugs).distinct()
 
     def filter_on_sale(self, queryset, name, value):
         if value:

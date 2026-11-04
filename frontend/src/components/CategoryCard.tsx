@@ -8,9 +8,12 @@ interface Props {
 }
 
 export default function CategoryCard({ category, variant = 'default' }: Props) {
-  const link = category.section
-    ? `/shop?section=${category.section}&category=${category.slug}`
-    : `/shop?category=${category.slug}`
+  const isSectionRoot = category.parent == null
+  const link = isSectionRoot && category.section
+    ? `/shop?section=${category.section}`
+    : category.section
+      ? `/shop?section=${category.section}&category=${category.slug}`
+      : `/shop?category=${category.slug}`
 
   const hasImage = Boolean(category.image)
 
