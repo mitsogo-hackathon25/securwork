@@ -308,6 +308,26 @@ def merge_toptex_catalog_items(
     return merged
 
 
+def apply_toptex_stock_to_product_rows(
+    rows: list[dict[str, Any]],
+    client: TopTexClient | None = None,
+) -> None:
+    """Fetch /v3/products/inventory for one Codice Padre (during chunked import)."""
+    if not rows or not getattr(settings, "TOPTEX_FETCH_INVENTORY", True):
+        return
+    catalog_ref = (rows[0].get("product_sku") or "").strip()
+    if not catalog_ref:
+        return
+    client = client or TopTexClient()
+    if not client._token:
+        client.authenticate()
+    stock_by_sku = build_stock_by_sku_from_inventory(client, [catalog_ref])
+    for row in rows:
+        sku = (row.get("variant_sku") or "").strip().lower()
+        if sku in stock_by_sku:
+            row["stock"] = stock_by_sku[sku]
+
+
 def build_parsed_rows_from_toptex(
     client: TopTexClient | None = None,
     *,
@@ -327,7 +347,11 @@ def build_parsed_rows_from_toptex(
     } - {""})
 
     stock_by_sku: dict[str, int] = {}
-    if getattr(settings, "TOPTEX_FETCH_INVENTORY", True):
+    if getattr(settings, "TOPTEX_FETCH_INVENTORY", True) and getattr(
+        settings,
+        "TOPTEX_FETCH_INVENTORY_IN_PREPARE",
+        False,
+    ):
         stock_by_sku = build_stock_by_sku_from_inventory(client, catalog_refs)
 
     price_by_sku: dict[str, Decimal] = {}

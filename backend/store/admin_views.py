@@ -56,7 +56,7 @@ from .category_ordering import sort_categories
 from .models import Brand, Category, Color, CsvImportBatch, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
-from .toptex_client import TopTexAPIError, TopTexConfigError
+from .toptex_client import TOPTEX_USAGE_RIGHTS, TopTexAPIError, TopTexConfigError
 from .toptex_import import prepare_toptex_import_staging
 
 logger = logging.getLogger(__name__)
@@ -977,7 +977,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         chunk_size = _csv_import_chunk_size(request)
         rights_summary = ", ".join(
             f"{right}={usage_stats.get(right, 0)}"
-            for right in sorted(usage_stats.keys())
+            for right in TOPTEX_USAGE_RIGHTS
         )
         return Response({
             "upload_id": sync_id,
@@ -988,7 +988,8 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             "usage_right_stats": usage_stats,
             "detail": (
                 f"TopTex: {total_products} prodotti ({len(parsed_rows)} varianti) "
-                f"da {len(usage_stats)} chiamate usage_right ({rights_summary}). "
+                f"catalogo ({rights_summary}). "
+                f"Stock via API inventory durante import a blocchi. "
                 f"Import a blocchi da {chunk_size}."
             ),
         })

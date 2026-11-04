@@ -271,7 +271,11 @@ async function prepareCsvImport(
 async function prepareTopTexSync(): Promise<CsvImportPrepareResult> {
   const qs = new URLSearchParams({ lang: i18n.language })
   return api
-    .post<CsvImportPrepareResult>(`/admin/products/toptex_sync_prepare/?${qs.toString()}`, {})
+    .post<CsvImportPrepareResult>(
+      `/admin/products/toptex_sync_prepare/?${qs.toString()}`,
+      {},
+      { timeout: 0 },
+    )
     .then((r) => r.data)
 }
 

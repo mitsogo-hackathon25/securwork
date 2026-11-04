@@ -195,43 +195,58 @@ class TopTexClient:
             "lang": lang,
             "display_prices": "1" if display_prices else "0",
         }
-        items: list[dict[str, Any]] = []
         max_pages = int(getattr(settings, "TOPTEX_MAX_CATALOG_PAGES", 500))
-        page = 1
-        page_size_hint: int | None = None
+        items: list[dict[str, Any]] = []
 
+        data = self.get("/v3/products/all", base_params)
+        batch = _catalog_batch_items(data)
+        items.extend(batch)
+
+        total_pages = _catalog_total_pages(data)
+        page_size_hint = _catalog_page_size(data)
+        seen_refs = _catalog_refs(batch)
+
+        if total_pages is not None:
+            try:
+                pages = min(int(total_pages), max_pages)
+            except (TypeError, ValueError):
+                pages = 1
+            for page in range(2, pages + 1):
+                page_data = self.get(
+                    "/v3/products/all",
+                    {**base_params, "page": str(page)},
+                )
+                page_batch = _catalog_batch_items(page_data)
+                if not page_batch:
+                    break
+                items.extend(page_batch)
+            return items
+
+        full_page_threshold = page_size_hint or 50
+        if len(batch) < full_page_threshold:
+            return items
+
+        page = 2
         while page <= max_pages:
-            params = {**base_params, "page": str(page)}
-            data = self.get("/v3/products/all", params)
-            batch = [i for i in (data.get("items") or []) if isinstance(i, dict)]
-            if not batch:
-                break
-            items.extend(batch)
-            if page_size_hint is None:
-                for key in ("pageSize", "page_size", "limit", "perPage"):
-                    raw = data.get(key)
-                    if raw is not None:
-                        try:
-                            page_size_hint = int(raw)
-                        except (TypeError, ValueError):
-                            pass
-                        break
-
-            total_pages = (
-                data.get("totalPages")
-                or data.get("total_pages")
-                or data.get("nbPages")
-                or data.get("pageCount")
+            page_data = self.get(
+                "/v3/products/all",
+                {**base_params, "page": str(page)},
             )
-            if total_pages is not None:
-                try:
-                    if page >= int(total_pages):
-                        break
-                except (TypeError, ValueError):
-                    pass
-            elif page_size_hint and len(batch) < page_size_hint:
+            page_batch = _catalog_batch_items(page_data)
+            if not page_batch:
                 break
-            elif page > 1 and len(batch) == 0:
+            new_items = [
+                item for item in page_batch
+                if _catalog_item_ref(item) not in seen_refs
+            ]
+            if not new_items:
+                break
+            for item in new_items:
+                ref = _catalog_item_ref(item)
+                if ref:
+                    seen_refs.add(ref)
+            items.extend(new_items)
+            if len(page_batch) < full_page_threshold:
                 break
             page += 1
 
@@ -278,9 +293,48 @@ class TopTexClient:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise TopTexAPIError("Risposta TopTex non JSON.") from exc
+        if isinstance(data, list):
+            return {"items": data}
         if not isinstance(data, dict):
             raise TopTexAPIError("Risposta TopTex non valida.")
         return data
+
+
+def _catalog_item_ref(item: dict[str, Any]) -> str:
+    return (item.get("catalogReference") or item.get("productReference") or "").strip().lower()
+
+
+def _catalog_refs(items: list[dict[str, Any]]) -> set[str]:
+    refs: set[str] = set()
+    for item in items:
+        ref = _catalog_item_ref(item)
+        if ref:
+            refs.add(ref)
+    return refs
+
+
+def _catalog_batch_items(data: dict[str, Any]) -> list[dict[str, Any]]:
+    return [i for i in extract_toptex_list_payload(data) if isinstance(i, dict)]
+
+
+def _catalog_total_pages(data: dict[str, Any]) -> Any:
+    return (
+        data.get("totalPages")
+        or data.get("total_pages")
+        or data.get("nbPages")
+        or data.get("pageCount")
+    )
+
+
+def _catalog_page_size(data: dict[str, Any]) -> int | None:
+    for key in ("pageSize", "page_size", "limit", "perPage"):
+        raw = data.get(key)
+        if raw is not None:
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                continue
+    return None
 
 
 def extract_toptex_list_payload(data: Any) -> list[Any]:

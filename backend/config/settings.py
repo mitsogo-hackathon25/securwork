@@ -286,8 +286,13 @@ TOPTEX_DEFAULT_STOCK = config("TOPTEX_DEFAULT_STOCK", default=0, cast=int)
 TOPTEX_HTTP_TIMEOUT = config("TOPTEX_HTTP_TIMEOUT", default=120, cast=int)
 TOPTEX_MAX_CATALOG_PAGES = config("TOPTEX_MAX_CATALOG_PAGES", default=500, cast=int)
 TOPTEX_FETCH_INVENTORY = config("TOPTEX_FETCH_INVENTORY", default=True, cast=bool)
-TOPTEX_FETCH_PRICES = config("TOPTEX_FETCH_PRICES", default=True, cast=bool)
+TOPTEX_FETCH_PRICES = config("TOPTEX_FETCH_PRICES", default=False, cast=bool)
 TOPTEX_DOWNLOAD_IMAGES = config("TOPTEX_DOWNLOAD_IMAGES", default=True, cast=bool)
+TOPTEX_FETCH_INVENTORY_IN_PREPARE = config(
+    "TOPTEX_FETCH_INVENTORY_IN_PREPARE",
+    default=False,
+    cast=bool,
+)
 
 # Security (production)
 if not DEBUG:

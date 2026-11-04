@@ -2261,6 +2261,10 @@ def parse_and_validate_csv(
 def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     """Create one product and its variants. Returns (variants_created, product)."""
     first = rows[0]
+    if first.get("_toptex_source"):
+        from .toptex_import import apply_toptex_stock_to_product_rows
+
+        apply_toptex_stock_to_product_rows(rows)
     brand_name = ensure_brand(first["brand"])
     base_slug = slugify(first["name_it"])[:240] or slugify(first["product_sku"])[:240] or "product"
     slug = base_slug
