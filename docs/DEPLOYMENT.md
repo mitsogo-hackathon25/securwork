@@ -144,8 +144,8 @@ The app also **gzip-compresses** CSV on upload and parses columns **in the brows
 | Portal section | Endpoint | Used for |
 |----------------|----------|----------|
 | Catalog | `GET /v3/products/all` (+ `usage_right`) | Product data, packshots (×3 rights) |
-| Inventory | `GET /v3/products/inventory` | Variant stock (`TOPTEX_FETCH_INVENTORY`) |
-| Price | `GET /v3/products/price` | Fallback prices if catalog row has none (`TOPTEX_FETCH_PRICES`) |
+| Inventory | `GET /v3/products/inventory` | Variant stock (`TOPTEX_FETCH_INVENTORY`); query **`catalog_reference`**, **`page_size`**, **`page_number`** |
+| Price | `GET /v3/products/price` | Fallback prices (`TOPTEX_FETCH_PRICES`); same query params; uses **`prices[]`** tier with `quantity` 1 when present |
 
 Packshots are **downloaded server-side** with TopTex auth when `TOPTEX_DOWNLOAD_IMAGES=true` (default), so the storefront can display them. Set `TOPTEX_*` in `.env`. Pagination walks `page=` until empty or `totalPages`. Prepare can take several minutes on a full catalog—use DNS-only / long nginx timeouts if Cloudflare returns 524.
 

@@ -2,10 +2,11 @@ from decimal import Decimal
 
 from django.test import SimpleTestCase, override_settings
 
-from store.toptex_client import TOPTEX_USAGE_RIGHTS, extract_toptex_list_payload
+from store.toptex_client import TOPTEX_USAGE_RIGHTS, extract_toptex_list_payload, _list_records_from_toptex_response
 from store.toptex_import import (
     _inventory_stock_value,
     _inventory_sku_key,
+    _price_from_toptex_price_api_row,
     merge_toptex_catalog_items,
     toptex_item_to_parsed_rows,
 )
@@ -69,3 +70,26 @@ class TopTexImportTests(SimpleTestCase):
 
     def test_extract_toptex_list_payload(self):
         self.assertEqual(len(extract_toptex_list_payload({"inventoryItems": [{"sku": "1"}]})), 1)
+
+    def test_list_records_single_price_row(self):
+        row = {
+            "catalogReference": "B57",
+            "sku": "B57_51335_51334",
+            "prices": [{"quantity": 1, "price": 6.18}],
+        }
+        records = _list_records_from_toptex_response(row)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["sku"], "B57_51335_51334")
+
+    @override_settings(TOPTEX_PRICE_MARKUP_PERCENT=0)
+    def test_price_api_row_parsing(self):
+        item = {
+            "sku": "SKU-1",
+            "prices": [{"quantity": 10, "price": 5.0}, {"quantity": 1, "price": 6.18}],
+        }
+        price = _price_from_toptex_price_api_row(item, Decimal("0"))
+        self.assertEqual(price, Decimal("6.18"))
+
+    def test_inventory_stock_skips_price_tier_quantity(self):
+        item = {"sku": "X", "prices": [{"quantity": 1, "price": 6}], "stock": 42}
+        self.assertEqual(_inventory_stock_value(item), 42)

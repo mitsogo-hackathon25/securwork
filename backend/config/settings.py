@@ -285,6 +285,7 @@ TOPTEX_IMPORT_ONLY_ACTIVE = config("TOPTEX_IMPORT_ONLY_ACTIVE", default=True, ca
 TOPTEX_DEFAULT_STOCK = config("TOPTEX_DEFAULT_STOCK", default=0, cast=int)
 TOPTEX_HTTP_TIMEOUT = config("TOPTEX_HTTP_TIMEOUT", default=120, cast=int)
 TOPTEX_MAX_CATALOG_PAGES = config("TOPTEX_MAX_CATALOG_PAGES", default=500, cast=int)
+TOPTEX_API_PAGE_SIZE = config("TOPTEX_API_PAGE_SIZE", default=100, cast=int)
 TOPTEX_FETCH_INVENTORY = config("TOPTEX_FETCH_INVENTORY", default=True, cast=bool)
 TOPTEX_FETCH_PRICES = config("TOPTEX_FETCH_PRICES", default=False, cast=bool)
 TOPTEX_DOWNLOAD_IMAGES = config("TOPTEX_DOWNLOAD_IMAGES", default=True, cast=bool)

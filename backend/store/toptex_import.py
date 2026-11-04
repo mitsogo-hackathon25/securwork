@@ -43,6 +43,49 @@ def _parse_toptex_price(raw: str, markup_percent: Decimal) -> Decimal | None:
     return amount.quantize(Decimal("0.01"))
 
 
+def _parse_toptex_price_amount(raw: Any, markup_percent: Decimal) -> Decimal | None:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            amount = Decimal(str(raw))
+        except InvalidOperation:
+            return None
+        if markup_percent:
+            amount = amount * (Decimal("1") + markup_percent / Decimal("100"))
+        return amount.quantize(Decimal("0.01"))
+    return _parse_toptex_price(str(raw), markup_percent)
+
+
+def _price_from_toptex_price_api_row(item: dict[str, Any], markup_percent: Decimal) -> Decimal | None:
+    """Parse GET /v3/products/price row (prices[] tiers + legacy root fields)."""
+    prices = item.get("prices")
+    if isinstance(prices, list) and prices:
+        tier: dict[str, Any] | None = None
+        for entry in prices:
+            if not isinstance(entry, dict):
+                continue
+            qty = entry.get("quantity")
+            if qty == 1 or qty == "1":
+                tier = entry
+                break
+        if tier is None:
+            first = prices[0]
+            tier = first if isinstance(first, dict) else None
+        if tier is not None:
+            parsed = _parse_toptex_price_amount(tier.get("price"), markup_percent)
+            if parsed is not None:
+                return parsed
+    for key in ("publicUnitPrice", "price", "unitPrice", "publicPrice"):
+        parsed = _parse_toptex_price_amount(item.get(key), markup_percent)
+        if parsed is not None:
+            return parsed
+        parsed = _parse_toptex_price(str(item.get(key) or ""), markup_percent)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def _extract_image_urls_from_packshots(packshots: Any) -> list[str]:
     urls: list[str] = []
     if not isinstance(packshots, dict):
@@ -91,6 +134,25 @@ def _product_sale_state_ok(item: dict[str, Any]) -> bool:
 
 
 def _inventory_stock_value(item: dict[str, Any]) -> int | None:
+    # Ignore price-tier "quantity" inside prices[] (price API rows).
+    if isinstance(item.get("prices"), list):
+        for key in (
+            "stock",
+            "availableQuantity",
+            "available_quantity",
+            "inventory",
+            "inStock",
+            "in_stock",
+            "qty",
+        ):
+            raw = item.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                return max(int(raw), 0)
+            except (TypeError, ValueError):
+                continue
+        return None
     for key in (
         "quantity",
         "stock",
@@ -162,14 +224,7 @@ def build_price_by_sku_from_price_api(
             sku = _inventory_sku_key(item)
             if not sku:
                 continue
-            raw = (
-                item.get("publicUnitPrice")
-                or item.get("price")
-                or item.get("unitPrice")
-                or item.get("publicPrice")
-                or ""
-            )
-            price = _parse_toptex_price(str(raw), markup_percent)
+            price = _price_from_toptex_price_api_row(item, markup_percent)
             if price is not None:
                 price_by_sku[sku] = price
     return price_by_sku

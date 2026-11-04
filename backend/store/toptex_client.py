@@ -126,58 +126,51 @@ class TopTexClient:
             raise TopTexAPIError(f"TopTex download rete: {exc.reason}") from exc
 
     def fetch_inventory_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
-        """GET /v3/products/inventory — stock by Codice Padre (Catalog_Ref)."""
-        catalog_ref = (catalog_ref or "").strip()
-        if not catalog_ref:
-            return []
-        param_names = (
-            "catalogReference",
-            "catalog_ref",
-            "Catalog_Ref",
-            "catalogRef",
+        """GET /v3/products/inventory — stock by Codice Padre (catalog_reference)."""
+        return self._fetch_paginated_by_catalog_reference(
+            "/v3/products/inventory",
+            catalog_ref,
         )
-        last_error: TopTexAPIError | None = None
-        for param in param_names:
-            try:
-                data = self.get("/v3/products/inventory", {param: catalog_ref})
-                items = extract_toptex_list_payload(data)
-                if items:
-                    return [i for i in items if isinstance(i, dict)]
-            except TopTexAPIError as exc:
-                last_error = exc
-                if exc.status in (400, 404):
-                    continue
-                raise
-        if last_error and last_error.status not in (400, 404):
-            logger.warning(
-                "TopTex inventory %s: %s",
-                catalog_ref,
-                last_error,
-            )
-        return []
 
     def fetch_prices_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
         """GET /v3/products/price — fallback when catalog/all omits publicUnitPrice."""
+        return self._fetch_paginated_by_catalog_reference(
+            "/v3/products/price",
+            catalog_ref,
+        )
+
+    def _fetch_paginated_by_catalog_reference(
+        self,
+        path: str,
+        catalog_ref: str,
+    ) -> list[dict[str, Any]]:
         catalog_ref = (catalog_ref or "").strip()
         if not catalog_ref:
             return []
-        param_names = (
-            "catalogReference",
-            "catalog_ref",
-            "Catalog_Ref",
-            "catalogRef",
-        )
-        for param in param_names:
+        page_size = str(getattr(settings, "TOPTEX_API_PAGE_SIZE", 100))
+        max_pages = int(getattr(settings, "TOPTEX_MAX_CATALOG_PAGES", 500))
+        items: list[dict[str, Any]] = []
+        page_number = 1
+        while page_number <= max_pages:
+            params = {
+                "catalog_reference": catalog_ref,
+                "page_size": page_size,
+                "page_number": str(page_number),
+            }
             try:
-                data = self.get("/v3/products/price", {param: catalog_ref})
-                items = extract_toptex_list_payload(data)
-                if items:
-                    return [i for i in items if isinstance(i, dict)]
+                data = self.get(path, params)
             except TopTexAPIError as exc:
-                if exc.status in (400, 404):
-                    continue
+                if page_number == 1 and exc.status in (400, 404):
+                    return []
                 raise
-        return []
+            batch = _list_records_from_toptex_response(data)
+            if not batch:
+                break
+            items.extend(batch)
+            if len(batch) < int(page_size):
+                break
+            page_number += 1
+        return items
 
     def fetch_products_all_for_usage_right(
         self,
@@ -351,11 +344,22 @@ def extract_toptex_list_payload(data: Any) -> list[Any]:
         "priceItems",
         "data",
         "results",
+        "content",
     ):
         value = data.get(key)
         if isinstance(value, list):
             return value
     return []
+
+
+def _list_records_from_toptex_response(data: Any) -> list[dict[str, Any]]:
+    """Price/inventory rows: array, wrapped list, or single SKU record."""
+    if isinstance(data, list):
+        return [i for i in data if isinstance(i, dict)]
+    if isinstance(data, dict) and (data.get("sku") or data.get("SKU")):
+        return [data]
+    batch = extract_toptex_list_payload(data)
+    return [i for i in batch if isinstance(i, dict)]
 
 
 def _configured_usage_rights() -> tuple[str, ...]:
