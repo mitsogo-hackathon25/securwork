@@ -510,8 +510,51 @@ def _row_eligible_for_import_scan(row: dict, supplier_format: bool) -> bool:
     return True
 
 
+DB_PRODUCT_NAME_MAX = 255
+DB_BRAND_NAME_MAX = 100
+DB_COLOR_NAME_MAX = 100
+DB_VARIANT_COLOR_MAX = 50
+DB_VARIANT_SIZE_MAX = 50
+DB_SKU_MAX = 100
+DB_EXTERNAL_URL_MAX = 500
+
+
+def _truncate_db_text(value: str, max_len: int, *, ellipsis: bool = False) -> str:
+    text = (value or "").strip()
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    if ellipsis and max_len > 1:
+        return f"{text[: max_len - 1]}…"
+    return text[:max_len]
+
+
+def _product_translation_names(first: dict) -> tuple[str, str, str, str]:
+    """Fit supplier Descrizione into name (255) + description (unlimited)."""
+    raw_name_it = (first.get("name_it") or "").strip()
+    raw_name_en = (first.get("name_en") or "").strip()
+    desc_it = (first.get("description_it") or "").strip()
+    desc_en = (first.get("description_en") or "").strip()
+
+    if len(raw_name_it) > DB_PRODUCT_NAME_MAX and (not desc_it or desc_it == raw_name_it):
+        desc_it = raw_name_it
+    if len(raw_name_en) > DB_PRODUCT_NAME_MAX and (not desc_en or desc_en == raw_name_en):
+        desc_en = raw_name_en or desc_it
+    if not raw_name_en:
+        raw_name_en = raw_name_it
+    if not desc_en:
+        desc_en = desc_it
+
+    name_it = _truncate_db_text(raw_name_it, DB_PRODUCT_NAME_MAX, ellipsis=True)
+    name_en = _truncate_db_text(raw_name_en, DB_PRODUCT_NAME_MAX, ellipsis=True)
+    if not name_en:
+        name_en = name_it
+    return name_it, name_en, desc_it, desc_en
+
+
 def ensure_brand(name: str) -> str:
-    cleaned = (name or "").strip()
+    cleaned = _truncate_db_text(name, DB_BRAND_NAME_MAX)
     if not cleaned:
         return ""
     existing = Brand.objects.filter(name__iexact=cleaned).first()
@@ -522,7 +565,7 @@ def ensure_brand(name: str) -> str:
 
 
 def ensure_color(name: str) -> str:
-    cleaned = (name or "").strip()
+    cleaned = _truncate_db_text(name, DB_COLOR_NAME_MAX)
     if not cleaned:
         return ""
     existing = Color.objects.filter(name__iexact=cleaned).first()
@@ -2222,10 +2265,10 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     slug = base_slug
     counter = 1
     while Product.objects.filter(slug=slug).exists():
-        slug = f"{base_slug}-{counter}"
+        slug = f"{base_slug}-{counter}"[:DB_PRODUCT_NAME_MAX]
         counter += 1
 
-    product_sku = _unique_product_sku(first["product_sku"])
+    product_sku = _unique_product_sku(_truncate_db_text(first["product_sku"], DB_SKU_MAX, ellipsis=False))
 
     product = Product.objects.create(
         sku=product_sku,
@@ -2244,15 +2287,19 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
         dtf_large_enabled=bool(first.get("dtf_large_enabled")),
         dtf_large_fee=first.get("dtf_large_fee") or Decimal("0.00"),
     )
+    name_it, name_en, desc_it, desc_en = _product_translation_names(first)
+    short_it = _truncate_db_text(first.get("short_description_it") or "", 500, ellipsis=True)
+    short_en = _truncate_db_text(first.get("short_description_en") or "", 500, ellipsis=True)
+
     product.set_current_language("it")
-    product.name = first["name_it"]
-    product.description = first["description_it"]
-    product.short_description = first.get("short_description_it") or ""
+    product.name = name_it
+    product.description = desc_it
+    product.short_description = short_it
     product.save()
     product.set_current_language("en")
-    product.name = first["name_en"]
-    product.description = first["description_en"]
-    product.short_description = first.get("short_description_en") or ""
+    product.name = name_en
+    product.description = desc_en
+    product.short_description = short_en
     product.save()
 
     category_ids = list(first.get("category_ids") or [])
@@ -2279,9 +2326,17 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     )
     link_images_only = getattr(settings, "CSV_IMPORT_LINK_IMAGES_ONLY", True)
     for index, image_url in enumerate(image_urls):
+        safe_url = (image_url or "").strip()
+        if len(safe_url) > DB_EXTERNAL_URL_MAX:
+            logger.warning(
+                "CSV import: skip image URL over %s chars for %s",
+                DB_EXTERNAL_URL_MAX,
+                product.sku,
+            )
+            continue
         image, reason = attach_image_from_url(
             product,
-            image_url,
+            safe_url,
             is_primary=(index == 0),
             link_only=link_images_only,
         )
@@ -2307,12 +2362,12 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
     variants_created = 0
     for row in rows:
         color_name = ensure_color(row["color"])
-        variant_sku = _unique_variant_sku(row["variant_sku"])
+        variant_sku = _unique_variant_sku(_truncate_db_text(row["variant_sku"], DB_SKU_MAX, ellipsis=False))
         ProductVariant.objects.create(
             product=product,
             sku=variant_sku,
-            size=row["size"],
-            color=color_name,
+            size=_truncate_db_text(row["size"], DB_VARIANT_SIZE_MAX, ellipsis=False),
+            color=_truncate_db_text(color_name, DB_VARIANT_COLOR_MAX, ellipsis=False),
             price=row["price"],
             sale_price=row["sale_price"],
             stock_quantity=row["stock"],

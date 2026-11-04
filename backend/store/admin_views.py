@@ -56,6 +56,8 @@ from .category_ordering import sort_categories
 from .models import Brand, Category, Color, CsvImportBatch, Product, ProductImage, ProductVariant
 from .permissions import IsStaffUser
 from .product_images import attach_image_from_url, create_product_image
+from .toptex_client import TopTexAPIError, TopTexConfigError
+from .toptex_import import prepare_toptex_import_staging
 
 logger = logging.getLogger(__name__)
 
@@ -932,6 +934,61 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             "chunk_size": chunk_size,
             "detail": (
                 f"Pronti {total_products} prodotti ({len(parsed_rows)} righe varianti). "
+                f"Import a blocchi da {chunk_size}."
+            ),
+        })
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[JSONParser, FormParser],
+        url_path="toptex_sync_prepare",
+    )
+    def toptex_sync_prepare(self, request):
+        """
+        Fetch TopTex catalog for all configured usage_right values, stage rows, start import batch.
+        """
+        try:
+            return self._toptex_sync_prepare_impl(request)
+        except TopTexConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except TopTexAPIError as exc:
+            code = status.HTTP_502_BAD_GATEWAY
+            if exc.status and 400 <= exc.status < 500:
+                code = status.HTTP_400_BAD_REQUEST
+            return Response({"detail": str(exc)}, status=code)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("toptex_sync_prepare failed")
+            return Response(
+                {"detail": f"Errore sincronizzazione TopTex: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _toptex_sync_prepare_impl(self, request):
+        sync_id, parsed_rows, usage_stats = prepare_toptex_import_staging()
+        total_products = len(group_parsed_product_rows(parsed_rows))
+        import_batch = CsvImportBatch.objects.create(
+            filename="TopTex API",
+            staging_upload_id=sync_id,
+            status=CsvImportBatch.Status.IN_PROGRESS,
+        )
+        chunk_size = _csv_import_chunk_size(request)
+        rights_summary = ", ".join(
+            f"{right}={usage_stats.get(right, 0)}"
+            for right in sorted(usage_stats.keys())
+        )
+        return Response({
+            "upload_id": sync_id,
+            "batch_id": str(import_batch.id),
+            "total_products": total_products,
+            "variant_rows": len(parsed_rows),
+            "chunk_size": chunk_size,
+            "usage_right_stats": usage_stats,
+            "detail": (
+                f"TopTex: {total_products} prodotti ({len(parsed_rows)} varianti) "
+                f"da {len(usage_stats)} chiamate usage_right ({rights_summary}). "
                 f"Import a blocchi da {chunk_size}."
             ),
         })

@@ -12,6 +12,7 @@ import {
   restoreDemoCatalog,
   fetchAdminProducts,
   importProductsCsvWithProgress,
+  importProductsTopTexWithProgress,
   rollbackCsvImportBatch,
   updateAdminProduct,
   type CsvImportColumnFilter,
@@ -343,6 +344,64 @@ export default function AdminProductsPage() {
     }
   }
 
+  const runTopTexImport = async () => {
+    setImporting(true)
+    setImportSuccess('')
+    setImportErrors([])
+    setImportDetail('')
+    setImportBatchId(null)
+    setImportBatchCreated(0)
+    setImportProgress({
+      phase: 'validating',
+      message: t('adminProducts.topTexPrepareMessage'),
+    })
+    try {
+      const result = await importProductsTopTexWithProgress((event) => {
+        setImportProgress(event)
+        if (event.batch_id) setImportBatchId(event.batch_id)
+        if (event.phase === 'done' || event.phase === 'failed') {
+          setImportBatchCreated(event.created_products ?? 0)
+        } else if (event.phase === 'importing' && event.batch_id) {
+          setImportBatchId(event.batch_id)
+        }
+      })
+      setImportSuccess(result.detail)
+      if (result.batch_id) setImportBatchId(result.batch_id)
+      setImportBatchCreated(result.created_products)
+      if (result.errors?.length) {
+        setImportErrors(result.errors)
+        if (result.import_partial) {
+          setImportDetail(result.detail)
+        }
+      }
+      setImportProgress({ phase: 'done', current: 100, total: 100, message: result.detail })
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] })
+    } catch (err: unknown) {
+      const responseData = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: CsvImportResult & { errors?: CsvImportError[] } } }).response?.data
+        : undefined
+      if (responseData?.batch_id) {
+        setImportBatchId(responseData.batch_id)
+        setImportBatchCreated(responseData.created_products ?? 0)
+      }
+      if (responseData?.can_rollback && (responseData.created_products ?? 0) > 0) {
+        setImportBatchCreated(responseData.created_products ?? 0)
+      }
+      if (responseData?.errors?.length) {
+        setImportDetail(responseData.detail || t('adminProducts.topTexSyncError'))
+        setImportErrors(responseData.errors)
+      } else if (responseData?.detail) {
+        setImportDetail(responseData.detail)
+      } else if (err instanceof Error && err.message) {
+        setImportDetail(err.message)
+      } else {
+        setImportDetail(formatApiError(err, t('adminProducts.topTexSyncError')))
+      }
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -564,6 +623,17 @@ export default function AdminProductsPage() {
         <p className="admin-hint">{t('adminProducts.importHint')}</p>
         <p className="admin-hint">{t('adminProducts.skipExistingHint')}</p>
         <p className="admin-hint">{t('adminProducts.chunkImportHint')}</p>
+        <p className="admin-hint">{t('adminProducts.topTexHint')}</p>
+        <div className="admin-import-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={importing || scanningCsv}
+            onClick={runTopTexImport}
+          >
+            {importing ? t('adminProducts.importing') : t('adminProducts.syncTopTex')}
+          </button>
+        </div>
         {catalogEmpty && (
           <div className="admin-alert admin-alert-warning">
             <p>{t('adminProducts.emptyCatalog')}</p>

@@ -522,3 +522,18 @@ P2;Abbigliamento;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertEqual(batch.items.count(), 2)
         delete_staged_csv(upload_id)
         self.assertIsNone(load_staged_parsed_rows(upload_id))
+
+    def test_import_truncates_long_supplier_description_for_product_name(self):
+        long_desc = "X" * 400
+        csv_text = f"""Codice Padre;Merceologica;Categoria;SCategoria;SKU;Colore;Taglia;Descrizione;Prezzo Unico
+LONG1;Payper;Polo;Test;LONG1-M;Blu;M;{long_desc};10,00
+"""
+        rows, errors = parse_and_validate_csv(csv_text.encode("utf-8"))
+        self.assertEqual(errors, [])
+        result = import_parsed_rows(rows)
+        self.assertEqual(result["created_products"], 1)
+        product = Product.objects.get(sku="LONG1")
+        name = product.safe_translation_getter("name", language_code="it")
+        full_desc = product.safe_translation_getter("description", language_code="it")
+        self.assertLessEqual(len(name), 255)
+        self.assertEqual(len(full_desc), 400)

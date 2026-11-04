@@ -139,6 +139,8 @@ The app also **gzip-compresses** CSV on upload and parses columns **in the brows
 
 **Long imports:** the admin UI uses **chunked import** (`import_csv_stage` → `import_csv_prepare` → repeated `import_csv_chunk`, default **20 products** per request via `CSV_IMPORT_CHUNK_SIZE`). Each chunk is a short HTTP call, so **Cloudflare’s ~100s limit** applies only to the one-time **prepare/validate** step—not the whole catalog. Use a column filter if prepare times out. Legacy streaming: `import_csv_stream` (NDJSON).
 
+**TopTex API sync:** Admin → Products → **Sync from TopTex API** calls `POST /api/admin/products/toptex_sync_prepare/` (three catalog GETs with `usage_right` = `b2b_b2c`, `b2b_uniquement`, `b2c_uniquement`, then the same chunked `import_csv_chunk` flow). Set `TOPTEX_API_KEY`, `TOPTEX_USERNAME`, `TOPTEX_PASSWORD` (and optional `TOPTEX_BASE_URL`, `TOPTEX_LANG`, `TOPTEX_PRICE_MARKUP_PERCENT`) in `.env`. The prepare step can take several minutes on a full catalog—use DNS-only / long nginx timeouts if it hits Cloudflare 524.
+
 **Cloudflare:** if `www.securwork.it` uses the **orange cloud** (proxied), Cloudflare cuts idle connections after **~100 seconds** → browser shows *failed* or **524** on `import_csv_stream` even when nginx/gunicorn allow 600s. Fix: in Cloudflare DNS set **www** (and optionally `@`) to **DNS only** (grey cloud), or import in smaller chunks via the column filter. Enterprise plans can raise the proxy timeout; Free/Pro cannot rely on 600s nginx alone.
 
 ## 5. SSL

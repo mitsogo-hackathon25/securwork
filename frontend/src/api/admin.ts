@@ -218,6 +218,7 @@ export type CsvImportPrepareResult = {
   variant_rows: number
   chunk_size: number
   detail: string
+  usage_right_stats?: Record<string, number>
 }
 
 export type CsvImportChunkResult = {
@@ -241,13 +242,13 @@ export type CsvImportChunkResult = {
 
 function buildCsvImportPostForm(
   uploadId: string,
-  file: File,
+  filename: string,
   columnFilter?: CsvImportColumnFilter,
   extra?: Record<string, string>,
 ) {
   const form = new FormData()
   form.append('upload_id', uploadId)
-  form.append('filename', file.name)
+  form.append('filename', filename)
   form.append('skip_existing', '1')
   appendCsvImportFilters(form, columnFilter)
   if (extra) {
@@ -263,8 +264,15 @@ async function prepareCsvImport(
   file: File,
   columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportPrepareResult> {
-  const form = buildCsvImportPostForm(uploadId, file, columnFilter)
+  const form = buildCsvImportPostForm(uploadId, file.name, columnFilter)
   return postMultipartJson<CsvImportPrepareResult>('/admin/products/import_csv_prepare/', form)
+}
+
+async function prepareTopTexSync(): Promise<CsvImportPrepareResult> {
+  const qs = new URLSearchParams({ lang: i18n.language })
+  return api
+    .post<CsvImportPrepareResult>(`/admin/products/toptex_sync_prepare/?${qs.toString()}`, {})
+    .then((r) => r.data)
 }
 
 async function importCsvImportChunk(
@@ -272,15 +280,87 @@ async function importCsvImportChunk(
   batchId: string,
   offset: number,
   chunkSize: number,
-  file: File,
+  filename: string,
   columnFilter?: CsvImportColumnFilter,
 ): Promise<CsvImportChunkResult> {
-  const form = buildCsvImportPostForm(uploadId, file, columnFilter, {
+  const form = buildCsvImportPostForm(uploadId, filename, columnFilter, {
     batch_id: batchId,
     offset: String(offset),
     chunk_size: String(chunkSize),
   })
   return postMultipartJson<CsvImportChunkResult>('/admin/products/import_csv_chunk/', form)
+}
+
+async function runPreparedImportChunks(
+  prepared: CsvImportPrepareResult,
+  filename: string,
+  onEvent: (event: CsvImportProgressEvent) => void,
+  columnFilter?: CsvImportColumnFilter,
+): Promise<CsvImportResult> {
+  let offset = 0
+  const allErrors: CsvImportError[] = []
+  let lastChunk: CsvImportChunkResult | null = null
+
+  while (true) {
+    onEvent({
+      phase: 'importing',
+      current: offset,
+      total: prepared.total_products,
+      message: `Import blocco (${offset + 1}–${Math.min(offset + prepared.chunk_size, prepared.total_products)} di ${prepared.total_products})…`,
+      batch_id: prepared.batch_id,
+    })
+
+    const chunk = await importCsvImportChunk(
+      prepared.upload_id,
+      prepared.batch_id,
+      offset,
+      prepared.chunk_size,
+      filename,
+      columnFilter,
+    )
+    lastChunk = chunk
+    if (chunk.errors?.length) {
+      allErrors.push(...chunk.errors)
+    }
+
+    onEvent({
+      phase: 'importing',
+      current: chunk.next_offset,
+      total: chunk.total_products,
+      message: chunk.detail,
+      batch_id: chunk.batch_id,
+    })
+
+    if (chunk.done) break
+    offset = chunk.next_offset
+  }
+
+  const finalDetail = lastChunk?.detail || prepared.detail
+  onEvent({
+    phase: 'done',
+    current: prepared.total_products,
+    total: prepared.total_products,
+    message: finalDetail,
+    detail: finalDetail,
+    batch_id: prepared.batch_id,
+    created_products: lastChunk?.created_products ?? 0,
+    created_variants: lastChunk?.created_variants ?? 0,
+    skipped_products: lastChunk?.skipped_products,
+    can_rollback: (lastChunk?.created_products ?? 0) > 0,
+    import_partial: allErrors.length > 0,
+    errors: allErrors.slice(0, 50),
+  })
+
+  return {
+    detail: finalDetail,
+    errors: allErrors.slice(0, 50),
+    created_products: lastChunk?.created_products ?? 0,
+    created_variants: lastChunk?.created_variants ?? 0,
+    skipped_products: lastChunk?.skipped_products,
+    batch_id: prepared.batch_id,
+    can_rollback: (lastChunk?.created_products ?? 0) > 0,
+    import_partial: allErrors.length > 0,
+  }
 }
 
 function appendCsvImportFilters(form: FormData, columnFilter?: CsvImportColumnFilter) {
@@ -570,70 +650,27 @@ export function importProductsCsvWithProgress(
       batch_id: prepared.batch_id,
     })
 
-    let offset = 0
-    const allErrors: CsvImportError[] = []
-    let lastChunk: CsvImportChunkResult | null = null
+    return runPreparedImportChunks(prepared, file.name, onEvent, columnFilter)
+  })
+}
 
-    while (true) {
-      onEvent({
-        phase: 'importing',
-        current: offset,
-        total: prepared.total_products,
-        message: `Import blocco (${offset + 1}–${Math.min(offset + prepared.chunk_size, prepared.total_products)} di ${prepared.total_products})…`,
-        batch_id: prepared.batch_id,
-      })
+export function importProductsTopTexWithProgress(
+  onEvent: (event: CsvImportProgressEvent) => void,
+): Promise<CsvImportResult> {
+  onEvent({
+    phase: 'validating',
+    message: 'TopTex: autenticazione e catalogo (b2b_b2c, b2b_uniquement, b2c_uniquement)…',
+  })
 
-      const chunk = await importCsvImportChunk(
-        prepared.upload_id,
-        prepared.batch_id,
-        offset,
-        prepared.chunk_size,
-        file,
-        columnFilter,
-      )
-      lastChunk = chunk
-      if (chunk.errors?.length) {
-        allErrors.push(...chunk.errors)
-      }
-
-      onEvent({
-        phase: 'importing',
-        current: chunk.next_offset,
-        total: chunk.total_products,
-        message: chunk.detail,
-        batch_id: chunk.batch_id,
-      })
-
-      if (chunk.done) break
-      offset = chunk.next_offset
-    }
-
-    const finalDetail = lastChunk?.detail || prepared.detail
+  return prepareTopTexSync().then(async (prepared) => {
     onEvent({
-      phase: 'done',
+      phase: 'validated',
       current: prepared.total_products,
       total: prepared.total_products,
-      message: finalDetail,
-      detail: finalDetail,
+      message: prepared.detail,
       batch_id: prepared.batch_id,
-      created_products: lastChunk?.created_products ?? 0,
-      created_variants: lastChunk?.created_variants ?? 0,
-      skipped_products: lastChunk?.skipped_products,
-      can_rollback: (lastChunk?.created_products ?? 0) > 0,
-      import_partial: allErrors.length > 0,
-      errors: allErrors.slice(0, 50),
     })
-
-    return {
-      detail: finalDetail,
-      errors: allErrors.slice(0, 50),
-      created_products: lastChunk?.created_products ?? 0,
-      created_variants: lastChunk?.created_variants ?? 0,
-      skipped_products: lastChunk?.skipped_products,
-      batch_id: prepared.batch_id,
-      can_rollback: (lastChunk?.created_products ?? 0) > 0,
-      import_partial: allErrors.length > 0,
-    }
+    return runPreparedImportChunks(prepared, 'TopTex API', onEvent)
   })
 }
 

@@ -272,6 +272,19 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX
 CSV_IMPORT_LINK_IMAGES_ONLY = config("CSV_IMPORT_LINK_IMAGES_ONLY", default=True, cast=bool)
 CSV_IMPORT_CHUNK_SIZE = config("CSV_IMPORT_CHUNK_SIZE", default=20, cast=int)
 
+# TopTex catalog API (admin sync — three usage_right values for full visuals catalog)
+TOPTEX_BASE_URL = config("TOPTEX_BASE_URL", default="https://api.toptex.io")
+TOPTEX_API_KEY = config("TOPTEX_API_KEY", default="")
+TOPTEX_USERNAME = config("TOPTEX_USERNAME", default="")
+TOPTEX_PASSWORD = config("TOPTEX_PASSWORD", default="")
+TOPTEX_LANG = config("TOPTEX_LANG", default="it")
+# Comma-separated subset of b2b_b2c,b2b_uniquement,b2c_uniquement (default: all three)
+TOPTEX_USAGE_RIGHTS = config("TOPTEX_USAGE_RIGHTS", default="")
+TOPTEX_PRICE_MARKUP_PERCENT = config("TOPTEX_PRICE_MARKUP_PERCENT", default=0, cast=float)
+TOPTEX_IMPORT_ONLY_ACTIVE = config("TOPTEX_IMPORT_ONLY_ACTIVE", default=True, cast=bool)
+TOPTEX_DEFAULT_STOCK = config("TOPTEX_DEFAULT_STOCK", default=0, cast=int)
+TOPTEX_HTTP_TIMEOUT = config("TOPTEX_HTTP_TIMEOUT", default=120, cast=int)
+
 # Security (production)
 if not DEBUG:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
