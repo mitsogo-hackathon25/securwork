@@ -161,18 +161,25 @@ def _inventory_stock_value(item: dict[str, Any]) -> int | None:
     for key in (
         "quantity",
         "stock",
+        "stockQuantity",
+        "stock_quantity",
         "availableQuantity",
         "available_quantity",
+        "availableStock",
+        "physicalStock",
+        "totalQuantity",
         "qty",
         "inventory",
         "inStock",
         "in_stock",
+        "stockDispo",
+        "stock_disponible",
     ):
         raw = item.get(key)
         if raw is None or raw == "":
             continue
         try:
-            stock = int(raw)
+            stock = int(float(raw))
         except (TypeError, ValueError):
             continue
         return max(stock, 0)
@@ -180,11 +187,80 @@ def _inventory_stock_value(item: dict[str, Any]) -> int | None:
 
 
 def _inventory_sku_key(item: dict[str, Any]) -> str:
-    for key in ("sku", "SKU", "productSku", "product_sku", "variantSku"):
+    for key in (
+        "sku",
+        "SKU",
+        "productSku",
+        "product_sku",
+        "variantSku",
+        "reference",
+        "barcode",
+        "ean",
+        "ean13",
+    ):
         raw = item.get(key)
         if raw and str(raw).strip():
             return str(raw).strip().lower()
     return ""
+
+
+def flatten_toptex_inventory_rows(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize flat or catalog-shaped TopTex inventory payloads to {sku, quantity} rows."""
+    flat: list[dict[str, Any]] = []
+
+    def append_row(row: dict[str, Any]) -> None:
+        sku = _inventory_sku_key(row)
+        stock = _inventory_stock_value(row)
+        if sku and stock is not None:
+            flat.append({"sku": sku, "quantity": stock})
+
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        if _inventory_sku_key(item) and _inventory_stock_value(item) is not None:
+            append_row(item)
+            continue
+
+        colors = item.get("colors")
+        if isinstance(colors, list):
+            before = len(flat)
+            for color in colors:
+                if not isinstance(color, dict):
+                    continue
+                for size_row in color.get("sizes") or []:
+                    if isinstance(size_row, dict):
+                        append_row(size_row)
+            if len(flat) > before:
+                continue
+
+        sku = _inventory_sku_key(item)
+        warehouse_total = 0
+        warehouse_found = False
+        for wh_key in (
+            "warehouses",
+            "warehouseStocks",
+            "stocks",
+            "stockItems",
+            "balances",
+            "balance",
+        ):
+            wh_list = item.get(wh_key)
+            if not isinstance(wh_list, list):
+                continue
+            for wh in wh_list:
+                if not isinstance(wh, dict):
+                    continue
+                qty = _inventory_stock_value(wh)
+                if qty is not None:
+                    warehouse_total += qty
+                    warehouse_found = True
+        if sku and warehouse_found:
+            flat.append({"sku": sku, "quantity": warehouse_total})
+            continue
+
+        append_row(item)
+
+    return flat
 
 
 def build_stock_by_sku_from_inventory(
@@ -201,7 +277,15 @@ def build_stock_by_sku_from_inventory(
         except TopTexAPIError:
             logger.exception("TopTex inventory fetch failed for %s", ref)
             continue
-        for item in items:
+        flat = flatten_toptex_inventory_rows(items)
+        if items and not flat:
+            logger.warning(
+                "TopTex inventory %s: %s raw row(s) but no SKU/qty parsed (sample keys: %s)",
+                ref,
+                len(items),
+                sorted(items[0].keys())[:25],
+            )
+        for item in flat:
             sku = _inventory_sku_key(item)
             stock = _inventory_stock_value(item)
             if sku and stock is not None:
@@ -299,6 +383,9 @@ def toptex_item_to_parsed_rows(
             if price is None:
                 continue
             stock = 0
+            size_stock = _inventory_stock_value(size_row)
+            if size_stock is not None:
+                stock = size_stock
             if stock_by_sku and variant_sku.lower() in stock_by_sku:
                 stock = stock_by_sku[variant_sku.lower()]
             elif getattr(settings, "TOPTEX_DEFAULT_STOCK", 0):
@@ -397,6 +484,37 @@ def apply_toptex_stock_to_product_rows(
         sku = (row.get("variant_sku") or "").strip().lower()
         if sku in stock_by_sku:
             row["stock"] = stock_by_sku[sku]
+
+
+def refresh_existing_toptex_product_stock(
+    rows: list[dict[str, Any]],
+    stock_by_sku: dict[str, int],
+) -> int:
+    """Update variant stock_quantity for an already-imported Codice Padre (skip_existing)."""
+    if not rows or not stock_by_sku:
+        return 0
+    from .models import Product, ProductVariant
+
+    parent_sku = (rows[0].get("product_sku") or "").strip()
+    if not parent_sku:
+        return 0
+    product = Product.objects.filter(sku__iexact=parent_sku).first()
+    if product is None:
+        return 0
+    updated = 0
+    for row in rows:
+        variant_sku = (row.get("variant_sku") or "").strip()
+        if not variant_sku:
+            continue
+        qty = stock_by_sku.get(variant_sku.lower())
+        if qty is None:
+            continue
+        count = ProductVariant.objects.filter(
+            product=product,
+            sku__iexact=variant_sku,
+        ).update(stock_quantity=qty)
+        updated += count
+    return updated
 
 
 def build_toptex_chunk_context(

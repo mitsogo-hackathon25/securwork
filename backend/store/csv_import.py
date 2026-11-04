@@ -2516,7 +2516,11 @@ def import_parsed_rows_chunk(
     limit = max(1, limit)
     slice_groups = groups[offset : offset + limit]
 
-    from .toptex_import import build_toptex_chunk_context
+    from .toptex_import import (
+        apply_toptex_stock_to_product_rows,
+        build_toptex_chunk_context,
+        refresh_existing_toptex_product_stock,
+    )
 
     toptex_client, toptex_stock_by_sku = build_toptex_chunk_context(slice_groups)
 
@@ -2524,12 +2528,22 @@ def import_parsed_rows_chunk(
     chunk_created_products = 0
     chunk_created_variants = 0
     chunk_skipped_products = 0
+    chunk_stock_updated_variants = 0
     import_errors: list[dict] = []
 
     for rows in slice_groups:
         first = rows[0]
         parent_key = (first.get("product_sku") or "").strip().lower()
         if skip_existing_in_catalog and parent_key and parent_key in catalog_skus:
+            if first.get("_toptex_source") and toptex_stock_by_sku:
+                apply_toptex_stock_to_product_rows(
+                    rows,
+                    stock_by_sku=toptex_stock_by_sku,
+                )
+                chunk_stock_updated_variants += refresh_existing_toptex_product_stock(
+                    rows,
+                    toptex_stock_by_sku,
+                )
             chunk_skipped_products += 1
             continue
         try:

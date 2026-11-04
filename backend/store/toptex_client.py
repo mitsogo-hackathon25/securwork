@@ -94,6 +94,23 @@ class TopTexClient:
         )
         return self._read_json(req)
 
+    def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        if not self._token:
+            self.authenticate()
+        payload = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=payload,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "x-api-key": self.api_key,
+                "x-toptex-authorization": self._token,
+            },
+        )
+        return self._read_json(req)
+
     def download_url(self, url: str) -> tuple[bytes, str]:
         """GET a URL with TopTex auth (packshots often require the same headers as the API)."""
         if not self._token:
@@ -126,11 +143,48 @@ class TopTexClient:
             raise TopTexAPIError(f"TopTex download rete: {exc.reason}") from exc
 
     def fetch_inventory_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
-        """GET /v3/products/inventory — stock by Codice Padre (catalog_reference)."""
-        return self._fetch_paginated_by_catalog_reference(
+        """Stock by Codice Padre — GET /v3/products/inventory, then POST search fallbacks."""
+        catalog_ref = (catalog_ref or "").strip()
+        if not catalog_ref:
+            return []
+        items = self._fetch_paginated_by_catalog_reference(
             "/v3/products/inventory",
             catalog_ref,
         )
+        if items:
+            return items
+        items = self._fetch_paginated_by_catalog_reference(
+            "/v3/products/stocks",
+            catalog_ref,
+        )
+        if items:
+            return items
+        return self._post_inventory_catalog_search(catalog_ref)
+
+    def _post_inventory_catalog_search(self, catalog_ref: str) -> list[dict[str, Any]]:
+        paths = (
+            "/v3/products/inventory/search",
+            "/v3/inventory/search",
+            "/v3/products/stocks/search",
+        )
+        bodies = (
+            {"catalogReferences": [catalog_ref]},
+            {"catalog_references": [catalog_ref]},
+            {"catalogReference": catalog_ref},
+            {"references": [catalog_ref]},
+        )
+        for path in paths:
+            for body in bodies:
+                try:
+                    data = self.post(path, body)
+                except TopTexAPIError as exc:
+                    if exc.status in (404, 405, 400, 422):
+                        continue
+                    raise
+                batch = _list_records_from_toptex_response(data)
+                if batch:
+                    return batch
+        return []
 
     def fetch_prices_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
         """GET /v3/products/price — fallback when catalog/all omits publicUnitPrice."""
@@ -151,11 +205,13 @@ class TopTexClient:
         max_pages = int(getattr(settings, "TOPTEX_MAX_CATALOG_PAGES", 500))
         items: list[dict[str, Any]] = []
         page_number = 1
+        lang = getattr(settings, "TOPTEX_LANG", "it") or "it"
         while page_number <= max_pages:
             params = {
                 "catalog_reference": catalog_ref,
                 "page_size": page_size,
                 "page_number": str(page_number),
+                "lang": lang,
             }
             try:
                 data = self.get(path, params)
@@ -340,6 +396,10 @@ def extract_toptex_list_payload(data: Any) -> list[Any]:
         "items",
         "inventoryItems",
         "inventory",
+        "stockItems",
+        "stocks",
+        "variants",
+        "skus",
         "prices",
         "priceItems",
         "data",

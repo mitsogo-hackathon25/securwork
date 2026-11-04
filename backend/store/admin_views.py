@@ -1008,12 +1008,28 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             from .toptex_client import extract_toptex_list_payload, _catalog_total_pages
 
             items = extract_toptex_list_payload(data)
-            return Response({
+            payload = {
                 "detail": "Connessione TopTex OK.",
                 "catalog_items_page1": len(items),
                 "total_pages": _catalog_total_pages(data),
                 "response_keys": sorted(data.keys())[:30],
-            })
+            }
+            catalog_ref = (request.data.get("catalog_reference") or "").strip()
+            if catalog_ref:
+                from .toptex_import import build_stock_by_sku_from_inventory, flatten_toptex_inventory_rows
+
+                raw = client.fetch_inventory_by_catalog_ref(catalog_ref)
+                flat = flatten_toptex_inventory_rows(raw)
+                stock_map = build_stock_by_sku_from_inventory(client, [catalog_ref])
+                payload["inventory_probe"] = {
+                    "catalog_reference": catalog_ref,
+                    "raw_rows": len(raw),
+                    "parsed_sku_rows": len(flat),
+                    "stock_map_size": len(stock_map),
+                    "sample_raw_keys": sorted(raw[0].keys())[:30] if raw else [],
+                    "sample_stock": dict(list(stock_map.items())[:5]),
+                }
+            return Response(payload)
         except TopTexConfigError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except TopTexAPIError as exc:

@@ -8,6 +8,7 @@ from store.toptex_import import (
     _inventory_stock_value,
     _inventory_sku_key,
     _price_from_toptex_price_api_row,
+    flatten_toptex_inventory_rows,
     merge_toptex_catalog_items,
     toptex_item_to_parsed_rows,
 )
@@ -106,3 +107,18 @@ class TopTexImportTests(SimpleTestCase):
         self.assertIsNotNone(client)
         auth_mock.assert_called_once()
         self.assertEqual(stock, {})
+
+    def test_flatten_catalog_shaped_inventory(self):
+        raw = [{
+            "catalogReference": "B57",
+            "colors": [{
+                "sizes": [
+                    {"sku": "B57-A-M", "quantity": 10},
+                    {"sku": "B57-A-L", "stockQuantity": 5},
+                ],
+            }],
+        }]
+        flat = flatten_toptex_inventory_rows(raw)
+        self.assertEqual(len(flat), 2)
+        self.assertEqual(_inventory_stock_value(flat[0]), 10)
+        self.assertEqual(_inventory_sku_key(flat[1]), "b57-a-l")
