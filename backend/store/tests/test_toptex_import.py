@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from django.test import SimpleTestCase, override_settings
 
-from store.toptex_client import TOPTEX_USAGE_RIGHTS
+from store.toptex_client import TOPTEX_USAGE_RIGHTS, extract_toptex_list_payload
 from store.toptex_import import (
+    _inventory_stock_value,
+    _inventory_sku_key,
     merge_toptex_catalog_items,
     toptex_item_to_parsed_rows,
 )
@@ -58,3 +60,12 @@ class TopTexImportTests(SimpleTestCase):
         self.assertEqual(row["variant_sku"], "SKU-1")
         self.assertEqual(row["price"], Decimal("11.00"))
         self.assertEqual(row["brand"], "BrandX")
+
+    def test_inventory_stock_parser(self):
+        self.assertEqual(_inventory_stock_value({"sku": "A", "quantity": 12}), 12)
+        self.assertEqual(_inventory_stock_value({"SKU": "B", "availableQuantity": "5"}), 5)
+        self.assertIsNone(_inventory_stock_value({"sku": "C"}))
+        self.assertEqual(_inventory_sku_key({"sku": "X-1"}), "x-1")
+
+    def test_extract_toptex_list_payload(self):
+        self.assertEqual(len(extract_toptex_list_payload({"inventoryItems": [{"sku": "1"}]})), 1)

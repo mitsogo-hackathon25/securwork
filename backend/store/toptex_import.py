@@ -14,7 +14,7 @@ from .csv_import import (
     _normalize_price_string,
     stage_parsed_import_rows,
 )
-from .toptex_client import TopTexClient
+from .toptex_client import TopTexAPIError, TopTexClient
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +90,98 @@ def _product_sale_state_ok(item: dict[str, Any]) -> bool:
     return _variant_sale_state_ok(item.get("saleState"))
 
 
+def _inventory_stock_value(item: dict[str, Any]) -> int | None:
+    for key in (
+        "quantity",
+        "stock",
+        "availableQuantity",
+        "available_quantity",
+        "qty",
+        "inventory",
+        "inStock",
+        "in_stock",
+    ):
+        raw = item.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            stock = int(raw)
+        except (TypeError, ValueError):
+            continue
+        return max(stock, 0)
+    return None
+
+
+def _inventory_sku_key(item: dict[str, Any]) -> str:
+    for key in ("sku", "SKU", "productSku", "product_sku", "variantSku"):
+        raw = item.get(key)
+        if raw and str(raw).strip():
+            return str(raw).strip().lower()
+    return ""
+
+
+def build_stock_by_sku_from_inventory(
+    client: TopTexClient,
+    catalog_refs: list[str],
+) -> dict[str, int]:
+    stock_by_sku: dict[str, int] = {}
+    for catalog_ref in catalog_refs:
+        ref = (catalog_ref or "").strip()
+        if not ref:
+            continue
+        try:
+            items = client.fetch_inventory_by_catalog_ref(ref)
+        except TopTexAPIError:
+            logger.exception("TopTex inventory fetch failed for %s", ref)
+            continue
+        for item in items:
+            sku = _inventory_sku_key(item)
+            stock = _inventory_stock_value(item)
+            if sku and stock is not None:
+                stock_by_sku[sku] = stock
+    return stock_by_sku
+
+
+def build_price_by_sku_from_price_api(
+    client: TopTexClient,
+    catalog_refs: list[str],
+    *,
+    markup_percent: Decimal,
+) -> dict[str, Decimal]:
+    price_by_sku: dict[str, Decimal] = {}
+    for catalog_ref in catalog_refs:
+        ref = (catalog_ref or "").strip()
+        if not ref:
+            continue
+        try:
+            items = client.fetch_prices_by_catalog_ref(ref)
+        except TopTexAPIError:
+            logger.exception("TopTex price fetch failed for %s", ref)
+            continue
+        for item in items:
+            sku = _inventory_sku_key(item)
+            if not sku:
+                continue
+            raw = (
+                item.get("publicUnitPrice")
+                or item.get("price")
+                or item.get("unitPrice")
+                or item.get("publicPrice")
+                or ""
+            )
+            price = _parse_toptex_price(str(raw), markup_percent)
+            if price is not None:
+                price_by_sku[sku] = price
+    return price_by_sku
+
+
 def toptex_item_to_parsed_rows(
     item: dict[str, Any],
     *,
     lang: str = "it",
     markup_percent: Decimal | None = None,
+    stock_by_sku: dict[str, int] | None = None,
+    price_by_sku: dict[str, Decimal] | None = None,
 ) -> list[dict[str, Any]]:
     if not _product_sale_state_ok(item):
         return []
@@ -147,10 +234,14 @@ def toptex_item_to_parsed_rows(
             size = (size_row.get("size") or "UNICA").strip()
             price_raw = size_row.get("publicUnitPrice") or size_row.get("price") or ""
             price = _parse_toptex_price(str(price_raw), markup)
+            if price is None and price_by_sku:
+                price = price_by_sku.get(variant_sku.lower())
             if price is None:
                 continue
             stock = 0
-            if getattr(settings, "TOPTEX_DEFAULT_STOCK", 0):
+            if stock_by_sku and variant_sku.lower() in stock_by_sku:
+                stock = stock_by_sku[variant_sku.lower()]
+            elif getattr(settings, "TOPTEX_DEFAULT_STOCK", 0):
                 try:
                     stock = int(getattr(settings, "TOPTEX_DEFAULT_STOCK", 0))
                 except (TypeError, ValueError):
@@ -159,6 +250,7 @@ def toptex_item_to_parsed_rows(
             rows.append({
                 "row": 0,
                 "product_sku": catalog_ref,
+                "_toptex_source": True,
                 "brand": brand,
                 "name_it": name_it,
                 "name_en": name_en,
@@ -229,10 +321,33 @@ def build_parsed_rows_from_toptex(
     stats = {right: len(items) for right, items in by_right.items()}
     merged_items = merge_toptex_catalog_items(by_right)
     markup = Decimal(str(getattr(settings, "TOPTEX_PRICE_MARKUP_PERCENT", 0)))
+    catalog_refs = sorted({
+        (item.get("catalogReference") or item.get("productReference") or "").strip()
+        for item in merged_items
+    } - {""})
+
+    stock_by_sku: dict[str, int] = {}
+    if getattr(settings, "TOPTEX_FETCH_INVENTORY", True):
+        stock_by_sku = build_stock_by_sku_from_inventory(client, catalog_refs)
+
+    price_by_sku: dict[str, Decimal] = {}
+    if getattr(settings, "TOPTEX_FETCH_PRICES", True):
+        price_by_sku = build_price_by_sku_from_price_api(
+            client,
+            catalog_refs,
+            markup_percent=markup,
+        )
+
     parsed_rows: list[dict] = []
     seen_variants: set[tuple[str, str]] = set()
     for item in merged_items:
-        for row in toptex_item_to_parsed_rows(item, lang=lang, markup_percent=markup):
+        for row in toptex_item_to_parsed_rows(
+            item,
+            lang=lang,
+            markup_percent=markup,
+            stock_by_sku=stock_by_sku,
+            price_by_sku=price_by_sku,
+        ):
             key = (row["product_sku"].lower(), row["variant_sku"].lower())
             if key in seen_variants:
                 idx = next(
@@ -246,6 +361,8 @@ def build_parsed_rows_from_toptex(
                 continue
             seen_variants.add(key)
             parsed_rows.append(row)
+    stats["catalog_references"] = len(catalog_refs)
+    stats["inventory_skus"] = len(stock_by_sku)
     return parsed_rows, stats
 
 

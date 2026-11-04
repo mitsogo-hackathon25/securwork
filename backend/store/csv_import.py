@@ -597,6 +597,7 @@ from .product_images import (
     absolute_media_url,
     attach_image_from_url,
     attach_mockup_from_url,
+    attach_toptex_image_from_url,
     product_image_export_urls,
     split_url_list,
 )
@@ -2325,6 +2326,8 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
         *(r.get("image_urls") or [] for r in rows),
     )
     link_images_only = getattr(settings, "CSV_IMPORT_LINK_IMAGES_ONLY", True)
+    toptex_source = bool(first.get("_toptex_source"))
+    download_toptex = toptex_source and getattr(settings, "TOPTEX_DOWNLOAD_IMAGES", True)
     for index, image_url in enumerate(image_urls):
         safe_url = (image_url or "").strip()
         if len(safe_url) > DB_EXTERNAL_URL_MAX:
@@ -2334,12 +2337,19 @@ def _import_one_product_group(rows: list[dict]) -> tuple[int, Product]:
                 product.sku,
             )
             continue
-        image, reason = attach_image_from_url(
-            product,
-            safe_url,
-            is_primary=(index == 0),
-            link_only=link_images_only,
-        )
+        if download_toptex:
+            image, reason = attach_toptex_image_from_url(
+                product,
+                safe_url,
+                is_primary=(index == 0),
+            )
+        else:
+            image, reason = attach_image_from_url(
+                product,
+                safe_url,
+                is_primary=(index == 0),
+                link_only=link_images_only,
+            )
         if not image:
             raise ValueError(
                 f"Prodotto '{product.sku}': impossibile importare url_immagini "

@@ -94,6 +94,91 @@ class TopTexClient:
         )
         return self._read_json(req)
 
+    def download_url(self, url: str) -> tuple[bytes, str]:
+        """GET a URL with TopTex auth (packshots often require the same headers as the API)."""
+        if not self._token:
+            self.authenticate()
+        req = urllib.request.Request(
+            url,
+            method="GET",
+            headers={
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                "x-api-key": self.api_key,
+                "x-toptex-authorization": self._token,
+            },
+        )
+        try:
+            with urllib.request.urlopen(
+                req,
+                timeout=int(getattr(settings, "TOPTEX_HTTP_TIMEOUT", 120)),
+            ) as resp:
+                data = resp.read()
+                content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+                return data, content_type
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise TopTexAPIError(
+                f"TopTex download HTTP {exc.code}",
+                status=exc.code,
+                body=body,
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise TopTexAPIError(f"TopTex download rete: {exc.reason}") from exc
+
+    def fetch_inventory_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
+        """GET /v3/products/inventory — stock by Codice Padre (Catalog_Ref)."""
+        catalog_ref = (catalog_ref or "").strip()
+        if not catalog_ref:
+            return []
+        param_names = (
+            "catalogReference",
+            "catalog_ref",
+            "Catalog_Ref",
+            "catalogRef",
+        )
+        last_error: TopTexAPIError | None = None
+        for param in param_names:
+            try:
+                data = self.get("/v3/products/inventory", {param: catalog_ref})
+                items = extract_toptex_list_payload(data)
+                if items:
+                    return [i for i in items if isinstance(i, dict)]
+            except TopTexAPIError as exc:
+                last_error = exc
+                if exc.status in (400, 404):
+                    continue
+                raise
+        if last_error and last_error.status not in (400, 404):
+            logger.warning(
+                "TopTex inventory %s: %s",
+                catalog_ref,
+                last_error,
+            )
+        return []
+
+    def fetch_prices_by_catalog_ref(self, catalog_ref: str) -> list[dict[str, Any]]:
+        """GET /v3/products/price — fallback when catalog/all omits publicUnitPrice."""
+        catalog_ref = (catalog_ref or "").strip()
+        if not catalog_ref:
+            return []
+        param_names = (
+            "catalogReference",
+            "catalog_ref",
+            "Catalog_Ref",
+            "catalogRef",
+        )
+        for param in param_names:
+            try:
+                data = self.get("/v3/products/price", {param: catalog_ref})
+                items = extract_toptex_list_payload(data)
+                if items:
+                    return [i for i in items if isinstance(i, dict)]
+            except TopTexAPIError as exc:
+                if exc.status in (400, 404):
+                    continue
+                raise
+        return []
+
     def fetch_products_all_for_usage_right(
         self,
         usage_right: str,
@@ -110,18 +195,46 @@ class TopTexClient:
             "lang": lang,
             "display_prices": "1" if display_prices else "0",
         }
-        data = self.get("/v3/products/all", base_params)
-        items: list[dict[str, Any]] = list(data.get("items") or [])
-        total_pages = data.get("totalPages") or data.get("total_pages")
-        if total_pages is not None:
-            try:
-                pages = int(total_pages)
-            except (TypeError, ValueError):
-                pages = 1
-            for page in range(2, pages + 1):
-                params = {**base_params, "page": str(page)}
-                page_data = self.get("/v3/products/all", params)
-                items.extend(page_data.get("items") or [])
+        items: list[dict[str, Any]] = []
+        max_pages = int(getattr(settings, "TOPTEX_MAX_CATALOG_PAGES", 500))
+        page = 1
+        page_size_hint: int | None = None
+
+        while page <= max_pages:
+            params = {**base_params, "page": str(page)}
+            data = self.get("/v3/products/all", params)
+            batch = [i for i in (data.get("items") or []) if isinstance(i, dict)]
+            if not batch:
+                break
+            items.extend(batch)
+            if page_size_hint is None:
+                for key in ("pageSize", "page_size", "limit", "perPage"):
+                    raw = data.get(key)
+                    if raw is not None:
+                        try:
+                            page_size_hint = int(raw)
+                        except (TypeError, ValueError):
+                            pass
+                        break
+
+            total_pages = (
+                data.get("totalPages")
+                or data.get("total_pages")
+                or data.get("nbPages")
+                or data.get("pageCount")
+            )
+            if total_pages is not None:
+                try:
+                    if page >= int(total_pages):
+                        break
+                except (TypeError, ValueError):
+                    pass
+            elif page_size_hint and len(batch) < page_size_hint:
+                break
+            elif page > 1 and len(batch) == 0:
+                break
+            page += 1
+
         return items
 
     def fetch_products_all_usage_rights(
@@ -168,6 +281,27 @@ class TopTexClient:
         if not isinstance(data, dict):
             raise TopTexAPIError("Risposta TopTex non valida.")
         return data
+
+
+def extract_toptex_list_payload(data: Any) -> list[Any]:
+    """Normalize TopTex list responses (items, inventoryItems, …)."""
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    for key in (
+        "items",
+        "inventoryItems",
+        "inventory",
+        "prices",
+        "priceItems",
+        "data",
+        "results",
+    ):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    return []
 
 
 def _configured_usage_rights() -> tuple[str, ...]:

@@ -79,6 +79,64 @@ def attach_image_from_url(
     return None, reason or "Impossibile scaricare l'immagine da questo URL."
 
 
+def attach_toptex_image_from_url(
+    product: Product,
+    image_url: str,
+    *,
+    is_primary: bool = False,
+    alt_text: str = "",
+    sort_order: int | None = None,
+) -> tuple[ProductImage | None, str]:
+    """Download packshot using TopTex API credentials, then store in media/."""
+    from .image_utils import _content_file_from_bytes
+    from .toptex_client import TopTexAPIError, TopTexClient
+
+    url = (image_url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return None, "L'URL deve iniziare con http:// o https://."
+
+    client = TopTexClient()
+    try:
+        data, content_type = client.download_url(url)
+    except TopTexAPIError as exc:
+        content, reason = download_image_with_reason(url, filename_from_url(url, product.sku))
+        if content:
+            return create_product_image(
+                product,
+                image_file=content,
+                alt_text=alt_text,
+                is_primary=is_primary,
+                sort_order=sort_order,
+            ), ""
+        return None, str(exc) or reason
+
+    content = _content_file_from_bytes(
+        data,
+        content_type,
+        url,
+        filename_from_url(url, product.sku),
+    )
+    if not content:
+        content, reason = download_image_with_reason(url, filename_from_url(url, product.sku))
+        if content:
+            return create_product_image(
+                product,
+                image_file=content,
+                alt_text=alt_text,
+                is_primary=is_primary,
+                sort_order=sort_order,
+            ), ""
+        return None, reason or "Immagine TopTex non valida."
+
+    return create_product_image(
+        product,
+        image_file=content,
+        alt_text=alt_text,
+        is_primary=is_primary,
+        sort_order=sort_order,
+    ), ""
+
+
 def attach_mockup_from_url(product: Product, image_url: str, *, link_only: bool = False) -> tuple[bool, str]:
     url = (image_url or "").strip()
     if not url:
