@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import { adminLogin, fetchMe } from '../../api/admin'
+import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
 
 export default function AdminLoginPage() {
@@ -31,8 +32,8 @@ export default function AdminLoginPage() {
         return
       }
       navigate('/admin/products')
-    } catch {
-      setError(t('adminLogin.errorCredentials'))
+    } catch (err: unknown) {
+      setError(formatApiError(err, t('adminLogin.errorCredentials')))
     } finally {
       setLoading(false)
     }
