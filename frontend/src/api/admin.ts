@@ -22,7 +22,7 @@ import type {
 } from './types'
 
 export const fetchMe = () =>
-  api.get<{ id: number; username: string; is_staff: boolean }>('/auth/me/').then((r) => r.data)
+  api.get<{ id: number; username: string; is_staff: boolean }>('/auth/session/').then((r) => r.data)
 
 export type AdminLoginTokens = { access: string; refresh: string }
 
