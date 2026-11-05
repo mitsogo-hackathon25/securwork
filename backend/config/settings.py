@@ -5,7 +5,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from decouple import Config, Csv, RepositoryEnv
+from decouple import Config, Csv, RepositoryEmpty, RepositoryEnv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
@@ -30,7 +30,7 @@ def _load_env_config() -> Config:
                 return Config(RepositoryEnv(str(path)))
         except OSError:
             continue
-    return Config()
+    return Config(RepositoryEmpty())
 
 
 config = _load_env_config()

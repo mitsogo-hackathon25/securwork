@@ -43,11 +43,50 @@ fail() {
 
 trap fail ERR
 
-echo "[1/10] Checking Git repository..."
+run_backend_compose() {
+    local -a run_args=(run --rm --entrypoint python)
+    if [ -f "${APP_DIR}/.env" ]; then
+        run_args+=(-v "${APP_DIR}/.env:/app/.env:ro")
+    fi
+    docker compose "${run_args[@]}" backend "$@"
+}
+
+assert_production_frontend_compose() {
+    local config_file="/tmp/securwork-compose-check.yml"
+    if awk '/^  frontend:/ { found=1 } found && /^  [a-z]/ && !/^  frontend:/ { found=0 } found' "$config_file" \
+        | grep -q 'node:20-alpine'; then
+        echo
+        echo "ERROR: docker-compose.yml is using the local DEV frontend (node + Vite)."
+        echo "Production needs the nginx image built from ./frontend (see"
+        echo "  deploy/docker-compose.production-frontend.example.yml"
+        echo "Update your protected docker-compose.yml, then redeploy."
+        exit 1
+    fi
+}
+
+wait_for_https() {
+    local url="$1"
+    local label="$2"
+    local max_attempts="${3:-24}"
+    local attempt=1
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if curl -fsS -o /dev/null --max-time 15 "$url"; then
+            echo "  ${label}: OK"
+            return 0
+        fi
+        echo "  ${label}: not ready (attempt ${attempt}/${max_attempts}), waiting 5s..."
+        sleep 5
+        attempt=$((attempt + 1))
+    done
+    echo "  ${label}: failed after ${max_attempts} attempts"
+    return 1
+}
+
+echo "[1/11] Checking Git repository..."
 git status --short
 echo
 
-echo "[2/10] Saving production configuration..."
+echo "[2/11] Saving production configuration..."
 
 mkdir -p "$BACKUP_DIR"
 
@@ -63,7 +102,7 @@ done
 
 echo
 
-echo "[3/10] Checking remote Git state..."
+echo "[3/11] Checking remote Git state..."
 git fetch origin
 
 LOCAL_COMMIT="$(git rev-parse HEAD)"
@@ -117,7 +156,7 @@ fi
 
 echo
 
-echo "[4/10] Verifying protected production configuration..."
+echo "[4/11] Verifying protected production configuration..."
 
 test -f backend/config/settings.py
 test -f docker-compose.yml
@@ -130,37 +169,50 @@ grep -q "proxy_pass http://backend:8000" frontend/nginx.conf
 echo "Production configuration looks valid."
 echo
 
-echo "[5/10] Validating Docker Compose configuration..."
+echo "[5/11] Validating Docker Compose configuration..."
 
 docker compose config >/tmp/securwork-compose-check.yml
+assert_production_frontend_compose
 
 echo "Docker Compose configuration: OK"
 echo
 
-echo "[6/10] Building application images..."
+echo "[6/11] Building frontend static assets (npm)..."
+
+cd "${APP_DIR}/frontend"
+if command -v npm >/dev/null 2>&1; then
+    npm ci
+    npm run build
+else
+    echo "  WARNING: npm not on host — relying on Docker frontend image build only."
+fi
+cd "${APP_DIR}"
+echo
+
+echo "[7/11] Building application images..."
 
 docker compose build backend frontend
 
 echo "Docker images built successfully."
 echo
 
-echo "[7/10] Running database migrations..."
+echo "[8/11] Running database migrations..."
 
-docker compose run --rm backend python manage.py migrate --noinput
+run_backend_compose manage.py migrate --noinput
 
 echo "Database migrations completed."
 echo
 
-echo "[8/10] Collecting static files..."
+echo "[9/11] Collecting static files..."
 
-docker compose run --rm backend python manage.py collectstatic --noinput
+run_backend_compose manage.py collectstatic --noinput
 
 echo "Static files collected."
 echo
 
-echo "[9/10] Running Django production checks..."
+echo "[10/11] Running Django production checks..."
 
-docker compose run --rm backend python manage.py check --deploy
+run_backend_compose manage.py check --deploy
 
 echo
 echo "Django production checks completed."
@@ -173,23 +225,19 @@ docker compose up -d backend frontend
 echo "Application containers started."
 echo
 
-echo "Waiting for containers..."
+echo "Waiting for services (frontend build / nginx may take up to 2 minutes)..."
 
-sleep 8
+sleep 5
 
 echo
 docker compose ps
 
 echo
 
-echo "[10/10] Running production smoke tests..."
+echo "[11/11] Running production smoke tests..."
 
 echo "Testing homepage..."
-curl -fsS -o /dev/null \
-    --max-time 20 \
-    https://www.securwork.it/
-
-echo "  Homepage: OK"
+wait_for_https "https://www.securwork.it/" "Homepage"
 
 echo "Testing API..."
 curl -fsS \

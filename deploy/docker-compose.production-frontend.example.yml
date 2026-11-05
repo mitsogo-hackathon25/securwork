@@ -1,0 +1,13 @@
+# Production frontend service — merge into your protected docker-compose.yml
+# Replace the dev `node:20-alpine` + `npm run dev` block. Host nginx should proxy
+# to the published port (adjust 8080 if your server uses another).
+
+services:
+  frontend:
+    build: ./frontend
+    image: securwork-frontend:prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"
