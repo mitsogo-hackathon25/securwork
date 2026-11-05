@@ -2,12 +2,15 @@ from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from store.home_media_specs import HERO_IMAGE_DIMENSIONS_LABEL
 from store.permissions import IsStaffUser
 
 from .models import GlobalSettings
 from .serializers import AdminGlobalSettingsSerializer
+
+STAFF_JWT_AUTH = [JWTAuthentication]
 
 
 def _hero_image_url(request, solo: GlobalSettings) -> str | None:
@@ -39,6 +42,7 @@ class AdminGlobalSettingsView(APIView):
 
 
 class AdminHeroImageView(APIView):
+    authentication_classes = STAFF_JWT_AUTH
     permission_classes = [IsStaffUser]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -50,10 +54,16 @@ class AdminHeroImageView(APIView):
                 {"detail": "Seleziona un file (campo hero_image)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if solo.hero_image:
-            solo.hero_image.delete(save=False)
-        solo.hero_image = image_file
-        solo.save(update_fields=["hero_image", "updated_at"])
+        try:
+            if solo.hero_image:
+                solo.hero_image.delete(save=False)
+            solo.hero_image = image_file
+            solo.save(update_fields=["hero_image", "updated_at"])
+        except OSError as exc:
+            return Response(
+                {"detail": f"Impossibile salvare il file: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         return Response({
             "hero_image_url": _hero_image_url(request, solo),
             "hero_image_dimensions_hint": HERO_IMAGE_DIMENSIONS_LABEL,

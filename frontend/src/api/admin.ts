@@ -768,12 +768,11 @@ export const updateAdminGlobalSettings = (data: Pick<AdminGlobalSettings, 'order
 export const uploadAdminHeroImage = (file: File) => {
   const form = new FormData()
   form.append('hero_image', file)
-  return api
-    .post<{ hero_image_url: string | null; hero_image_dimensions_hint: string; detail: string }>(
-      '/admin/global-settings/hero-image/',
-      form,
-    )
-    .then((r) => r.data)
+  return postMultipartJson<{
+    hero_image_url: string | null
+    hero_image_dimensions_hint: string
+    detail: string
+  }>('/admin/global-settings/hero-image/', form)
 }
 
 export const removeAdminHeroImage = () =>
@@ -784,9 +783,7 @@ export const removeAdminHeroImage = () =>
 export const uploadAdminCategoryImage = (categoryId: number, file: File) => {
   const form = new FormData()
   form.append('image', file)
-  return api
-    .post<AdminCategory>(`/admin/categories/${categoryId}/upload_image/`, form)
-    .then((r) => r.data)
+  return postMultipartJson<AdminCategory>(`/admin/categories/${categoryId}/upload_image/`, form)
 }
 
 export const removeAdminCategoryImage = (categoryId: number) =>

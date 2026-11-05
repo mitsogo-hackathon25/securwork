@@ -130,6 +130,10 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      return Promise.reject(error)
+    }
+
     if (!config._retryAuth) {
       config._retryAuth = true
       const access = await refreshAccessToken()

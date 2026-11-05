@@ -10,7 +10,7 @@ import {
   uploadAdminHeroImage,
 } from '../../api/admin'
 import { HERO_IMAGE_DIMENSIONS_HINT } from '../../constants/homeImages'
-import { formatApiError } from '../../utils/formatApiError'
+import { formatApiError, formatClientError } from '../../utils/formatApiError'
 import './Admin.css'
 
 const NO_BRAND_VALUE = '__none__'
@@ -131,7 +131,7 @@ export default function AdminGlobalSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-global-settings'] })
       queryClient.invalidateQueries({ queryKey: ['siteConfig'] })
     } catch (err: unknown) {
-      setHeroError(formatApiError(err, 'Caricamento immagine hero non riuscito.'))
+      setHeroError(formatClientError(err, 'Caricamento immagine hero non riuscito.'))
     } finally {
       setHeroBusy(false)
     }
