@@ -61,7 +61,8 @@ assert_production_frontend_compose() {
         echo
         echo "ERROR: docker-compose.yml is using the local DEV frontend (node + Vite)."
         echo "Production needs the nginx image built from ./frontend (see"
-        echo "  deploy/docker-compose.production-frontend.example.yml)."
+        echo "  deploy/docker-compose.production.yml)."
+        echo "  cp deploy/docker-compose.production.yml docker-compose.yml"
         echo
         echo "Edit AFTER any 'git reset --hard origin/main' (reset overwrites this file):"
         echo "  nano ${APP_DIR}/docker-compose.yml"
@@ -180,7 +181,16 @@ echo
 
 echo "[5/11] Validating Docker Compose configuration..."
 
-docker compose config >/tmp/securwork-compose-check.yml
+if ! docker compose config >/tmp/securwork-compose-check.yml 2>/tmp/securwork-compose-config.err; then
+    echo
+    cat /tmp/securwork-compose-config.err
+    echo
+    echo "ERROR: docker-compose.yml is invalid or incomplete."
+    echo "Restore the production template (valid YAML with services.frontend):"
+    echo "  cp ${APP_DIR}/deploy/docker-compose.production.yml ${APP_DIR}/docker-compose.yml"
+    echo "Adjust ports if needed, then run ./deploy/deploy.sh again."
+    exit 1
+fi
 assert_production_frontend_compose
 
 echo "Docker Compose configuration: OK"

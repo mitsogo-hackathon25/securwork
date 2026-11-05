@@ -1,0 +1,52 @@
+# Full Docker Compose for production VPS (/opt/securwork/securwork).
+# After `git reset --hard origin/main`, install with:
+#   cp deploy/docker-compose.production.yml docker-compose.yml
+# Then keep your usual production tweaks (ports, env) and redeploy.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-securwork}
+      POSTGRES_USER: ${DB_USER:-securwork}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securwork}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-securwork}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+    command: ["gunicorn", "config.wsgi:application", "-c", "gunicorn.conf.py"]
+
+  frontend:
+    build: ./frontend
+    image: securwork-frontend:prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  postgres_data:
+  media_data:
