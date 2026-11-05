@@ -24,8 +24,17 @@ import type {
 export const fetchMe = () =>
   api.get<{ id: number; username: string; is_staff: boolean }>('/auth/me/').then((r) => r.data)
 
-export const adminLogin = (username: string, password: string) =>
-  api.post('/auth/login/', { username, password }).then((r) => r.data)
+export type AdminLoginTokens = { access: string; refresh: string }
+
+export const adminLogin = async (username: string, password: string): Promise<AdminLoginTokens> => {
+  const r = await api.post<{ access?: string; refresh?: string }>('/auth/login/', { username, password })
+  const access = r.data?.access
+  const refresh = r.data?.refresh
+  if (!access || !refresh) {
+    throw new Error('Login succeeded but the server did not return access tokens.')
+  }
+  return { access, refresh }
+}
 
 export const fetchAdminProducts = (params?: Record<string, string | number | boolean>) =>
   api.get<PaginatedResponse<AdminProductListItem>>('/admin/products/', { params }).then((r) => r.data)

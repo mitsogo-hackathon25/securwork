@@ -39,7 +39,10 @@ services:
     command: ["gunicorn", "config.wsgi:application", "-c", "gunicorn.conf.py"]
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-local}
     image: securwork-frontend:prod
     restart: unless-stopped
     depends_on:

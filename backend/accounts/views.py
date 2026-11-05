@@ -39,6 +39,7 @@ class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        UserProfile.objects.get_or_create(user=request.user)
         return Response(UserSerializer(request.user).data)
 
 

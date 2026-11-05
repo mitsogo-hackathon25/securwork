@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +25,7 @@ export default function AdminLoginPage() {
       const tokens = await adminLogin(username, password)
       localStorage.setItem('access_token', tokens.access)
       localStorage.setItem('refresh_token', tokens.refresh)
+
       const user = await fetchMe()
       if (!user.is_staff) {
         localStorage.removeItem('access_token')
@@ -33,7 +35,17 @@ export default function AdminLoginPage() {
       }
       navigate('/admin/products')
     } catch (err: unknown) {
-      setError(formatApiError(err, t('adminLogin.errorCredentials')))
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      const loginFailed =
+        (err instanceof Error && err.message.includes('access tokens'))
+        || (isAxiosError(err) && String(err.config?.url || '').includes('/auth/login'))
+      setError(
+        formatApiError(
+          err,
+          loginFailed ? t('adminLogin.errorCredentials') : t('adminLogin.errorSessionCheck'),
+        ),
+      )
     } finally {
       setLoading(false)
     }

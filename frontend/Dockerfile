@@ -1,9 +1,10 @@
 FROM node:20-alpine AS build
+ARG GIT_COMMIT=unknown
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
-RUN npm run build
+RUN echo "frontend build ${GIT_COMMIT}" && npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html

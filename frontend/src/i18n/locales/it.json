@@ -457,6 +457,7 @@
     "submitting": "Accesso in corso…",
     "forgotPassword": "Password dimenticata?",
     "errorCredentials": "Nome utente o password non validi.",
+    "errorSessionCheck": "Accesso riuscito ma non è stato possibile verificare la sessione. Riprova o contatta l'assistenza.",
     "errorNotStaff": "Questo account non ha accesso amministratore."
   },
   "adminCommon": {

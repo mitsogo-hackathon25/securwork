@@ -3,6 +3,8 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from accounts.models import UserProfile
+
 User = get_user_model()
 
 
@@ -51,6 +53,7 @@ class Command(BaseCommand):
             user.email = "admin@securwork.it"
         user.set_password(password)
         user.save()
+        UserProfile.objects.get_or_create(user=user)
 
         if created:
             self.stdout.write(self.style.SUCCESS(f"Created staff admin '{username}'."))

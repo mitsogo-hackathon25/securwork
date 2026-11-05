@@ -457,6 +457,7 @@
     "submitting": "Signing in…",
     "forgotPassword": "Forgot password?",
     "errorCredentials": "Invalid username or password.",
+    "errorSessionCheck": "Sign-in succeeded but the server could not verify your session. Try again or contact support.",
     "errorNotStaff": "This account does not have admin access."
   },
   "adminCommon": {

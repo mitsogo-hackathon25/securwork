@@ -303,7 +303,8 @@ echo
 
 echo "[7/11] Building application images..."
 
-docker compose build backend frontend
+export GIT_COMMIT="$(git rev-parse HEAD)"
+docker compose build --build-arg "GIT_COMMIT=${GIT_COMMIT}" backend frontend
 
 echo "Docker images built successfully."
 echo
