@@ -61,8 +61,14 @@ assert_production_frontend_compose() {
         echo
         echo "ERROR: docker-compose.yml is using the local DEV frontend (node + Vite)."
         echo "Production needs the nginx image built from ./frontend (see"
-        echo "  deploy/docker-compose.production-frontend.example.yml"
-        echo "Update your protected docker-compose.yml, then redeploy."
+        echo "  deploy/docker-compose.production-frontend.example.yml)."
+        echo
+        echo "Edit AFTER any 'git reset --hard origin/main' (reset overwrites this file):"
+        echo "  nano ${APP_DIR}/docker-compose.yml"
+        echo
+        echo "If you have a known-good backup on this server, e.g.:"
+        echo "  cp docker-compose.yml.pre-release docker-compose.yml"
+        echo "Then run ./deploy/deploy.sh again."
         exit 1
     fi
 }
