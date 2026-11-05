@@ -111,6 +111,74 @@ smoke_check_url() {
     esac
 }
 
+# Older protected settings.py backups omit these; without them SECURE_SSL_REDIRECT causes 301 on /api/.
+ensure_production_proxy_ssl_settings() {
+    local settings="backend/config/settings.py"
+    if grep -q 'SECURE_PROXY_SSL_HEADER' "$settings"; then
+        echo "  settings.py: SECURE_PROXY_SSL_HEADER present"
+        return 0
+    fi
+    echo "  settings.py: patching SECURE_PROXY_SSL_HEADER + USE_X_FORWARDED_HOST..."
+    python3 <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path("backend/config/settings.py")
+text = path.read_text()
+needle = 'SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)'
+block = """SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
+    # TLS terminates at host nginx / load balancer; backend sees HTTP from Docker proxy.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = config("USE_X_FORWARDED_HOST", default=True, cast=bool)"""
+if needle not in text:
+    print("ERROR: could not find SECURE_SSL_REDIRECT in settings.py", file=sys.stderr)
+    sys.exit(1)
+if "SECURE_PROXY_SSL_HEADER" in text:
+    sys.exit(0)
+path.write_text(text.replace(needle, block, 1))
+PY
+}
+
+ensure_frontend_nginx_proxy_headers() {
+    local nginx="frontend/nginx.conf"
+    if grep -q 'X-Forwarded-Proto https' "$nginx"; then
+        echo "  frontend/nginx.conf: X-Forwarded-Proto https present"
+        return 0
+    fi
+    echo "  frontend/nginx.conf: adding X-Forwarded-Proto https to API/media/django-admin proxies..."
+    python3 <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path("frontend/nginx.conf")
+text = path.read_text()
+if "X-Forwarded-Proto https" in text:
+    sys.exit(0)
+
+def add_proto(block: str) -> str:
+    if "X-Forwarded-Proto" in block:
+        return block
+    return re.sub(
+        r"(proxy_set_header Host \$host;\n)",
+        r"\1        proxy_set_header X-Forwarded-Proto https;\n",
+        block,
+        count=1,
+    )
+
+text = re.sub(
+    r"location /(?:api/|media/|django-admin/) \{.*?\n    \}",
+    lambda m: add_proto(m.group(0)),
+    text,
+    flags=re.DOTALL,
+)
+if "X-Forwarded-Proto https" not in text:
+    print("ERROR: could not patch frontend/nginx.conf", file=sys.stderr)
+    sys.exit(1)
+path.write_text(text)
+PY
+}
+
 echo "[1/11] Checking Git repository..."
 git status --short
 echo
@@ -194,6 +262,12 @@ test -f frontend/nginx.conf
 grep -q "ALLOWED_HOSTS" backend/config/settings.py
 grep -q "DB_HOST=db" .env
 grep -q "proxy_pass http://backend:8000" frontend/nginx.conf
+
+echo "Ensuring HTTPS proxy settings (admin login / API POST)..."
+ensure_production_proxy_ssl_settings
+ensure_frontend_nginx_proxy_headers
+grep -q 'SECURE_PROXY_SSL_HEADER' backend/config/settings.py
+grep -q 'X-Forwarded-Proto https' frontend/nginx.conf
 
 echo "Production configuration looks valid."
 echo
@@ -279,6 +353,26 @@ wait_for_https "https://www.securwork.it/" "Homepage"
 
 echo "Testing API..."
 smoke_check_url "https://www.securwork.it/api/" "API"
+
+echo "Testing admin login API (must not redirect POST with 301)..."
+login_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST \
+    'https://www.securwork.it/api/auth/login/?lang=en' \
+    -H 'Content-Type: application/json' \
+    -d '{"username":"admin","password":"__deploy_smoke_invalid__"}' 2>/dev/null || echo "000")"
+case "$login_code" in
+    301)
+        echo "  WARNING: POST /api/auth/login/ returned 301 — check SECURE_PROXY_SSL_HEADER and nginx X-Forwarded-Proto"
+        ;;
+    401|400)
+        echo "  Admin login API: HTTP ${login_code} (SSL/proxy OK; use real ADMIN_PASSWORD to sign in)"
+        ;;
+    200)
+        echo "  Admin login API: HTTP 200"
+        ;;
+    *)
+        echo "  WARNING: Admin login API: HTTP ${login_code}"
+        ;;
+esac
 
 echo "Testing React admin..."
 smoke_check_url "https://www.securwork.it/admin/" "React admin"

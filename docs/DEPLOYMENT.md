@@ -195,6 +195,25 @@ chmod +x /var/www/securwork/deploy/scripts/backup.sh
 
 See [MAINTENANCE.md](MAINTENANCE.md) for update and backup procedures.
 
+### HTTPS behind nginx / Docker (admin login)
+
+TLS terminates at **host nginx** (or Cloudflare). Gunicorn sees **HTTP** from the Docker frontend proxy. With `SECURE_SSL_REDIRECT=true`, Django returns **301** on `POST /api/auth/login/` unless it trusts the proxy:
+
+- `backend/config/settings.py` (production block): `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")` and `USE_X_FORWARDED_HOST`
+- `frontend/nginx.conf`: `proxy_set_header X-Forwarded-Proto https;` on `/api/`, `/media/`, `/django-admin/`
+- Host nginx (`deploy/nginx/securwork.conf`): `proxy_set_header X-Forwarded-Proto $scheme;` on `/api/`
+
+Quick check on the server:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  'https://www.securwork.it/api/auth/login/?lang=en' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"wrong-on-purpose"}'
+```
+
+Expect **401** or **400**, not **301**. `./deploy/deploy.sh` patches missing proxy settings in protected `settings.py` / `nginx.conf` before rebuild.
+
 ## 9. Subsequent Deploys
 
 ```bash
@@ -208,6 +227,7 @@ chmod +x /var/www/securwork/deploy/scripts/deploy.sh
 - [ ] https://www.securwork.it/api/products/ returns JSON
 - [ ] https://www.securwork.it/sitemap.xml returns XML
 - [ ] https://www.securwork.it/admin/login — React product admin
+- [ ] `POST /api/auth/login/` returns 401/200, not **301** (proxy SSL settings)
 - [ ] https://www.securwork.it/django-admin/ — Django admin (orders, CMS, etc.)
 - [ ] Nginx config updated: `/admin/` → React SPA, `/django-admin/` → Django
 - [ ] Admin password changed from default
