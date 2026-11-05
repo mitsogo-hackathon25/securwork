@@ -38,6 +38,9 @@ fail() {
     echo "Check the output above and container logs with:"
     echo "  docker compose logs --tail=100 backend"
     echo "  docker compose logs --tail=100 frontend"
+    echo
+    echo "If deploy failed during git update, check: git stash list"
+    echo "Protected config backups are under /tmp/securwork-deploy-* until this script exits."
     exit 1
 }
 
@@ -127,12 +130,12 @@ if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
     echo "Protected files stashed."
 
     echo
-    echo "Updating application from origin/$BRANCH..."
+    echo "Updating application to origin/$BRANCH (reset — server app code should match Git)..."
 
-    git pull --ff-only origin "$BRANCH"
+    git reset --hard "origin/${BRANCH}"
 
     echo
-    echo "Restoring production configuration..."
+    echo "Restoring production configuration from pre-deploy backup..."
 
     for file in "${PROTECTED_FILES[@]}"; do
         if [ -f "$BACKUP_DIR/$file" ]; then
