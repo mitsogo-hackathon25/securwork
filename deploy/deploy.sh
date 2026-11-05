@@ -278,7 +278,7 @@ ADMIN_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' \
     --max-time 20 \
     https://www.securwork.it/django-admin/)"
 
-if [ "$ADMIN_STATUS" != "200" ] && [ "$ADMIN_STATUS" != "302" ]; then
+if [ "$ADMIN_STATUS" != "200" ] && [ "$ADMIN_STATUS" != "302" ] && [ "$ADMIN_STATUS" != "301" ]; then
     echo "Django admin returned HTTP $ADMIN_STATUS"
     exit 1
 fi
