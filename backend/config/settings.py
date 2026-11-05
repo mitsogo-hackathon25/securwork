@@ -300,6 +300,9 @@ TOPTEX_MAX_IMAGES_PER_PRODUCT = config("TOPTEX_MAX_IMAGES_PER_PRODUCT", default=
 # Security (production)
 if not DEBUG:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
+    # TLS terminates at host nginx / load balancer; backend sees HTTP from Docker proxy.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = config("USE_X_FORWARDED_HOST", default=True, cast=bool)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
