@@ -111,6 +111,32 @@ smoke_check_url() {
     esac
 }
 
+check_host_nginx_upload_limit() {
+    echo "Checking host nginx upload limit (413 on hero image / CSV)..."
+    local nginx_dump=""
+    if command -v nginx >/dev/null 2>&1; then
+        nginx_dump="$(sudo nginx -T 2>/dev/null || true)"
+    fi
+    if [ -z "$nginx_dump" ]; then
+        echo "  WARNING: Could not read host nginx config (sudo nginx -T)."
+        echo "  If uploads return HTTP 413, set client_max_body_size 256M on the HTTPS server block"
+        echo "  and on the location that handles /api/ (or proxy to :8080)."
+        echo "  Template: ${APP_DIR}/deploy/nginx/securwork-docker-proxy.conf"
+        return 0
+    fi
+    if echo "$nginx_dump" | grep -q 'client_max_body_size 256M'; then
+        echo "  Host nginx: client_max_body_size 256M present"
+        return 0
+    fi
+    echo "  WARNING: Host nginx is missing client_max_body_size 256M (default 1M → HTTP 413)."
+    echo "  Docker frontend/nginx.conf is not enough — the HOST must accept large bodies first."
+    echo "  Fix (Docker on :8080):"
+    echo "    sudo cp ${APP_DIR}/deploy/nginx/securwork-docker-proxy.conf /etc/nginx/sites-available/securwork"
+    echo "    sudo ln -sf /etc/nginx/sites-available/securwork /etc/nginx/sites-enabled/securwork"
+    echo "    sudo nginx -t && sudo systemctl reload nginx"
+    echo "  Or edit /etc/nginx/sites-enabled/securwork and add client_max_body_size 256M; inside server { } and location /api/ or location / { }."
+}
+
 # Older protected settings.py backups omit these; without them SECURE_SSL_REDIRECT causes 301 on /api/.
 ensure_production_proxy_ssl_settings() {
     local settings="backend/config/settings.py"
@@ -397,6 +423,9 @@ echo "Checking frontend container..."
 docker compose ps frontend | grep -q "Up"
 
 echo "  Frontend container: UP"
+
+echo
+check_host_nginx_upload_limit
 
 echo
 echo "========================================"

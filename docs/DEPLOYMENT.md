@@ -133,7 +133,18 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-**Docker production:** add the same directive to `frontend/nginx.conf` (server + `location /api/`), rebuild the frontend image, and reload nginx inside the container.
+**Docker production (`/opt/securwork/securwork`, Compose on `:8080`):** the **host** nginx in front of Docker must allow large uploads, not only `frontend/nginx.conf`. Copy:
+
+```bash
+sudo cp /opt/securwork/securwork/deploy/nginx/securwork-docker-proxy.conf \
+  /etc/nginx/sites-available/securwork
+sudo ln -sf /etc/nginx/sites-available/securwork /etc/nginx/sites-enabled/securwork
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+If you proxy `/api/` directly to `127.0.0.1:8000` instead, use `deploy/nginx/securwork.conf` (also sets **256M** on `location /api/`).
+
+**Docker production (container only):** add the same directive to `frontend/nginx.conf` (server + `location /api/`), rebuild the frontend image.
 
 The app also **gzip-compresses** CSV on upload and parses columns **in the browser** so the column picker works even before nginx is fixed; the final import still needs gzip to fit a 1 MB limit or nginx raised to **256M**.
 
