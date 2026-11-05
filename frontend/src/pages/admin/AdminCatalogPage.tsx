@@ -11,11 +11,14 @@ import {
   fetchAdminBrands,
   fetchAdminCategoryList,
   fetchAdminColors,
+  removeAdminCategoryImage,
   updateAdminBrand,
   updateAdminCategory,
   updateAdminColor,
+  uploadAdminCategoryImage,
 } from '../../api/admin'
 import type { AdminBrand, AdminCategory, AdminColor } from '../../api/types'
+import { CATEGORY_IMAGE_DIMENSIONS_HINT } from '../../constants/homeImages'
 import './Admin.css'
 
 const emptyCategory = (): AdminCategory => ({
@@ -51,6 +54,7 @@ export default function AdminCatalogPage() {
   const [brandForm, setBrandForm] = useState<AdminBrand | null>(null)
   const [colorForm, setColorForm] = useState<AdminColor | null>(null)
   const [error, setError] = useState('')
+  const [categoryImageBusy, setCategoryImageBusy] = useState(false)
 
   const switchTab = (tab: CatalogTab) => {
     setCatalogTab(tab)
@@ -83,6 +87,7 @@ export default function AdminCatalogPage() {
     queryClient.invalidateQueries({ queryKey: ['product-brands'] })
     queryClient.invalidateQueries({ queryKey: ['product-colors'] })
     queryClient.invalidateQueries({ queryKey: ['categories'] })
+    queryClient.invalidateQueries({ queryKey: ['siteConfig'] })
   }
 
   const saveCategory = useMutation({
@@ -178,6 +183,39 @@ export default function AdminCatalogPage() {
     saveColor.mutate({ ...colorForm, is_active: true })
   }
 
+  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !categoryForm?.id) return
+    setCategoryImageBusy(true)
+    setError('')
+    try {
+      const updated = await uploadAdminCategoryImage(categoryForm.id, file)
+      setCategoryForm(updated)
+      invalidate()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Caricamento immagine non riuscito.')
+    } finally {
+      setCategoryImageBusy(false)
+    }
+  }
+
+  const handleCategoryImageRemove = async () => {
+    if (!categoryForm?.id) return
+    if (!window.confirm('Rimuovere l\'immagine di questa categoria?')) return
+    setCategoryImageBusy(true)
+    setError('')
+    try {
+      const updated = await removeAdminCategoryImage(categoryForm.id)
+      setCategoryForm(updated)
+      invalidate()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Rimozione immagine non riuscita.')
+    } finally {
+      setCategoryImageBusy(false)
+    }
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -222,6 +260,13 @@ export default function AdminCatalogPage() {
           </button>
         </div>
 
+        <p className="admin-hint">
+          Immagine categoria (home e schede shop): dimensioni consigliate{' '}
+          <strong>{CATEGORY_IMAGE_DIMENSIONS_HINT}</strong>.
+          Carica l&apos;immagine dopo aver creato la categoria (Modifica → Immagine).
+          Le categorie principali Workwear e Professionale compaiono in evidenza in homepage.
+        </p>
+
         {categoryForm && (
           <form className="admin-inline-form" onSubmit={handleCategorySubmit}>
             <div className="admin-form-grid">
@@ -254,6 +299,45 @@ export default function AdminCatalogPage() {
                 </select>
               </label>
             </div>
+            {categoryForm.id ? (
+              <div className="admin-category-image-block">
+                <p className="admin-hint">
+                  Dimensioni consigliate:{' '}
+                  <strong>{categoryForm.image_dimensions_hint || CATEGORY_IMAGE_DIMENSIONS_HINT}</strong>
+                </p>
+                {categoryForm.image && (
+                  <img
+                    src={categoryForm.image}
+                    alt=""
+                    className="admin-category-image-preview"
+                  />
+                )}
+                <div className="admin-inline-form-actions">
+                  <label className="btn btn-secondary">
+                    {categoryImageBusy ? 'Caricamento…' : 'Carica immagine'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      hidden
+                      disabled={categoryImageBusy}
+                      onChange={handleCategoryImageUpload}
+                    />
+                  </label>
+                  {categoryForm.image && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={categoryImageBusy}
+                      onClick={handleCategoryImageRemove}
+                    >
+                      Rimuovi immagine
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="admin-hint">Salva la categoria, poi potrai caricare l&apos;immagine.</p>
+            )}
             <div className="admin-inline-form-actions">
               <button type="submit" className="btn btn-primary" disabled={saveCategory.isPending}>
                 {categoryForm.id ? 'Salva categoria' : 'Crea categoria'}
@@ -270,6 +354,7 @@ export default function AdminCatalogPage() {
             <table className="admin-table">
               <thead>
                 <tr>
+                  <th>Immagine</th>
                   <th>Nome (IT)</th>
                   <th>Sezione</th>
                   <th>Genitore</th>
@@ -280,6 +365,13 @@ export default function AdminCatalogPage() {
               <tbody>
                 {categories.map((cat) => (
                   <tr key={cat.id}>
+                    <td>
+                      {cat.image ? (
+                        <img src={cat.image} alt="" className="admin-table-thumb" />
+                      ) : (
+                        <span className="admin-muted">—</span>
+                      )}
+                    </td>
                     <td><strong>{cat.name_it}</strong><br /><span className="admin-muted">{cat.slug}</span></td>
                     <td>{cat.section === 'workwear' ? 'Abbigliamento da lavoro' : 'Professionale'}</td>
                     <td>{cat.parent_name || '—'}</td>

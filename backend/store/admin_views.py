@@ -1771,6 +1771,37 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
             return AdminCategoryOptionSerializer
         return AdminCategorySerializer
 
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="upload_image",
+    )
+    def upload_image(self, request, pk=None):
+        category = self.get_object()
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return Response(
+                {"detail": "Seleziona un file immagine (campo image)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if category.image:
+            category.image.delete(save=False)
+        category.image = image_file
+        category.save(update_fields=["image"])
+        serializer = AdminCategorySerializer(category, context=self.get_serializer_context())
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="remove_image")
+    def remove_image(self, request, pk=None):
+        category = self.get_object()
+        if category.image:
+            category.image.delete(save=True)
+        else:
+            category.save()
+        serializer = AdminCategorySerializer(category, context=self.get_serializer_context())
+        return Response(serializer.data)
+
     def destroy(self, request, *args, **kwargs):
         category = self.get_object()
         if category.children.exists():

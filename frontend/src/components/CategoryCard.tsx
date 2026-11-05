@@ -5,9 +5,10 @@ import './CategoryCard.css'
 interface Props {
   category: Category
   variant?: 'default' | 'compact' | 'hero'
+  imageUrl?: string | null
 }
 
-export default function CategoryCard({ category, variant = 'default' }: Props) {
+export default function CategoryCard({ category, variant = 'default', imageUrl }: Props) {
   const isSectionRoot = category.parent == null
   const link = isSectionRoot && category.section
     ? `/shop?section=${category.section}`
@@ -15,7 +16,8 @@ export default function CategoryCard({ category, variant = 'default' }: Props) {
       ? `/shop?section=${category.section}&category=${category.slug}`
       : `/shop?category=${category.slug}`
 
-  const hasImage = Boolean(category.image)
+  const displayImage = imageUrl ?? category.image
+  const hasImage = Boolean(displayImage)
 
   return (
     <Link
@@ -24,7 +26,7 @@ export default function CategoryCard({ category, variant = 'default' }: Props) {
     >
       <div className="category-card-bg" aria-hidden="true" />
       {hasImage ? (
-        <img src={category.image!} alt="" className="category-card-img" loading="lazy" />
+        <img src={displayImage!} alt="" className="category-card-img" loading="lazy" />
       ) : (
         <div className="category-card-placeholder" aria-hidden="true">
           <span>{category.name.charAt(0)}</span>

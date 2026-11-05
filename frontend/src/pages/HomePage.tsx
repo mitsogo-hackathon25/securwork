@@ -9,11 +9,13 @@ import Newsletter from '../components/Newsletter'
 import TrustBadges from '../components/TrustBadges'
 import { OrganizationSchema } from '../components/SeoSchema'
 import { SITE_LOGO_URL } from '../constants/branding'
+import { HOME_HERO_IMAGE_FALLBACK, resolveCategoryCardImage } from '../constants/homeImages'
 import {
   fetchBestsellers,
   fetchCategories,
   fetchFeatured,
   fetchNewArrivals,
+  fetchSiteConfig,
 } from '../api/store'
 import { sortByName } from '../utils/sortCategories'
 import './HomePage.css'
@@ -36,6 +38,12 @@ export default function HomePage() {
     queryKey: ['categories', i18n.language],
     queryFn: fetchCategories,
   })
+  const { data: siteConfig } = useQuery({
+    queryKey: ['siteConfig'],
+    queryFn: fetchSiteConfig,
+  })
+
+  const heroImageUrl = siteConfig?.hero_image_url || HOME_HERO_IMAGE_FALLBACK
 
   const workwear = categories.find((c) => c.section === 'workwear')
   const professional = categories.find((c) => c.section === 'professional')
@@ -65,8 +73,11 @@ export default function HomePage() {
       <OrganizationSchema />
 
       <div className="home-page">
-      <section className="hero">
+      <section className={`hero${heroImageUrl ? ' hero--has-photo' : ''}`}>
         <div className="hero-backdrop" aria-hidden="true">
+          {heroImageUrl && (
+            <img src={heroImageUrl} alt="" className="hero-bg-photo" />
+          )}
           <div className="hero-grid-lines" />
           <div className="hero-glow" />
         </div>
@@ -115,8 +126,20 @@ export default function HomePage() {
             linkLabel={t('cta.viewProducts')}
           />
           <div className="hero-categories">
-            {workwear && <CategoryCard category={workwear} variant="hero" />}
-            {professional && <CategoryCard category={professional} variant="hero" />}
+            {workwear && (
+              <CategoryCard
+                category={workwear}
+                variant="hero"
+                imageUrl={resolveCategoryCardImage(workwear)}
+              />
+            )}
+            {professional && (
+              <CategoryCard
+                category={professional}
+                variant="hero"
+                imageUrl={resolveCategoryCardImage(professional)}
+              />
+            )}
           </div>
           {(workwearHomeCards.length > 0 || professionalHomeCards.length > 0) && (
             <div className="home-subcategories">
@@ -125,7 +148,12 @@ export default function HomePage() {
                   <h3 className="home-category-block-title">{t('nav.workwear')}</h3>
                   <div className="subcategory-grid">
                     {workwearHomeCards.map((cat) => (
-                      <CategoryCard key={cat.id} category={cat} variant="compact" />
+                      <CategoryCard
+                        key={cat.id}
+                        category={cat}
+                        variant="compact"
+                        imageUrl={resolveCategoryCardImage(cat)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -135,7 +163,12 @@ export default function HomePage() {
                   <h3 className="home-category-block-title">{t('nav.professional')}</h3>
                   <div className="subcategory-grid">
                     {professionalHomeCards.map((cat) => (
-                      <CategoryCard key={cat.id} category={cat} variant="compact" />
+                      <CategoryCard
+                        key={cat.id}
+                        category={cat}
+                        variant="compact"
+                        imageUrl={resolveCategoryCardImage(cat)}
+                      />
                     ))}
                   </div>
                 </div>

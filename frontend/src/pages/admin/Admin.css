@@ -1138,6 +1138,40 @@
   margin-bottom: 1.5rem;
 }
 
+.admin-table-thumb {
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+.admin-category-image-block {
+  margin-top: 1rem;
+}
+
+.admin-category-image-preview {
+  display: block;
+  max-width: 100%;
+  width: min(360px, 100%);
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  margin: 0.75rem 0;
+}
+
+.admin-hero-image-preview {
+  display: block;
+  max-width: 100%;
+  width: min(640px, 100%);
+  aspect-ratio: 1920 / 900;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  margin: 0.75rem 0 1rem;
+}
+
 .admin-inline-form {
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;

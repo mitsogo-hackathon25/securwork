@@ -18,9 +18,13 @@ class CategorySerializer(serializers.ModelSerializer):
         ]
 
     def get_image(self, obj):
-        if obj.image:
-            return obj.image.url
-        return None
+        if not obj.image:
+            return None
+        url = obj.image.url
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
     def _lang(self):
         return self.context.get("lang", "it")

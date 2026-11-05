@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from store.home_media_specs import HERO_IMAGE_DIMENSIONS_LABEL
+
 from .models import ContactSubmission, FAQItem, GlobalSettings, Page, parse_email_list
 
 
@@ -57,10 +59,30 @@ class ContactSerializer(serializers.ModelSerializer):
 
 
 class AdminGlobalSettingsSerializer(serializers.ModelSerializer):
+    hero_image_url = serializers.SerializerMethodField()
+    hero_image_dimensions_hint = serializers.SerializerMethodField()
+
     class Meta:
         model = GlobalSettings
-        fields = ["order_notification_emails", "updated_at"]
-        read_only_fields = ["updated_at"]
+        fields = [
+            "order_notification_emails",
+            "hero_image_url",
+            "hero_image_dimensions_hint",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at", "hero_image_url", "hero_image_dimensions_hint"]
+
+    def get_hero_image_url(self, obj):
+        if not obj.hero_image:
+            return None
+        request = self.context.get("request")
+        url = obj.hero_image.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_hero_image_dimensions_hint(self, obj):
+        return HERO_IMAGE_DIMENSIONS_LABEL
 
     def validate_order_notification_emails(self, value):
         if not value or not value.strip():

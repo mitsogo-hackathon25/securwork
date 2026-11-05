@@ -23,6 +23,36 @@
   pointer-events: none;
 }
 
+.hero-bg-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.35;
+}
+
+.hero--has-photo .hero-backdrop {
+  background: #0a1220;
+}
+
+.hero--has-photo .hero-bg-photo {
+  opacity: 0.42;
+}
+
+.hero--has-photo .hero-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(10, 18, 32, 0.88) 0%,
+    rgba(15, 26, 46, 0.72) 45%,
+    rgba(36, 61, 102, 0.55) 100%
+  );
+  pointer-events: none;
+}
+
 .hero-grid-lines {
   position: absolute;
   inset: 0;
@@ -332,6 +362,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
   align-items: stretch;
+}
+
+.hero-categories .category-card--hero {
+  min-height: 280px;
 }
 
 .home-subcategories {

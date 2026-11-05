@@ -327,6 +327,7 @@ export interface SiteConfig {
   contact_email: string
   map_lat: string
   map_lng: string
+  hero_image_url?: string | null
 }
 
 export interface AdminCategoryOption {
@@ -351,6 +352,8 @@ export interface AdminCategory {
   is_active: boolean
   product_count?: number
   created_at?: string
+  image?: string | null
+  image_dimensions_hint?: string
 }
 
 export interface AdminBrand {

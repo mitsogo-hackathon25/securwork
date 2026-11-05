@@ -745,6 +745,8 @@ export const adjustProductPricesByBrand = (payload: { percent: number; brand: st
 
 export type AdminGlobalSettings = {
   order_notification_emails: string
+  hero_image_url?: string | null
+  hero_image_dimensions_hint?: string
   updated_at: string
 }
 
@@ -753,6 +755,35 @@ export const fetchAdminGlobalSettings = () =>
 
 export const updateAdminGlobalSettings = (data: Pick<AdminGlobalSettings, 'order_notification_emails'>) =>
   api.patch<AdminGlobalSettings>('/admin/global-settings/', data).then((r) => r.data)
+
+export const uploadAdminHeroImage = (file: File) => {
+  const form = new FormData()
+  form.append('hero_image', file)
+  return api
+    .post<{ hero_image_url: string | null; hero_image_dimensions_hint: string; detail: string }>(
+      '/admin/global-settings/hero-image/',
+      form,
+    )
+    .then((r) => r.data)
+}
+
+export const removeAdminHeroImage = () =>
+  api
+    .delete<{ hero_image_url: null; detail: string }>('/admin/global-settings/hero-image/')
+    .then((r) => r.data)
+
+export const uploadAdminCategoryImage = (categoryId: number, file: File) => {
+  const form = new FormData()
+  form.append('image', file)
+  return api
+    .post<AdminCategory>(`/admin/categories/${categoryId}/upload_image/`, form)
+    .then((r) => r.data)
+}
+
+export const removeAdminCategoryImage = (categoryId: number) =>
+  api
+    .post<AdminCategory>(`/admin/categories/${categoryId}/remove_image/`, {})
+    .then((r) => r.data)
 
 export const fetchAdminCategories = () =>
   api.get<AdminCategoryOption[]>('/admin/categories/', { params: { options: 'true' } })

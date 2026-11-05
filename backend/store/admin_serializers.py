@@ -1,6 +1,7 @@
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from .home_media_specs import CATEGORY_IMAGE_DIMENSIONS_LABEL
 from .models import Brand, Category, Color, Product, ProductImage, ProductVariant
 
 CATEGORY_TRANSLATION_FIELDS = ("name", "description")
@@ -38,13 +39,16 @@ class AdminCategorySerializer(serializers.ModelSerializer):
     )
     product_count = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    image_dimensions_hint = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = [
             "id", "slug", "section", "parent_id", "parent_name",
             "name_it", "name_en", "description_it", "description_en",
-            "sort_order", "is_active", "product_count", "created_at",
+            "sort_order", "is_active", "product_count", "image", "image_dimensions_hint",
+            "created_at",
         ]
         read_only_fields = ["id", "slug", "created_at"]
 
@@ -55,6 +59,18 @@ class AdminCategorySerializer(serializers.ModelSerializer):
         if not obj.parent_id:
             return None
         return obj.parent.safe_translation_getter("name", language_code="it", any_language=True)
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        url = obj.image.url
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_image_dimensions_hint(self, obj):
+        return CATEGORY_IMAGE_DIMENSIONS_LABEL
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

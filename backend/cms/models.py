@@ -30,6 +30,7 @@ class GlobalSettings(models.Model):
         blank=True,
         help_text="Comma- or line-separated addresses for new-order alerts only.",
     )
+    hero_image = models.ImageField(upload_to="home/", blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

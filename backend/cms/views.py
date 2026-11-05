@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import FAQItem, Page
+from .models import FAQItem, GlobalSettings, Page
 from .serializers import ContactSerializer, FAQSerializer, PageSerializer
 
 
@@ -14,6 +14,10 @@ class SiteConfigView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        solo = GlobalSettings.get_solo()
+        hero_url = None
+        if solo.hero_image:
+            hero_url = request.build_absolute_uri(solo.hero_image.url)
         return Response({
             "company_name": settings.SECURWORK_COMPANY_NAME,
             "company_vat": settings.SECURWORK_COMPANY_VAT,
@@ -23,6 +27,7 @@ class SiteConfigView(APIView):
             "contact_email": settings.CONTACT_EMAIL,
             "map_lat": settings.SECURWORK_MAP_LAT,
             "map_lng": settings.SECURWORK_MAP_LNG,
+            "hero_image_url": hero_url,
         })
 
 

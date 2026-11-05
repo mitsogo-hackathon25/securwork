@@ -5,8 +5,11 @@ import {
   adjustProductPricesByBrand,
   fetchAdminBrands,
   fetchAdminGlobalSettings,
+  removeAdminHeroImage,
   updateAdminGlobalSettings,
+  uploadAdminHeroImage,
 } from '../../api/admin'
+import { HERO_IMAGE_DIMENSIONS_HINT } from '../../constants/homeImages'
 import { formatApiError } from '../../utils/formatApiError'
 import './Admin.css'
 
@@ -24,6 +27,9 @@ export default function AdminGlobalSettingsPage() {
   const [notificationEmails, setNotificationEmails] = useState('')
   const [mailMessage, setMailMessage] = useState('')
   const [mailError, setMailError] = useState('')
+  const [heroBusy, setHeroBusy] = useState(false)
+  const [heroMessage, setHeroMessage] = useState('')
+  const [heroError, setHeroError] = useState('')
 
   const { data: globalSettings, isLoading: settingsLoading } = useQuery({
     queryKey: ['admin-global-settings'],
@@ -112,6 +118,42 @@ export default function AdminGlobalSettingsPage() {
     mailMutation.mutate({ order_notification_emails: notificationEmails })
   }
 
+  const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setHeroBusy(true)
+    setHeroMessage('')
+    setHeroError('')
+    try {
+      const result = await uploadAdminHeroImage(file)
+      setHeroMessage(result.detail)
+      queryClient.invalidateQueries({ queryKey: ['admin-global-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['siteConfig'] })
+    } catch (err: unknown) {
+      setHeroError(formatApiError(err, 'Caricamento immagine hero non riuscito.'))
+    } finally {
+      setHeroBusy(false)
+    }
+  }
+
+  const handleHeroRemove = async () => {
+    if (!window.confirm('Rimuovere l\'immagine hero della homepage?')) return
+    setHeroBusy(true)
+    setHeroMessage('')
+    setHeroError('')
+    try {
+      const result = await removeAdminHeroImage()
+      setHeroMessage(result.detail)
+      queryClient.invalidateQueries({ queryKey: ['admin-global-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['siteConfig'] })
+    } catch (err: unknown) {
+      setHeroError(formatApiError(err, 'Rimozione immagine hero non riuscita.'))
+    } finally {
+      setHeroBusy(false)
+    }
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -156,6 +198,52 @@ export default function AdminGlobalSettingsPage() {
                 </button>
               </div>
             </form>
+          </>
+        )}
+      </section>
+
+      <section className="admin-card">
+        <h2>Homepage — immagine hero</h2>
+        <p className="admin-hint">
+          Banner di sfondo nella sezione principale in homepage. Dimensioni consigliate:{' '}
+          <strong>{globalSettings?.hero_image_dimensions_hint || HERO_IMAGE_DIMENSIONS_HINT}</strong>.
+          Formati: JPG, PNG o WebP.
+        </p>
+        {settingsLoading ? (
+          <p>Caricamento…</p>
+        ) : (
+          <>
+            {heroMessage && <p className="admin-alert admin-alert-success">{heroMessage}</p>}
+            {heroError && <p className="admin-alert admin-alert-error">{heroError}</p>}
+            {globalSettings?.hero_image_url && (
+              <img
+                src={globalSettings.hero_image_url}
+                alt=""
+                className="admin-hero-image-preview"
+              />
+            )}
+            <div className="admin-inline-form-actions">
+              <label className="btn btn-primary">
+                {heroBusy ? 'Caricamento…' : 'Carica immagine hero'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  disabled={heroBusy}
+                  onChange={handleHeroUpload}
+                />
+              </label>
+              {globalSettings?.hero_image_url && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={heroBusy}
+                  onClick={handleHeroRemove}
+                >
+                  Rimuovi immagine hero
+                </button>
+              )}
+            </div>
           </>
         )}
       </section>
