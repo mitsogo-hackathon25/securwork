@@ -10,6 +10,7 @@ import {
   deleteAdminCategory,
   deleteAdminColor,
   fetchAdminBrands,
+  fetchAdminCategories,
   fetchAdminCategoryList,
   fetchAdminColors,
   removeAdminCategoryImage,
@@ -18,7 +19,8 @@ import {
   updateAdminColor,
   uploadAdminCategoryImage,
 } from '../../api/admin'
-import type { AdminBrand, AdminCategory, AdminColor } from '../../api/types'
+import type { AdminBrand, AdminCategory, AdminCategoryOption, AdminColor } from '../../api/types'
+import { formatApiError } from '../../utils/formatApiError'
 import { CATEGORY_IMAGE_DIMENSIONS_HINT } from '../../constants/homeImages'
 import './Admin.css'
 
@@ -59,6 +61,11 @@ export default function AdminCatalogPage() {
   const [error, setError] = useState('')
   const [categoryImageBusy, setCategoryImageBusy] = useState(false)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set())
+  const [categoryDeleteModal, setCategoryDeleteModal] = useState<
+    | null
+    | { mode: 'single' | 'bulk'; ids: number[]; productCount: number }
+  >(null)
+  const [reassignTargetId, setReassignTargetId] = useState<number | ''>('')
 
   const switchTab = (tab: CatalogTab) => {
     setCatalogTab(tab)
@@ -82,6 +89,12 @@ export default function AdminCatalogPage() {
   const { data: colors = [], isLoading: loadingColors } = useQuery({
     queryKey: ['admin-colors'],
     queryFn: fetchAdminColors,
+  })
+
+  const { data: categoryOptions = [] } = useQuery({
+    queryKey: ['admin-categories', 'options'],
+    queryFn: fetchAdminCategories,
+    enabled: categoryDeleteModal !== null,
   })
 
   const invalidate = () => {
@@ -126,21 +139,25 @@ export default function AdminCatalogPage() {
   })
 
   const removeCategory = useMutation({
-    mutationFn: deleteAdminCategory,
+    mutationFn: (vars: { id: number; reassignTo?: number }) =>
+      deleteAdminCategory(vars.id, vars.reassignTo),
     onSuccess: () => {
+      setCategoryDeleteModal(null)
+      setReassignTargetId('')
       setSelectedCategoryIds(new Set())
       invalidate()
     },
     onError: (err: unknown) => {
-      setError(err && typeof err === 'object' && 'response' in err
-        ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Impossibile eliminare la categoria.')
+      setError(formatApiError(err, 'Impossibile eliminare la categoria.'))
     },
   })
 
   const bulkRemoveCategories = useMutation({
-    mutationFn: bulkDeleteAdminCategories,
+    mutationFn: (vars: { ids: number[]; reassignTo?: number }) =>
+      bulkDeleteAdminCategories(vars.ids, vars.reassignTo),
     onSuccess: (res) => {
+      setCategoryDeleteModal(null)
+      setReassignTargetId('')
       setSelectedCategoryIds((prev) => {
         const next = new Set(prev)
         for (const id of res.deleted) {
@@ -161,9 +178,7 @@ export default function AdminCatalogPage() {
       }
     },
     onError: (err: unknown) => {
-      setError(err && typeof err === 'object' && 'response' in err
-        ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
-        : 'Eliminazione multipla non riuscita.')
+      setError(formatApiError(err, 'Eliminazione multipla non riuscita.'))
     },
   })
 
@@ -201,8 +216,87 @@ export default function AdminCatalogPage() {
     const preview = labels.length < ids.length
       ? `${labels.join(', ')}… (+${ids.length - labels.length})`
       : labels.join(', ')
+    const totalProducts = categoryRowsWithId
+      .filter((c) => ids.includes(c.id))
+      .reduce((sum, c) => sum + (c.product_count ?? 0), 0)
+    const needsReassign = totalProducts > 0
+    if (needsReassign) {
+      setReassignTargetId('')
+      setCategoryDeleteModal({
+        mode: 'bulk',
+        ids,
+        productCount: totalProducts,
+      })
+      return
+    }
     if (!window.confirm(`Eliminare ${ids.length} categorie selezionate?\n\n${preview}`)) return
-    bulkRemoveCategories.mutate(ids)
+    bulkRemoveCategories.mutate({ ids })
+  }
+
+  const categoryReassignOptions = categoryOptions.filter(
+    (o: AdminCategoryOption) =>
+      !categoryDeleteModal?.ids.includes(o.id),
+  )
+
+  const confirmCategoryDeleteWithReassign = () => {
+    if (!categoryDeleteModal) return
+    if (categoryDeleteModal.productCount === 0) {
+      setError('')
+      if (categoryDeleteModal.mode === 'single') {
+        removeCategory.mutate({ id: categoryDeleteModal.ids[0] })
+      } else {
+        bulkRemoveCategories.mutate({ ids: categoryDeleteModal.ids })
+      }
+      return
+    }
+    if (reassignTargetId === '') {
+      setError('Seleziona la categoria in cui spostare i prodotti.')
+      return
+    }
+    const tid = Number(reassignTargetId)
+    if (!Number.isFinite(tid)) {
+      setError('Destinazione non valida.')
+      return
+    }
+    setError('')
+    if (categoryDeleteModal.mode === 'single') {
+      removeCategory.mutate({ id: categoryDeleteModal.ids[0], reassignTo: tid })
+    } else {
+      bulkRemoveCategories.mutate({ ids: categoryDeleteModal.ids, reassignTo: tid })
+    }
+  }
+
+  const handleSingleCategoryDelete = async (cat: AdminCategory & { id: number }) => {
+    if (!window.confirm(`Eliminare la categoria "${cat.name_it}"?`)) return
+    setError('')
+    if ((cat.product_count ?? 0) > 0) {
+      setReassignTargetId('')
+      setCategoryDeleteModal({
+        mode: 'single',
+        ids: [cat.id],
+        productCount: cat.product_count ?? 0,
+      })
+      return
+    }
+    try {
+      await deleteAdminCategory(cat.id)
+      setSelectedCategoryIds(new Set())
+      invalidate()
+    } catch (err: unknown) {
+      const res = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { status?: number; data?: { code?: string; product_count?: number } } }).response
+        : undefined
+      if (res?.status === 400 && res.data?.code === 'category_has_products') {
+        setReassignTargetId('')
+        setCategoryDeleteModal({
+          mode: 'single',
+          ids: [cat.id],
+          productCount: res.data.product_count ?? 0,
+        })
+        return
+      }
+      setError(formatApiError(err, 'Impossibile eliminare la categoria.'))
+    }
   }
 
   const removeBrand = useMutation({
@@ -301,6 +395,84 @@ export default function AdminCatalogPage() {
       </div>
 
       {error && <div className="admin-alert admin-alert-error">{error}</div>}
+
+      {categoryDeleteModal && (
+        <div
+          className="admin-import-brand-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="category-delete-modal-title"
+        >
+          <div className="admin-card admin-import-brand-dialog">
+            <h3 id="category-delete-modal-title">
+              {categoryDeleteModal.mode === 'single' ? 'Elimina categoria' : 'Elimina categorie selezionate'}
+            </h3>
+            <p className="admin-hint">
+              {categoryDeleteModal.productCount > 0
+                ? (
+                  <>
+                    {categoryDeleteModal.mode === 'single'
+                      ? `Questa categoria ha ${categoryDeleteModal.productCount} prodott${categoryDeleteModal.productCount === 1 ? 'o' : 'i'}. `
+                      : `${categoryDeleteModal.productCount} prodotti in totale nelle categorie selezionate (stima da conteggio). `}
+                    Scegli una categoria di destinazione: i prodotti verranno collegati anche a quella, poi la categoria
+                    verrà rimossa dall’assegnazione.
+                  </>
+                )
+                : 'Conferma eliminazione.'}
+            </p>
+            <label className="full-width">
+              Sposta prodotti verso *
+              <select
+                value={reassignTargetId === '' ? '' : String(reassignTargetId)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setReassignTargetId(v === '' ? '' : Number(v))
+                }}
+                required={categoryDeleteModal.productCount > 0}
+              >
+                <option value="">— Seleziona categoria —</option>
+                {categoryReassignOptions
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }))
+                  .map((opt) => {
+                    const sec =
+                      opt.section === 'professional' ? 'Prof.' : 'Lavoro'
+                    return (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.name} ({opt.slug}) [{sec}]
+                      </option>
+                    )
+                  })}
+              </select>
+            </label>
+            <p className="admin-hint">
+              Non è possibile eliminare categorie principali che contengono ancora sottocategorie; in quel caso spostale o
+              eliminale prima.
+            </p>
+            <div className="admin-inline-form-actions" style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={removeCategory.isPending || bulkRemoveCategories.isPending}
+                onClick={confirmCategoryDeleteWithReassign}
+              >
+                {categoryDeleteModal.productCount > 0 ? 'Sposta ed elimina' : 'Elimina'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={removeCategory.isPending || bulkRemoveCategories.isPending}
+                onClick={() => {
+                  setCategoryDeleteModal(null)
+                  setReassignTargetId('')
+                }}
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="admin-tabs admin-catalog-tabs">
         <button
@@ -518,10 +690,7 @@ export default function AdminCatalogPage() {
                       <button
                         type="button"
                         className="admin-link admin-link-danger"
-                        onClick={() => {
-                          if (!cat.id || !window.confirm(`Eliminare la categoria "${cat.name_it}"?`)) return
-                          removeCategory.mutate(cat.id)
-                        }}
+                        onClick={() => cat.id && handleSingleCategoryDelete(cat)}
                       >
                         Elimina
                       </button>

@@ -808,17 +808,22 @@ export const createAdminCategory = (data: Partial<AdminCategory>) =>
 export const updateAdminCategory = (id: number, data: Partial<AdminCategory>) =>
   api.patch<AdminCategory>(`/admin/categories/${id}/`, data).then((r) => r.data)
 
-export const deleteAdminCategory = (id: number) =>
-  api.delete(`/admin/categories/${id}/`)
+export const deleteAdminCategory = (id: number, reassignTo?: number) =>
+  api.delete(`/admin/categories/${id}/`, {
+    ...(reassignTo != null ? { params: { reassign_to: reassignTo } } : {}),
+  })
 
 export type BulkDeleteCategoriesResult = {
   deleted: number[]
   failed: { id: number; detail: string }[]
 }
 
-export const bulkDeleteAdminCategories = (ids: number[]) =>
+export const bulkDeleteAdminCategories = (ids: number[], reassignTo?: number) =>
   api
-    .post<BulkDeleteCategoriesResult>('/admin/categories/bulk-delete/', { ids })
+    .post<BulkDeleteCategoriesResult>('/admin/categories/bulk-delete/', {
+      ids,
+      ...(reassignTo != null ? { reassign_to: reassignTo } : {}),
+    })
     .then((r) => r.data)
 
 export const fetchAdminBrands = () =>

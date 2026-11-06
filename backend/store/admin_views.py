@@ -1748,6 +1748,77 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         )
 
 
+def _reassign_category_products(source: Category, target_id: int | None) -> tuple[bool, Response | None]:
+    """
+    Move all products from source to target. Returns (ok, error_response).
+    target_id required when source has products.
+    """
+    if not source.products.exists():
+        return True, None
+    if target_id is None:
+        return False, Response(
+            {
+                "detail": (
+                    "Cannot delete a category that has products assigned. "
+                    "Pass reassign_to with the destination category id."
+                ),
+                "code": "category_has_products",
+                "product_count": source.products.count(),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        tid = int(target_id)
+    except (TypeError, ValueError):
+        return False, Response(
+            {"detail": "reassign_to must be a valid category id."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if tid == source.pk:
+        return False, Response(
+            {"detail": "La categoria di destinazione non può essere la stessa che si elimina."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if source.parent_id is None:
+        return False, Response(
+            {
+                "detail": (
+                    "Non è possibile riassegnare prodotti da una categoria principale: "
+                    "sposta o elimina prima le sottocategorie, oppure riassegna manualmente i prodotti."
+                ),
+                "code": "cannot_reassign_from_root",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    target = Category.objects.filter(pk=tid).first()
+    if target is None:
+        return False, Response(
+            {"detail": "Categoria di destinazione non trovata."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    # Leaf-only deletes still allow any existing category as target (admin responsibility).
+    products = list(source.products.all())
+    with transaction.atomic():
+        for product in products:
+            product.categories.add(target)
+            product.categories.remove(source)
+    return True, None
+
+
+def _parse_reassign_target(request, *, from_body: bool) -> int | None:
+    raw = None
+    if from_body:
+        raw = request.data.get("reassign_to")
+    if raw is None:
+        raw = request.query_params.get("reassign_to")
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class AdminCategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaffUser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -1809,11 +1880,10 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
                 {"detail": "Cannot delete a category that has subcategories."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if category.products.exists():
-            return Response(
-                {"detail": "Cannot delete a category that has products assigned."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        reassign_to = _parse_reassign_target(request, from_body=False)
+        ok, err = _reassign_category_products(category, reassign_to)
+        if not ok:
+            return err
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"], url_path="bulk-delete")
@@ -1843,6 +1913,13 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        reassign_to = _parse_reassign_target(request, from_body=True)
+        if reassign_to is not None and reassign_to in parsed:
+            return Response(
+                {"detail": "reassign_to non può essere una delle categorie da eliminare."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         deleted: list[int] = []
         failed: list[dict[str, int | str]] = []
 
@@ -1859,13 +1936,14 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
                     },
                 )
                 continue
-            if category.products.exists():
-                failed.append(
-                    {
-                        "id": pk,
-                        "detail": "Cannot delete a category that has products assigned.",
-                    },
-                )
+            ok, err = _reassign_category_products(category, reassign_to)
+            if not ok:
+                msg = "Cannot delete category with products (reassign_to required)."
+                if err is not None:
+                    data = getattr(err, "data", None)
+                    if isinstance(data, dict) and data.get("detail"):
+                        msg = str(data["detail"])
+                failed.append({"id": pk, "detail": msg})
                 continue
             category.delete()
             deleted.append(pk)
