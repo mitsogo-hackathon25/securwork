@@ -29,9 +29,7 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: min(42vw, 420px);
-  object-fit: cover;
-  object-position: center;
+  /* Full banner (e.g. 1832×858): scale to viewport width; no max-height/cover — avoids cropping */
 }
 
 .hero-body {
@@ -614,7 +612,6 @@
 
 @media (max-width: 768px) {
   .hero-body { padding-top: 2.5rem; }
-  .hero-top-banner__img { max-height: min(52vw, 280px); }
   .hero-layout { padding-bottom: 2.5rem; }
   .hero-stat { padding: 1.25rem; }
   .hero-categories { grid-template-columns: 1fr; }
