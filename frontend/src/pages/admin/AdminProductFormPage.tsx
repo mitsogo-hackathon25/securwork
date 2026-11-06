@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,7 +16,7 @@ import {
   uploadProductImage,
   uploadProductMockup,
 } from '../../api/admin'
-import type { AdminProduct, AdminProductVariant } from '../../api/types'
+import type { AdminCategoryOption, AdminProduct, AdminProductVariant } from '../../api/types'
 import { CLOTHING_SIZES } from '../../constants/clothingSizes'
 import { PRODUCT_COLORS } from '../../constants/productColors'
 import { useToast } from '../../components/toast/ToastProvider'
@@ -140,6 +140,77 @@ export default function AdminProductFormPage() {
     return [...names].sort((a, b) => a.localeCompare(b))
   }, [adminColors, form.variants])
 
+  const toggleCategory = useCallback((categoryId: number) => {
+    setForm((prev) => {
+      const ids = prev.category_ids.includes(categoryId)
+        ? prev.category_ids.filter((id) => id !== categoryId)
+        : [...prev.category_ids, categoryId]
+      return { ...prev, category_ids: ids }
+    })
+  }, [])
+
+  const categorySectionsTree = useMemo(() => {
+    const sectionOrder = ['workwear', 'professional'] as const
+    const label: Record<(typeof sectionOrder)[number], string> = {
+      workwear: 'Abbigliamento da lavoro',
+      professional: 'Abbigliamento professionale',
+    }
+    const pool = categories
+
+    const sortByName = (a: AdminCategoryOption, b: AdminCategoryOption) =>
+      a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
+
+    return sectionOrder.map((section) => {
+      const inSection = pool.filter((c) => c.section === section)
+      const roots = inSection.filter((c) => c.parent === null).sort(sortByName)
+      const assigned = new Set<number>()
+      roots.forEach((r) => {
+        assigned.add(r.id)
+        const stack = [r.id]
+        while (stack.length) {
+          const id = stack.pop()!
+          pool
+            .filter((c) => c.parent === id)
+            .forEach((ch) => {
+              assigned.add(ch.id)
+              stack.push(ch.id)
+            })
+        }
+      })
+      const orphans = inSection.filter((c) => !assigned.has(c.id)).sort(sortByName)
+
+      return {
+        section,
+        title: label[section],
+        roots,
+        orphans,
+      }
+    })
+  }, [categories])
+
+  const renderCategoryNode = useCallback((cat: AdminCategoryOption, depth: number): JSX.Element => {
+    const sortByName = (a: AdminCategoryOption, b: AdminCategoryOption) =>
+      a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
+    const children = categories.filter((c) => c.parent === cat.id).sort(sortByName)
+    return (
+      <div key={cat.id} className={`admin-product-category-node depth-${Math.min(depth, 3)}`}>
+        <label className="admin-category-chip">
+          <input
+            type="checkbox"
+            checked={form.category_ids.includes(cat.id)}
+            onChange={() => toggleCategory(cat.id)}
+          />
+          <span>{cat.name}</span>
+        </label>
+        {children.length > 0 && (
+          <div className="admin-product-category-children">
+            {children.map((ch) => renderCategoryNode(ch, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }, [categories, form.category_ids, toggleCategory])
+
   const { data: product, isLoading } = useQuery({
     queryKey: ['admin-product', productId],
     queryFn: () => fetchAdminProduct(productId!),
@@ -241,15 +312,6 @@ export default function AdminProductFormPage() {
   }
 
   const sizeGroups = getSizeGroups(form.variants)
-
-  const toggleCategory = (categoryId: number) => {
-    setForm((prev) => {
-      const ids = prev.category_ids.includes(categoryId)
-        ? prev.category_ids.filter((id) => id !== categoryId)
-        : [...prev.category_ids, categoryId]
-      return { ...prev, category_ids: ids }
-    })
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -442,16 +504,36 @@ export default function AdminProductFormPage() {
 
         <section className="admin-card">
           <h2>Categorie</h2>
-          <div className="admin-category-grid">
-            {categories.map((cat) => (
-              <label key={cat.id} className="admin-category-chip">
-                <input
-                  type="checkbox"
-                  checked={form.category_ids.includes(cat.id)}
-                  onChange={() => toggleCategory(cat.id)}
-                />
-                <span>{cat.name}</span>
-              </label>
+          <p className="admin-hint">
+            Puoi assegnare lo stesso tipo di sottocategoria in entrambe le sezioni selezionando le caselle corrispondenti
+            sotto «Abbigliamento da lavoro» e «Abbigliamento professionale» (ogni voce nel catalogo è un record con ID
+            diverso).
+          </p>
+          <div className="admin-product-category-sections">
+            {categorySectionsTree.map(({ section, title, roots, orphans }) => (
+              <div key={section} className="admin-product-category-section">
+                <h3 className="admin-product-category-section-title">{title}</h3>
+                <div className="admin-product-category-tree">
+                  {roots.map((cat) => renderCategoryNode(cat, 0))}
+                </div>
+                {orphans.length > 0 && (
+                  <div className="admin-product-category-orphans">
+                    <p className="admin-product-category-orphans-label">Altre in questa sezione</p>
+                    <div className="admin-category-grid">
+                      {orphans.map((cat) => (
+                        <label key={cat.id} className="admin-category-chip">
+                          <input
+                            type="checkbox"
+                            checked={form.category_ids.includes(cat.id)}
+                            onChange={() => toggleCategory(cat.id)}
+                          />
+                          <span>{cat.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </section>
