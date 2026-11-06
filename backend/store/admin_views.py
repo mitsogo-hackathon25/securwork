@@ -1872,6 +1872,8 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
 
         return Response({"deleted": deleted, "failed": failed})
 
+
+class AdminBrandViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaffUser]
     serializer_class = AdminBrandSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
