@@ -11,6 +11,7 @@ from store.csv_import import (
     canonical_brand_key,
     canonical_filter_key,
     export_products_csv,
+    export_products_csv_native,
     import_parsed_rows,
     iter_import_parsed_rows,
     group_parsed_product_rows,
@@ -30,8 +31,8 @@ from store.csv_import import (
 from store.models import Category, CsvImportBatch, Product, ProductVariant
 
 
-NATIVE_CSV = """sku_prodotto,marca,categoria,nome_it,nome_en,descrizione_it,descrizione_en,taglia,colore,prezzo,scorte,sku_variante
-SW-POLO-01,ExampleBrand,polo,Polo da lavoro,Work polo,Polo IT,Polo EN,M,Blu,29.90,10,SW-POLO-01-M-BLU
+NATIVE_CSV = """sku_prodotto\tmarca\tsezione\tmacro_categoria\tsottocategoria\tcategoria\tnome_it\tnome_en\tdescrizione_it\tdescrizione_en\ttaglia\tcolore\tprezzo\tscorte\tsku_variante
+SW-POLO-01\tExampleBrand\tworkwear\tAbbigliamento\tPolo\tpolo\tPolo da lavoro\tWork polo\tPolo IT\tPolo EN\tM\tBlu\t29.90\t10\tSW-POLO-01-M-BLU
 """
 
 SUPPLIER_CSV = """Codice Padre;Merceologica;Categoria;SCategoria;SKU;EAN;In Arrivo;Colore;Taglia;Descrizione;Foto;Unico;Confezione;Imballo;Prezzo Unico;Prezzo Confezione;Prezzo Imballo
@@ -102,6 +103,21 @@ class CsvImportTests(TestCase):
         product = Product.objects.get(sku="SW-POLO-01")
         self.assertEqual(product.brand, "ExampleBrand")
         self.assertEqual(product.variants.get().price, Decimal("29.90"))
+        self.assertTrue(product.categories.filter(slug="polo").exists())
+
+    def test_native_csv_imports_without_slug_categoria_column(self):
+        csv_text = (
+            "sku_prodotto\tmarca\tsezione\tmacro_categoria\tsottocategoria\tnome_it\tnome_en\t"
+            "descrizione_it\tdescrizione_en\ttaglia\tcolore\tprezzo\tscorte\tsku_variante\n"
+            "IMP-2\tBrand\tworkwear\tAbbigliamento\tPantaloni\tPant\tPants\tDesc IT\tDesc EN\t"
+            "M\tNero\t9.90\t1\tIMP-2-M-N\n"
+        )
+        rows, errors = parse_and_validate_csv(csv_text.encode("utf-8"))
+        self.assertEqual(errors, [], errors)
+        result = import_parsed_rows(rows)
+        self.assertEqual(result["created_products"], 1)
+        product = Product.objects.get(sku="IMP-2")
+        self.assertTrue(product.categories.filter(slug="pantaloni").exists())
 
     def test_supplier_csv_imports_parent_variants_and_categories(self):
         rows, errors = parse_and_validate_csv(SUPPLIER_CSV.encode("utf-8"))
@@ -451,6 +467,47 @@ P2;Abbigliamento da lavoro;Dickies;Polo;P2-M;Nero;L;Polo 2;12,00
         self.assertIn("POLO", row)
         self.assertIn("AY 7439-XS-ACQUAMARINA", row)
         self.assertIn("12,50", row)
+
+    def test_export_products_csv_native_tsv_layout(self):
+        parent = Category.objects.create(slug="abbigliamento-native", section=Category.Section.WORKWEAR)
+        parent.set_current_language("it")
+        parent.name = "Abbigliamento"
+        parent.save()
+        child = Category.objects.create(
+            slug="polo-native",
+            section=Category.Section.WORKWEAR,
+            parent=parent,
+        )
+        child.set_current_language("it")
+        child.name = "Polo"
+        child.save()
+
+        product = Product.objects.create(sku="NAT-EXP-1", brand="TestBrand", slug="nat-exp-1")
+        product.set_current_language("it")
+        product.name = "Polo test"
+        product.save()
+        product.categories.add(child)
+        ProductVariant.objects.create(
+            product=product,
+            sku="NAT-EXP-1-M-BLU",
+            size="M",
+            color="Blu",
+            price=Decimal("19.99"),
+            stock_quantity=5,
+        )
+        text = export_products_csv_native()
+        lines = text.splitlines()
+        header = lines[0].split("\t")
+        self.assertIn("sezione", header)
+        self.assertIn("macro_categoria", header)
+        self.assertIn("sottocategoria", header)
+        self.assertIn("marca", header)
+        row = lines[1].split("\t")
+        self.assertEqual(row[header.index("sku_prodotto")], "NAT-EXP-1")
+        self.assertEqual(row[header.index("marca")], "TestBrand")
+        self.assertEqual(row[header.index("sezione")], "workwear")
+        self.assertEqual(row[header.index("sottocategoria")], "Polo")
+        self.assertEqual(row[header.index("prezzo")], "19.99")
 
     def test_skip_existing_in_catalog_allows_duplicate_parent_sku(self):
         Product.objects.create(sku="PAD-01", slug="pad-01-existing", brand="X")

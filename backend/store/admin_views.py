@@ -34,7 +34,7 @@ from .csv_import import (
     canonical_brand_key,
     build_csv_template,
     csv_download_bytes,
-    export_products_csv,
+    export_products_csv_native,
     csv_upload_filename_ok,
     import_parsed_rows,
     iter_import_parsed_rows,
@@ -402,7 +402,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            content = export_products_csv(queryset)
+            content = export_products_csv_native(queryset)
         except Exception:
             logger.exception("Product CSV export failed")
             return Response(

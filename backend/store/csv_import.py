@@ -606,6 +606,9 @@ from .product_images import (
 CSV_HEADERS = [
     "sku_prodotto",
     "marca",
+    "sezione",
+    "macro_categoria",
+    "sottocategoria",
     "categoria",
     "nome_it",
     "nome_en",
@@ -633,7 +636,8 @@ CSV_HEADERS = [
     "url_mockup",
 ]
 
-CSV_DELIMITER = ","
+# Tab-separated native template/export (one column per field, no comma delimiter).
+CSV_DELIMITER = "\t"
 
 # Supplier listino layout (Codice Padre, Merceologica, …) — semicolon-separated for IT Excel.
 SUPPLIER_EXPORT_HEADERS = [
@@ -666,7 +670,15 @@ def _make_csv_writer(buffer: io.StringIO) -> csv.DictWriter:
         delimiter=CSV_DELIMITER,
         quoting=csv.QUOTE_MINIMAL,
         lineterminator="\r\n",
+        extrasaction="ignore",
     )
+
+
+def _export_delimiter_cell(value: str) -> str:
+    """Escape tabs/newlines in TSV cells so columns stay aligned."""
+    text = (value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\t", " ")
+    return text
 
 
 def _make_supplier_csv_writer(buffer: io.StringIO) -> csv.DictWriter:
@@ -791,9 +803,21 @@ HEADER_ALIASES = {
     "merceologica": "merceologica",
     "scategoria": "scategoria",
     "s_categoria": "scategoria",
-    "sottocategoria": "scategoria",
     "subcategoria": "scategoria",
     "subcategory": "scategoria",
+    # Native template: subcategory is its own column (do not map to supplier scategoria).
+    "sottocategoria": "sottocategoria",
+    "sotto_categoria": "sottocategoria",
+    # English aliases for native import
+    "section": "sezione",
+    "sezione_catalogo": "sezione",
+    "workwear_section": "sezione",
+    "macro_categoria": "macro_categoria",
+    "macro_category": "macro_categoria",
+    "main_category": "macro_categoria",
+    "parent_category": "macro_categoria",
+    "sub_category": "sottocategoria",
+    "child_category": "sottocategoria",
     "descrizione": "descrizione_it",
     "foto": "url_immagini",
     "immagine": "url_immagini",
@@ -855,6 +879,9 @@ TEMPLATE_EXAMPLE_ROWS = [
     {
         "sku_prodotto": "SW-POLO-01",
         "marca": "ExampleBrand",
+        "sezione": "workwear",
+        "macro_categoria": "Abbigliamento",
+        "sottocategoria": "Polo",
         "nome_it": "Polo da lavoro",
         "nome_en": "Work polo",
         "descrizione_breve_it": "Polo operativa traspirante.",
@@ -884,6 +911,9 @@ TEMPLATE_EXAMPLE_ROWS = [
     {
         "sku_prodotto": "SW-POLO-01",
         "marca": "ExampleBrand",
+        "sezione": "workwear",
+        "macro_categoria": "Abbigliamento",
+        "sottocategoria": "Polo",
         "nome_it": "Polo da lavoro",
         "nome_en": "Work polo",
         "descrizione_breve_it": "Polo operativa traspirante.",
@@ -1004,6 +1034,81 @@ def export_products_csv(products_queryset=None) -> str:
     return buffer.getvalue()
 
 
+def export_products_csv_native(products_queryset=None) -> str:
+    """Export catalog in native SecurWork TSV layout (tab-separated, one column per field)."""
+    buffer = io.StringIO()
+    writer = _make_csv_writer(buffer)
+    writer.writeheader()
+
+    if products_queryset is None:
+        products = (
+            Product.objects.prefetch_related("variants", "categories", "categories__parent", "images")
+            .order_by("sku")
+        )
+    else:
+        products = products_queryset.prefetch_related(
+            "variants", "categories", "categories__parent", "images",
+        ).order_by("sku")
+
+    for product in products:
+        try:
+            sezione_slug, macro_label, sotto_label, slug_joined = _native_export_category_fields(product)
+            image_urls = product_image_export_urls(product)
+            url_immagini = ",".join(_export_delimiter_cell(u) for u in image_urls)
+            mockup_url = ""
+            if getattr(product, "mockup_front", None):
+                try:
+                    mockup_url = _export_delimiter_cell(absolute_media_url(product.mockup_front.url))
+                except (ValueError, OSError):
+                    mockup_url = ""
+
+            variants = list(product.variants.all())
+            if not variants:
+                writer.writerow({h: "" for h in CSV_HEADERS})
+                continue
+
+            for variant in variants:
+                sale = variant.sale_price
+                sale_str = _decimal_to_csv(sale) if sale is not None else ""
+                writer.writerow({
+                    "sku_prodotto": _export_delimiter_cell(product.sku),
+                    "marca": _export_delimiter_cell(product.brand or ""),
+                    "sezione": _export_delimiter_cell(sezione_slug),
+                    "macro_categoria": macro_label,
+                    "sottocategoria": sotto_label,
+                    "categoria": slug_joined,
+                    "nome_it": _export_delimiter_cell(_translation(product, "name", "it")),
+                    "nome_en": _export_delimiter_cell(_translation(product, "name", "en")),
+                    "descrizione_breve_it": _export_delimiter_cell(_translation(product, "short_description", "it")),
+                    "descrizione_breve_en": _export_delimiter_cell(_translation(product, "short_description", "en")),
+                    "descrizione_it": _export_delimiter_cell(_translation(product, "description", "it")),
+                    "descrizione_en": _export_delimiter_cell(_translation(product, "description", "en")),
+                    "bestseller": _bool_to_csv(bool(product.is_bestseller)),
+                    "costo_personalizzazione": _decimal_to_csv(product.customization_fee),
+                    "taglia": _export_delimiter_cell(variant.size or ""),
+                    "colore": _export_delimiter_cell(variant.color or ""),
+                    "prezzo": _decimal_to_csv(variant.price),
+                    "scorte": str(variant.stock_quantity),
+                    "sku_variante": _export_delimiter_cell(variant.sku),
+                    "prezzo_scontato": sale_str,
+                    "ricamo_petto": _bool_to_csv(product.embroidery_chest_enabled),
+                    "costo_ricamo_petto": _decimal_to_csv(product.embroidery_chest_fee),
+                    "ricamo_grande": _bool_to_csv(product.embroidery_large_enabled),
+                    "costo_ricamo_grande": _decimal_to_csv(product.embroidery_large_fee),
+                    "dtf_petto": _bool_to_csv(product.dtf_chest_enabled),
+                    "costo_dtf_petto": _decimal_to_csv(product.dtf_chest_fee),
+                    "dtf_grande": _bool_to_csv(product.dtf_large_enabled),
+                    "costo_dtf_grande": _decimal_to_csv(product.dtf_large_fee),
+                    "url_immagini": url_immagini,
+                    "url_mockup": mockup_url,
+                })
+        except Exception:
+            logger.exception("Skipping product %s during native CSV export", product.sku)
+            continue
+
+    return buffer.getvalue()
+
+
 def _header_key(value: str) -> str:
     text = unicodedata.normalize("NFKD", (value or "").strip().lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
@@ -1092,6 +1197,48 @@ def _section_from_merceologica(raw: str) -> str:
     if any(token in text for token in ("profession", "divis", "sanitar", "hotel", "chef", "cuoco")):
         return Category.Section.PROFESSIONAL
     return Category.Section.WORKWEAR
+
+
+def _parse_native_section(raw: str) -> str | None:
+    """Map CSV sezione text to Category.Section value, or None if empty."""
+    text = (raw or "").strip().lower()
+    if not text:
+        return None
+    if text in {"workwear", "w", "abbigliamento_da_lavoro"}:
+        return Category.Section.WORKWEAR
+    if text in {"professional", "professionale", "p", "abbigliamento_professionale"}:
+        return Category.Section.PROFESSIONAL
+    if "profession" in text or "divis" in text or "sanitar" in text:
+        return Category.Section.PROFESSIONAL
+    if "work" in text or "lavoro" in text:
+        return Category.Section.WORKWEAR
+    return None
+
+
+def _native_export_category_fields(product: Product) -> tuple[str, str, str, str]:
+    """(sezione slug, macro label, sotto label, comma-separated category slugs) for native export."""
+    cats = list(product.categories.select_related("parent").order_by("slug"))
+    slug_parts = [_export_delimiter_cell(c.slug) for c in cats]
+    slug_joined = ",".join(slug_parts) if slug_parts else ""
+
+    if not cats:
+        return (Category.Section.WORKWEAR, "", "", slug_joined)
+
+    leaf = next((c for c in cats if c.parent_id), None)
+    if leaf and leaf.parent:
+        section = leaf.section or leaf.parent.section or Category.Section.WORKWEAR
+        macro = _export_delimiter_cell(_category_display_name(leaf.parent))
+        sotto = _export_delimiter_cell(_category_display_name(leaf))
+        return (section, macro, sotto, slug_joined)
+
+    cat = cats[0]
+    section = cat.section or Category.Section.WORKWEAR
+    name = _export_delimiter_cell(_category_display_name(cat))
+    if cat.parent_id and cat.parent:
+        macro = _export_delimiter_cell(_category_display_name(cat.parent))
+        return (section, macro, name, slug_joined)
+    # Top-level category only
+    return (section, "", name, slug_joined)
 
 
 def ensure_category(name: str, *, parent: Category | None = None, section: str | None = None) -> Category | None:
@@ -1284,12 +1431,14 @@ def _row_has_category_value(row: dict) -> bool:
         for key in (
             "categoria",
             "scategoria",
+            "sottocategoria",
             "merceologica",
             "famiglia",
             "linea",
             "reparto",
             "macro_categoria",
             "categoria_principale",
+            "sezione",
         )
     )
 
@@ -1311,6 +1460,8 @@ def _missing_native_headers(normalized_headers: list[str]) -> list[str]:
                 "linea",
                 "reparto",
                 "macro_categoria",
+                "sottocategoria",
+                "sezione",
                 "categoria_principale",
             )
         ):
@@ -1528,10 +1679,15 @@ def _apply_derived_fields(row: dict) -> None:
             or _cell(row, "famiglia")
             or _cell(row, "linea")
             or _cell(row, "reparto")
-            or _cell(row, "macro_categoria")
             or _cell(row, "categoria_principale")
             or mer_for_category
         )
+    # Native listino: fill slug column from sottocategoria / macro when empty (slug or name OK for resolver).
+    if not _cell(row, "categoria"):
+        row["categoria"] = _cell(row, "sottocategoria") or _cell(row, "macro_categoria")
+    native_sec = _parse_native_section(_cell(row, "sezione"))
+    if native_sec:
+        row["_native_section"] = native_sec
     if not _cell(row, "scorte"):
         incoming = _cell(row, "in_arrivo")
         if incoming.isdigit():
@@ -1543,8 +1699,16 @@ def _supplier_category_names(row: dict) -> tuple[str, str, str]:
     mer_for_section = mer
     if mer and _is_merceologica_brand_name(mer):
         mer_for_section = ""
-    parent = _cell(row, "categoria")
-    child = _cell(row, "scategoria")
+
+    macro_native = _cell(row, "macro_categoria")
+    sotto_native = _cell(row, "sottocategoria")
+    if macro_native or sotto_native:
+        parent = macro_native
+        child = sotto_native
+    else:
+        parent = _cell(row, "categoria")
+        child = _cell(row, "scategoria")
+
     if not parent and not child:
         if mer_for_section:
             parent = mer_for_section
@@ -1568,7 +1732,13 @@ def _supplier_category_names(row: dict) -> tuple[str, str, str]:
 def _uses_supplier_category_tree(row: dict, supplier: bool) -> bool:
     if supplier:
         return True
-    return bool(_cell(row, "merceologica") or _cell(row, "scategoria"))
+    return bool(
+        _cell(row, "merceologica")
+        or _cell(row, "scategoria")
+        or _cell(row, "macro_categoria")
+        or _cell(row, "sottocategoria")
+        or _parse_native_section(_cell(row, "sezione"))
+    )
 
 
 def _resolve_row_categories(
@@ -1581,7 +1751,7 @@ def _resolve_row_categories(
     errors: list[dict],
 ) -> list[int]:
     if _uses_supplier_category_tree(row, supplier):
-        # Supplier/listino categories are created at import from supplier_category fields.
+        # Supplier/listino or native macro/sottocategoria/sezione — categories created in _import_one_product_group.
         return []
     return _resolve_category_ids(
         _cell(row, "categoria"),
@@ -2197,10 +2367,14 @@ def parse_and_validate_csv(
                     merceologica or f"{category_name} {subcategory_name}".strip(),
                 )
                 if supplier_row
-                else ""
+                else (
+                    row.get("_native_section")
+                    or _parse_native_section(_cell(row, "sezione"))
+                    or ""
+                )
             ),
-            "supplier_category": category_name if supplier_row else "",
-            "supplier_subcategory": subcategory_name if supplier_row else "",
+            "supplier_category": category_name if (supplier_row or _uses_supplier_category_tree(row, False)) else "",
+            "supplier_subcategory": subcategory_name if (supplier_row or _uses_supplier_category_tree(row, False)) else "",
             "allows_customization": allows_customization,
             "customization_fee": customization_fee,
             "image_urls": meta.get("image_urls") or image_urls,
