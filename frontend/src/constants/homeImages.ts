@@ -1,6 +1,6 @@
 /** Default home imagery when no upload exists in admin (replace via Catalog / Settings). */
 export const HOME_HERO_IMAGE_FALLBACK =
-  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1920&h=900&q=80'
+  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1832&h=858&q=80'
 
 export const HOME_SECTION_CATEGORY_FALLBACKS: Record<string, string> = {
   workwear:
@@ -10,7 +10,7 @@ export const HOME_SECTION_CATEGORY_FALLBACKS: Record<string, string> = {
 }
 
 export const CATEGORY_IMAGE_DIMENSIONS_HINT = '1200 × 800 px (rapporto 3:2, JPG/PNG/WebP)'
-export const HERO_IMAGE_DIMENSIONS_HINT = '1920 × 900 px (banner home, JPG/PNG/WebP)'
+export const HERO_IMAGE_DIMENSIONS_HINT = '1832 × 858 px (banner home, JPG/PNG/WebP)'
 
 export function resolveCategoryCardImage(category: {
   image: string | null

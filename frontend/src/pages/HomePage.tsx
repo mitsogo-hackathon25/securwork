@@ -82,8 +82,8 @@ export default function HomePage() {
               src={heroBannerUrl}
               alt=""
               className="hero-top-banner__img"
-              width={1920}
-              height={900}
+              width={1832}
+              height={858}
               fetchPriority="high"
             />
           </div>
