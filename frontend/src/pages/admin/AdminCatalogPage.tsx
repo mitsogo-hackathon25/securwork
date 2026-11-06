@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  bulkDeleteAdminCategories,
   createAdminBrand,
   createAdminCategory,
   createAdminColor,
@@ -55,6 +56,7 @@ export default function AdminCatalogPage() {
   const [colorForm, setColorForm] = useState<AdminColor | null>(null)
   const [error, setError] = useState('')
   const [categoryImageBusy, setCategoryImageBusy] = useState(false)
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set())
 
   const switchTab = (tab: CatalogTab) => {
     setCatalogTab(tab)
@@ -62,6 +64,7 @@ export default function AdminCatalogPage() {
     setCategoryForm(null)
     setBrandForm(null)
     setColorForm(null)
+    setSelectedCategoryIds(new Set())
   }
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
@@ -122,13 +125,83 @@ export default function AdminCatalogPage() {
 
   const removeCategory = useMutation({
     mutationFn: deleteAdminCategory,
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setSelectedCategoryIds(new Set())
+      invalidate()
+    },
     onError: (err: unknown) => {
       setError(err && typeof err === 'object' && 'response' in err
         ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
         : 'Impossibile eliminare la categoria.')
     },
   })
+
+  const bulkRemoveCategories = useMutation({
+    mutationFn: bulkDeleteAdminCategories,
+    onSuccess: (res) => {
+      setSelectedCategoryIds((prev) => {
+        const next = new Set(prev)
+        for (const id of res.deleted) {
+          next.delete(id)
+        }
+        return next
+      })
+      invalidate()
+      if (res.failed.length > 0) {
+        const lines = res.failed.map((f) => `#${f.id}: ${f.detail}`).join('\n')
+        setError(
+          res.deleted.length > 0
+            ? `Eliminate ${res.deleted.length} categorie. Non eliminate:\n${lines}`
+            : `Nessuna categoria eliminata:\n${lines}`,
+        )
+      } else {
+        setError('')
+      }
+    },
+    onError: (err: unknown) => {
+      setError(err && typeof err === 'object' && 'response' in err
+        ? JSON.stringify((err as { response?: { data?: unknown } }).response?.data)
+        : 'Eliminazione multipla non riuscita.')
+    },
+  })
+
+  const categoryRowsWithId = categories.filter((c): c is typeof c & { id: number } => typeof c.id === 'number')
+  const selectableCategoryIds = categoryRowsWithId.map((c) => c.id)
+  const allCategoriesSelected =
+    selectableCategoryIds.length > 0
+    && selectableCategoryIds.every((id) => selectedCategoryIds.has(id))
+  const someCategoriesSelected = selectableCategoryIds.some((id) => selectedCategoryIds.has(id))
+
+  const toggleSelectAllCategories = () => {
+    if (allCategoriesSelected) {
+      setSelectedCategoryIds(new Set())
+    } else {
+      setSelectedCategoryIds(new Set(selectableCategoryIds))
+    }
+  }
+
+  const toggleCategoryRow = (id: number) => {
+    setSelectedCategoryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkDeleteCategories = () => {
+    const ids = [...selectedCategoryIds]
+    if (ids.length === 0) return
+    const labels = categoryRowsWithId
+      .filter((c) => ids.includes(c.id))
+      .map((c) => c.name_it)
+      .slice(0, 5)
+    const preview = labels.length < ids.length
+      ? `${labels.join(', ')}… (+${ids.length - labels.length})`
+      : labels.join(', ')
+    if (!window.confirm(`Eliminare ${ids.length} categorie selezionate?\n\n${preview}`)) return
+    bulkRemoveCategories.mutate(ids)
+  }
 
   const removeBrand = useMutation({
     mutationFn: deleteAdminBrand,
@@ -255,9 +328,21 @@ export default function AdminCatalogPage() {
       <section className="admin-card admin-catalog-section">
         <div className="admin-section-header">
           <h2>Categorie</h2>
-          <button type="button" className="btn btn-secondary" onClick={() => setCategoryForm(emptyCategory())}>
-            Aggiungi categoria
-          </button>
+          <div className="admin-section-header-actions">
+            {selectedCategoryIds.size > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary admin-btn-danger-outline"
+                disabled={bulkRemoveCategories.isPending}
+                onClick={handleBulkDeleteCategories}
+              >
+                Elimina selezionate ({selectedCategoryIds.size})
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={() => setCategoryForm(emptyCategory())}>
+              Aggiungi categoria
+            </button>
+          </div>
         </div>
 
         <p className="admin-hint">
@@ -354,6 +439,18 @@ export default function AdminCatalogPage() {
             <table className="admin-table">
               <thead>
                 <tr>
+                  <th className="admin-table-col-check" scope="col">
+                    <input
+                      type="checkbox"
+                      className="admin-table-checkbox"
+                      checked={allCategoriesSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someCategoriesSelected && !allCategoriesSelected
+                      }}
+                      onChange={toggleSelectAllCategories}
+                      aria-label="Seleziona tutte le categorie"
+                    />
+                  </th>
                   <th>Immagine</th>
                   <th>Nome (IT)</th>
                   <th>Sezione</th>
@@ -365,6 +462,17 @@ export default function AdminCatalogPage() {
               <tbody>
                 {categories.map((cat) => (
                   <tr key={cat.id}>
+                    <td className="admin-table-col-check">
+                      {typeof cat.id === 'number' && (
+                        <input
+                          type="checkbox"
+                          className="admin-table-checkbox"
+                          checked={selectedCategoryIds.has(cat.id)}
+                          onChange={() => toggleCategoryRow(cat.id)}
+                          aria-label={`Seleziona ${cat.name_it}`}
+                        />
+                      )}
+                    </td>
                     <td>
                       {cat.image ? (
                         <img src={cat.image} alt="" className="admin-table-thumb" />

@@ -811,6 +811,16 @@ export const updateAdminCategory = (id: number, data: Partial<AdminCategory>) =>
 export const deleteAdminCategory = (id: number) =>
   api.delete(`/admin/categories/${id}/`)
 
+export type BulkDeleteCategoriesResult = {
+  deleted: number[]
+  failed: { id: number; detail: string }[]
+}
+
+export const bulkDeleteAdminCategories = (ids: number[]) =>
+  api
+    .post<BulkDeleteCategoriesResult>('/admin/categories/bulk-delete/', { ids })
+    .then((r) => r.data)
+
 export const fetchAdminBrands = () =>
   api.get<AdminBrand[]>('/admin/brands/').then((r) => r.data)
 

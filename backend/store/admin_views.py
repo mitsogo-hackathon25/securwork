@@ -1816,8 +1816,62 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=False, methods=["post"], url_path="bulk-delete")
+    def bulk_delete(self, request):
+        """Delete multiple categories; skips rows that have children or assigned products."""
+        raw_ids = request.data.get("ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return Response(
+                {"detail": "Provide a non-empty ids list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        parsed: list[int] = []
+        seen: set[int] = set()
+        for item in raw_ids:
+            try:
+                pk = int(item)
+            except (TypeError, ValueError):
+                continue
+            if pk < 1 or pk in seen:
+                continue
+            seen.add(pk)
+            parsed.append(pk)
 
-class AdminBrandViewSet(viewsets.ModelViewSet):
+        if not parsed:
+            return Response(
+                {"detail": "No valid category ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        deleted: list[int] = []
+        failed: list[dict[str, int | str]] = []
+
+        for pk in parsed:
+            category = Category.objects.filter(pk=pk).first()
+            if category is None:
+                failed.append({"id": pk, "detail": "Category not found."})
+                continue
+            if category.children.exists():
+                failed.append(
+                    {
+                        "id": pk,
+                        "detail": "Cannot delete a category that has subcategories.",
+                    },
+                )
+                continue
+            if category.products.exists():
+                failed.append(
+                    {
+                        "id": pk,
+                        "detail": "Cannot delete a category that has products assigned.",
+                    },
+                )
+                continue
+            category.delete()
+            deleted.append(pk)
+
+        return Response({"deleted": deleted, "failed": failed})
+
     permission_classes = [IsStaffUser]
     serializer_class = AdminBrandSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
