@@ -205,7 +205,7 @@ export default function AdminGlobalSettingsPage() {
       <section className="admin-card">
         <h2>Homepage — immagine hero</h2>
         <p className="admin-hint">
-          Banner di sfondo nella sezione principale in homepage. Dimensioni consigliate:{' '}
+          Banner in alto nella sezione hero in homepage (sotto resta il blocco testi e statistiche). Dimensioni consigliate:{' '}
           <strong>{globalSettings?.hero_image_dimensions_hint || HERO_IMAGE_DIMENSIONS_HINT}</strong>.
           Formati: JPG, PNG o WebP.
         </p>

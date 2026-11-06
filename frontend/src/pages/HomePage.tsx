@@ -9,7 +9,7 @@ import Newsletter from '../components/Newsletter'
 import TrustBadges from '../components/TrustBadges'
 import { OrganizationSchema } from '../components/SeoSchema'
 import { SITE_LOGO_URL } from '../constants/branding'
-import { HOME_HERO_IMAGE_FALLBACK, resolveCategoryCardImage } from '../constants/homeImages'
+import { resolveCategoryCardImage } from '../constants/homeImages'
 import {
   fetchBestsellers,
   fetchCategories,
@@ -43,7 +43,7 @@ export default function HomePage() {
     queryFn: fetchSiteConfig,
   })
 
-  const heroImageUrl = siteConfig?.hero_image_url || HOME_HERO_IMAGE_FALLBACK
+  const heroBannerUrl = siteConfig?.hero_image_url ?? null
 
   const workwear = categories.find((c) => c.section === 'workwear')
   const professional = categories.find((c) => c.section === 'professional')
@@ -67,17 +67,29 @@ export default function HomePage() {
         <meta name="description" content={t('home.heroSubtitle')} />
         <meta property="og:title" content={`SecurWork — ${t('home.heroTitle')}`} />
         <meta property="og:description" content={t('home.heroSubtitle')} />
-        <meta property="og:type" content="website" />
+        {heroBannerUrl && (
+          <meta property="og:image" content={heroBannerUrl} />
+        )}
         <html lang={i18n.language} />
       </Helmet>
       <OrganizationSchema />
 
       <div className="home-page">
-      <section className={`hero${heroImageUrl ? ' hero--has-photo' : ''}`}>
+      <section className="hero">
+        {heroBannerUrl && (
+          <div className="hero-top-banner">
+            <img
+              src={heroBannerUrl}
+              alt=""
+              className="hero-top-banner__img"
+              width={1920}
+              height={900}
+              fetchPriority="high"
+            />
+          </div>
+        )}
+        <div className="hero-body">
         <div className="hero-backdrop" aria-hidden="true">
-          {heroImageUrl && (
-            <img src={heroImageUrl} alt="" className="hero-bg-photo" />
-          )}
           <div className="hero-grid-lines" />
           <div className="hero-glow" />
         </div>
@@ -112,6 +124,7 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        </div>
         </div>
       </section>
 
