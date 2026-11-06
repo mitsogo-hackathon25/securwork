@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { Category } from '../api/types'
+import { categoryVisibleInSection, parentCategoriesForSection, type ShopSection } from '../utils/categorySections'
 import { CLOTHING_SIZES } from '../constants/clothingSizes'
 import './ShopFilters.css'
 
@@ -39,12 +40,17 @@ export default function ShopFilters({
   const { t, i18n } = useTranslation()
   const locale = i18n.language.startsWith('en') ? 'en' : 'it'
 
-  const filteredParents = filters.section
-    ? categories.filter((parent) => parent.section === filters.section)
-    : categories
+  const filteredParents =
+    filters.section === 'workwear' || filters.section === 'professional'
+      ? parentCategoriesForSection(categories, filters.section as ShopSection)
+      : categories
 
-  const categoryOptions = [...filteredParents.flatMap((parent) => parent.children ?? [])]
-    .sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: 'base' }))
+  const rawChildren = filteredParents.flatMap((parent) => parent.children ?? [])
+  const categoryOptions = (
+    filters.section === 'workwear' || filters.section === 'professional'
+      ? rawChildren.filter((c) => categoryVisibleInSection(c, filters.section as ShopSection))
+      : rawChildren
+  ).sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: 'base' }))
 
   const content = (
     <>

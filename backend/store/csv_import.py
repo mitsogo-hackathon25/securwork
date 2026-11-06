@@ -1255,6 +1255,8 @@ def ensure_category(name: str, *, parent: Category | None = None, section: str |
             if cat_name.strip().lower() == cleaned.lower():
                 return cat
     section_value = section or (parent.section if parent else Category.Section.WORKWEAR)
+    vis_w = section_value == Category.Section.WORKWEAR
+    vis_p = section_value == Category.Section.PROFESSIONAL
     unique_slug = slug
     counter = 2
     while Category.objects.filter(slug=unique_slug).exists():
@@ -1263,6 +1265,8 @@ def ensure_category(name: str, *, parent: Category | None = None, section: str |
     category = Category.objects.create(
         slug=unique_slug,
         section=section_value,
+        visible_in_workwear=vis_w,
+        visible_in_professional=vis_p,
         parent=parent,
         is_active=True,
     )

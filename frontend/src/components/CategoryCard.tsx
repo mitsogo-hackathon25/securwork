@@ -6,14 +6,17 @@ interface Props {
   category: Category
   variant?: 'default' | 'compact' | 'hero'
   imageUrl?: string | null
+  /** When set, shop links use this section (e.g. same category visible in both workwear and professional). */
+  shopSection?: 'workwear' | 'professional'
 }
 
-export default function CategoryCard({ category, variant = 'default', imageUrl }: Props) {
+export default function CategoryCard({ category, variant = 'default', imageUrl, shopSection }: Props) {
   const isSectionRoot = category.parent == null
-  const link = isSectionRoot && category.section
-    ? `/shop?section=${category.section}`
-    : category.section
-      ? `/shop?section=${category.section}&category=${category.slug}`
+  const sectionForLink = shopSection ?? category.section
+  const link = isSectionRoot && sectionForLink
+    ? `/shop?section=${sectionForLink}`
+    : sectionForLink
+      ? `/shop?section=${sectionForLink}&category=${category.slug}`
       : `/shop?category=${category.slug}`
 
   const displayImage = imageUrl ?? category.image

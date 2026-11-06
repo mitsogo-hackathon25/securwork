@@ -24,6 +24,8 @@ import './Admin.css'
 
 const emptyCategory = (): AdminCategory => ({
   section: 'workwear',
+  visible_in_workwear: true,
+  visible_in_professional: false,
   parent_id: null,
   name_it: '',
   name_en: '',
@@ -370,19 +372,39 @@ export default function AdminCatalogPage() {
                   onChange={(e) => setCategoryForm({ ...categoryForm, name_en: e.target.value })}
                 />
               </label>
-              <label>
-                Sezione
-                <select
-                  value={categoryForm.section}
-                  onChange={(e) => setCategoryForm({
-                    ...categoryForm,
-                    section: e.target.value as AdminCategory['section'],
-                  })}
-                >
-                  <option value="workwear">Abbigliamento da lavoro</option>
-                  <option value="professional">Professionale</option>
-                </select>
-              </label>
+              <div className="admin-category-section-checks">
+                <span className="admin-category-section-checks-label">Sezioni catalogo</span>
+                <label className="admin-category-section-check">
+                  <input
+                    type="checkbox"
+                    checked={categoryForm.visible_in_workwear}
+                    onChange={(e) =>
+                      setCategoryForm({
+                        ...categoryForm,
+                        visible_in_workwear: e.target.checked,
+                      })
+                    }
+                  />
+                  Abbigliamento da lavoro
+                </label>
+                <label className="admin-category-section-check">
+                  <input
+                    type="checkbox"
+                    checked={categoryForm.visible_in_professional}
+                    onChange={(e) =>
+                      setCategoryForm({
+                        ...categoryForm,
+                        visible_in_professional: e.target.checked,
+                      })
+                    }
+                  />
+                  Abbigliamento professionale
+                </label>
+                <p className="admin-hint admin-category-section-hint">
+                  Spunta entrambe se la stessa categoria deve comparare sotto lavoro e professionale (es. Pantaloni).
+                  Per i filtri dello shop serve almeno una sezione.
+                </p>
+              </div>
             </div>
             {categoryForm.id ? (
               <div className="admin-category-image-block">
@@ -481,7 +503,14 @@ export default function AdminCatalogPage() {
                       )}
                     </td>
                     <td><strong>{cat.name_it}</strong><br /><span className="admin-muted">{cat.slug}</span></td>
-                    <td>{cat.section === 'workwear' ? 'Abbigliamento da lavoro' : 'Professionale'}</td>
+                    <td>
+                      {[
+                        cat.visible_in_workwear !== false && 'Lavoro',
+                        cat.visible_in_professional && 'Professionale',
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || (cat.section === 'workwear' ? 'Abbigliamento da lavoro' : 'Professionale')}
+                    </td>
                     <td>{cat.parent_name || '—'}</td>
                     <td>{cat.product_count ?? 0}</td>
                     <td className="admin-actions">

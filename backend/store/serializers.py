@@ -9,11 +9,13 @@ class CategorySerializer(serializers.ModelSerializer):
     description = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = [
             "id", "slug", "name", "description", "section",
+            "visible_in_workwear", "visible_in_professional",
             "parent", "image", "sort_order", "children",
         ]
 
@@ -38,6 +40,17 @@ class CategorySerializer(serializers.ModelSerializer):
         lang = self._lang()
         desc = obj.safe_translation_getter("description", language_code=lang, any_language=True)
         return (desc or "").strip()
+
+    def get_section(self, obj):
+        w = getattr(obj, "visible_in_workwear", obj.section == Category.Section.WORKWEAR)
+        p = getattr(obj, "visible_in_professional", obj.section == Category.Section.PROFESSIONAL)
+        if w and not p:
+            return Category.Section.WORKWEAR
+        if p and not w:
+            return Category.Section.PROFESSIONAL
+        if w and p:
+            return Category.Section.WORKWEAR
+        return obj.section or Category.Section.WORKWEAR
 
     def get_children(self, obj):
         children = sort_categories(

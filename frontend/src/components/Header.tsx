@@ -116,7 +116,7 @@ export default function Header() {
                     <p className="mobile-categories-label">{t('nav.workwear')}</p>
                     {workwearChildren.map((child) => (
                       <Link
-                        key={child.id}
+                        key={`mw-${child.id}-${child.slug}`}
                         to={`/shop?section=workwear&category=${child.slug}`}
                         onClick={closeAll}
                       >
@@ -130,7 +130,7 @@ export default function Header() {
                     <p className="mobile-categories-label">{t('nav.professional')}</p>
                     {professionalChildren.map((child) => (
                       <Link
-                        key={child.id}
+                        key={`mp-${child.id}-${child.slug}`}
                         to={`/shop?section=professional&category=${child.slug}`}
                         onClick={closeAll}
                       >

@@ -17,6 +17,7 @@ import {
   fetchNewArrivals,
   fetchSiteConfig,
 } from '../api/store'
+import { categoryVisibleInSection } from '../utils/categorySections'
 import { sortByName } from '../utils/sortCategories'
 import './HomePage.css'
 
@@ -45,16 +46,24 @@ export default function HomePage() {
 
   const heroBannerUrl = siteConfig?.hero_image_url ?? null
 
-  const workwear = categories.find((c) => c.section === 'workwear')
-  const professional = categories.find((c) => c.section === 'professional')
+  const workwear =
+    categories.find((c) => c.parent == null && c.slug === 'abbigliamento-da-lavoro')
+    ?? categories.find((c) => c.parent == null && categoryVisibleInSection(c, 'workwear'))
+  const professional =
+    categories.find((c) => c.parent == null && c.slug === 'abbigliamento-professionale')
+    ?? categories.find((c) => c.parent == null && categoryVisibleInSection(c, 'professional'))
 
   const locale = i18n.language.startsWith('en') ? 'en' : 'it'
   const workwearHomeCards = sortByName(
-    workwear?.children?.filter((c) => WORKWEAR_HOME_SLUGS.includes(c.slug)) ?? [],
+    workwear?.children?.filter(
+      (c) => WORKWEAR_HOME_SLUGS.includes(c.slug) && categoryVisibleInSection(c, 'workwear'),
+    ) ?? [],
     locale,
   )
   const professionalHomeCards = sortByName(
-    professional?.children?.filter((c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug)) ?? [],
+    professional?.children?.filter(
+      (c) => PROFESSIONAL_HOME_SLUGS.includes(c.slug) && categoryVisibleInSection(c, 'professional'),
+    ) ?? [],
     locale,
   )
 
@@ -143,6 +152,7 @@ export default function HomePage() {
               <CategoryCard
                 category={workwear}
                 variant="hero"
+                shopSection="workwear"
                 imageUrl={resolveCategoryCardImage(workwear)}
               />
             )}
@@ -150,6 +160,7 @@ export default function HomePage() {
               <CategoryCard
                 category={professional}
                 variant="hero"
+                shopSection="professional"
                 imageUrl={resolveCategoryCardImage(professional)}
               />
             )}
@@ -165,6 +176,7 @@ export default function HomePage() {
                         key={cat.id}
                         category={cat}
                         variant="compact"
+                        shopSection="workwear"
                         imageUrl={resolveCategoryCardImage(cat)}
                       />
                     ))}
@@ -180,6 +192,7 @@ export default function HomePage() {
                         key={cat.id}
                         category={cat}
                         variant="compact"
+                        shopSection="professional"
                         imageUrl={resolveCategoryCardImage(cat)}
                       />
                     ))}

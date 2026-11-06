@@ -866,6 +866,35 @@
   cursor: pointer;
 }
 
+.admin-category-section-checks {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 0;
+}
+
+.admin-category-section-checks-label {
+  width: 100%;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text, #1a2332);
+}
+
+.admin-category-section-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-category-section-hint {
+  width: 100%;
+  margin: 0;
+}
+
 .admin-product-category-sections {
   display: flex;
   flex-direction: column;

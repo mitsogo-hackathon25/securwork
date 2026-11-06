@@ -4,6 +4,9 @@ export interface Category {
   name: string
   description: string
   section: string
+  /** When both visibility flags are set, the category appears under Workwear and Professional. */
+  visible_in_workwear?: boolean
+  visible_in_professional?: boolean
   parent: number | null
   image: string | null
   children: Category[]
@@ -335,13 +338,18 @@ export interface AdminCategoryOption {
   slug: string
   name: string
   section: string
+  visible_in_workwear?: boolean
+  visible_in_professional?: boolean
   parent: number | null
 }
 
 export interface AdminCategory {
   id?: number
   slug: string
+  /** Derived for list display when a single section applies; use visibility flags when editing. */
   section: 'workwear' | 'professional'
+  visible_in_workwear: boolean
+  visible_in_professional: boolean
   parent_id: number | null
   parent_name?: string | null
   name_it: string

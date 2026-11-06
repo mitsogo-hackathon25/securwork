@@ -42,7 +42,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ProductFilter(filters.FilterSet):
     category = filters.CharFilter(method="filter_category")
-    section = filters.CharFilter(field_name="categories__section")
+    section = filters.CharFilter(method="filter_section")
     brand = filters.CharFilter(field_name="brand", lookup_expr="iexact")
     min_price = filters.NumberFilter(field_name="variants__price", lookup_expr="gte")
     max_price = filters.NumberFilter(field_name="variants__price", lookup_expr="lte")
@@ -57,6 +57,16 @@ class ProductFilter(filters.FilterSet):
     class Meta:
         model = Product
         fields = ["category", "section", "brand", "size", "color", "in_stock", "on_sale"]
+
+    def filter_section(self, queryset, name, value):
+        sec = (value or "").strip()
+        if not sec:
+            return queryset
+        if sec == Category.Section.WORKWEAR:
+            return queryset.filter(categories__visible_in_workwear=True).distinct()
+        if sec == Category.Section.PROFESSIONAL:
+            return queryset.filter(categories__visible_in_professional=True).distinct()
+        return queryset.filter(categories__section=sec).distinct()
 
     def filter_category(self, queryset, name, value):
         slug = (value or "").strip()
@@ -119,7 +129,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         section = request.query_params.get("section")
         category = request.query_params.get("category")
         if section:
-            qs = qs.filter(categories__section=section).distinct()
+            if section == Category.Section.WORKWEAR:
+                qs = qs.filter(categories__visible_in_workwear=True).distinct()
+            elif section == Category.Section.PROFESSIONAL:
+                qs = qs.filter(categories__visible_in_professional=True).distinct()
+            else:
+                qs = qs.filter(categories__section=section).distinct()
         if category:
             qs = qs.filter(categories__slug=category).distinct()
         return Response(sorted({b for b in qs.values_list("brand", flat=True) if b}, key=str.casefold))
@@ -137,7 +152,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         if section or category:
             product_qs = self.get_queryset()
             if section:
-                product_qs = product_qs.filter(categories__section=section).distinct()
+                if section == Category.Section.WORKWEAR:
+                    product_qs = product_qs.filter(categories__visible_in_workwear=True).distinct()
+                elif section == Category.Section.PROFESSIONAL:
+                    product_qs = product_qs.filter(categories__visible_in_professional=True).distinct()
+                else:
+                    product_qs = product_qs.filter(categories__section=section).distinct()
             if category:
                 product_qs = product_qs.filter(categories__slug=category).distinct()
             qs = qs.filter(product__in=product_qs)

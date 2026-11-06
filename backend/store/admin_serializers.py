@@ -17,13 +17,24 @@ TRANSLATION_FIELDS = (
 
 class AdminCategoryOptionSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
-        fields = ["id", "slug", "name", "section", "parent"]
+        fields = [
+            "id", "slug", "name", "section", "parent",
+            "visible_in_workwear", "visible_in_professional",
+        ]
 
     def get_name(self, obj):
         return obj.safe_translation_getter("name", language_code="it", any_language=True) or obj.slug
+
+    def get_section(self, obj):
+        if getattr(obj, "visible_in_workwear", False) and not getattr(obj, "visible_in_professional", False):
+            return Category.Section.WORKWEAR
+        if getattr(obj, "visible_in_professional", False) and not getattr(obj, "visible_in_workwear", False):
+            return Category.Section.PROFESSIONAL
+        return getattr(obj, "section", Category.Section.WORKWEAR) or Category.Section.WORKWEAR
 
 
 class AdminCategorySerializer(serializers.ModelSerializer):
@@ -41,16 +52,18 @@ class AdminCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     image_dimensions_hint = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = [
-            "id", "slug", "section", "parent_id", "parent_name",
+            "id", "slug", "section", "visible_in_workwear", "visible_in_professional",
+            "parent_id", "parent_name",
             "name_it", "name_en", "description_it", "description_en",
             "sort_order", "is_active", "product_count", "image", "image_dimensions_hint",
             "created_at",
         ]
-        read_only_fields = ["id", "slug", "created_at"]
+        read_only_fields = ["id", "slug", "created_at", "section"]
 
     def get_product_count(self, obj):
         return obj.products.count()
@@ -72,6 +85,13 @@ class AdminCategorySerializer(serializers.ModelSerializer):
     def get_image_dimensions_hint(self, obj):
         return CATEGORY_IMAGE_DIMENSIONS_LABEL
 
+    def get_section(self, obj):
+        if getattr(obj, "visible_in_workwear", False) and not getattr(obj, "visible_in_professional", False):
+            return Category.Section.WORKWEAR
+        if getattr(obj, "visible_in_professional", False) and not getattr(obj, "visible_in_workwear", False):
+            return Category.Section.PROFESSIONAL
+        return getattr(obj, "section", Category.Section.WORKWEAR) or Category.Section.WORKWEAR
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         for lang in ("it", "en"):
@@ -83,9 +103,29 @@ class AdminCategorySerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         parent = attrs.get("parent")
-        section = attrs.get("section", getattr(self.instance, "section", Category.Section.WORKWEAR))
-        if parent and parent.section != section:
-            raise serializers.ValidationError({"parent_id": "Parent category must belong to the same section."})
+        if "parent" not in attrs and self.instance:
+            parent = self.instance.parent
+
+        inst_w = getattr(self.instance, "visible_in_workwear", True)
+        inst_p = getattr(self.instance, "visible_in_professional", False)
+        vis_w = attrs.get("visible_in_workwear", inst_w)
+        vis_p = attrs.get("visible_in_professional", inst_p)
+        if not vis_w and not vis_p:
+            raise serializers.ValidationError(
+                {"visible_in_workwear": "Seleziona almeno una sezione (Abbigliamento da lavoro o Professionale)."},
+            )
+
+        if parent:
+            p_w = getattr(parent, "visible_in_workwear", parent.section == Category.Section.WORKWEAR)
+            p_p = getattr(parent, "visible_in_professional", parent.section == Category.Section.PROFESSIONAL)
+            if vis_w and not p_w:
+                raise serializers.ValidationError(
+                    {"parent_id": "Il genitore non è visibile nella sezione Abbigliamento da lavoro."},
+                )
+            if vis_p and not p_p:
+                raise serializers.ValidationError(
+                    {"parent_id": "Il genitore non è visibile nella sezione Professionale."},
+                )
         if not self.instance and not attrs.get("name_it"):
             raise serializers.ValidationError({"name_it": "Italian category name is required."})
         return attrs
@@ -112,8 +152,11 @@ class AdminCategorySerializer(serializers.ModelSerializer):
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             category_fields["slug"] = slug
-        if category_fields.get("parent"):
-            category_fields["section"] = category_fields["parent"].section
+        vis_w = bool(category_fields.get("visible_in_workwear", True))
+        vis_p = bool(category_fields.get("visible_in_professional", False))
+        category_fields["section"] = (
+            Category.Section.PROFESSIONAL if vis_p and not vis_w else Category.Section.WORKWEAR
+        )
         category = Category.objects.create(**category_fields)
         self._save_translations(category, validated_data)
         return category
@@ -121,8 +164,15 @@ class AdminCategorySerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         translation_keys = [k for k in validated_data if k.endswith("_it") or k.endswith("_en")]
         category_fields = {k: v for k, v in validated_data.items() if k not in translation_keys}
-        if category_fields.get("parent"):
-            category_fields["section"] = category_fields["parent"].section
+        if "visible_in_workwear" in category_fields or "visible_in_professional" in category_fields:
+            vis_w = category_fields.get("visible_in_workwear", getattr(instance, "visible_in_workwear", True))
+            vis_p = category_fields.get(
+                "visible_in_professional",
+                getattr(instance, "visible_in_professional", False),
+            )
+            category_fields["section"] = (
+                Category.Section.PROFESSIONAL if vis_p and not vis_w else Category.Section.WORKWEAR
+            )
         for attr, value in category_fields.items():
             setattr(instance, attr, value)
         instance.save()

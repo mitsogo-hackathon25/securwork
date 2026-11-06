@@ -17,6 +17,14 @@ class Category(TranslatableModel):
     )
     slug = models.SlugField(max_length=200, unique=True)
     section = models.CharField(max_length=20, choices=Section.choices, default=Section.WORKWEAR)
+    visible_in_workwear = models.BooleanField(
+        default=True,
+        help_text="If true, this category appears when browsing the Workwear section.",
+    )
+    visible_in_professional = models.BooleanField(
+        default=False,
+        help_text="If true, this category appears when browsing the Professional section.",
+    )
     parent = models.ForeignKey(
         "self", null=True, blank=True, related_name="children", on_delete=models.CASCADE
     )

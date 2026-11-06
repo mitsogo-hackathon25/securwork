@@ -21,6 +21,7 @@ import { CLOTHING_SIZES } from '../../constants/clothingSizes'
 import { PRODUCT_COLORS } from '../../constants/productColors'
 import { useToast } from '../../components/toast/ToastProvider'
 import { formatApiError } from '../../utils/formatApiError'
+import { categoryVisibleInSection } from '../../utils/categorySections'
 import './Admin.css'
 
 type SizeGroup = {
@@ -161,7 +162,7 @@ export default function AdminProductFormPage() {
       a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
 
     return sectionOrder.map((section) => {
-      const inSection = pool.filter((c) => c.section === section)
+      const inSection = pool.filter((c) => categoryVisibleInSection(c, section))
       const roots = inSection.filter((c) => c.parent === null).sort(sortByName)
       const assigned = new Set<number>()
       roots.forEach((r) => {

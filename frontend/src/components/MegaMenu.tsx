@@ -39,7 +39,7 @@ export default function MegaMenu({
           </Link>
           <ul>
             {workwear.map((child) => (
-              <li key={child.id}>
+              <li key={`w-${child.id}-${child.slug}`}>
                 <Link
                   to={`/shop?section=workwear&category=${child.slug}`}
                   onClick={handleClick}
@@ -57,7 +57,7 @@ export default function MegaMenu({
           </Link>
           <ul>
             {professional.map((child) => (
-              <li key={child.id}>
+              <li key={`p-${child.id}-${child.slug}`}>
                 <Link
                   to={`/shop?section=professional&category=${child.slug}`}
                   onClick={handleClick}

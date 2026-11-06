@@ -17,12 +17,16 @@ class ProductVariantInline(admin.TabularInline):
 
 @admin.register(Category)
 class CategoryAdmin(TranslatableAdmin):
-    list_display = ("name", "slug", "section", "parent", "sort_order", "is_active")
-    list_filter = ("section", "is_active")
+    list_display = ("name", "slug", "section", "visible_in_workwear", "visible_in_professional", "parent", "sort_order", "is_active")
+    list_filter = ("section", "visible_in_workwear", "visible_in_professional", "is_active")
     search_fields = ("translations__name", "slug")
     prepopulated_fields = {"slug": ()}
     fieldsets = (
-        (None, {"fields": ("name", "description", "slug", "section", "parent", "image")}),
+        (None, {"fields": (
+            "name", "description", "slug", "section",
+            "visible_in_workwear", "visible_in_professional",
+            "parent", "image",
+        )}),
         ("Settings", {"fields": ("sort_order", "is_active")}),
     )
 
