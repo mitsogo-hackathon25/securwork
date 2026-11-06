@@ -91,6 +91,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         "images", "variants", "categories", "translations"
     )
     lookup_field = "slug"
+    # Full list for shop — no page clicks; keep default pagination for other API surfaces
+    pagination_class = None
     filter_backends = [DjangoFilterBackend, BilingualProductSearchFilter, OrderingFilter]
     filterset_class = ProductFilter
     ordering_fields = ["created_at", "translations__name"]

@@ -19,8 +19,15 @@ export const fetchCategories = (lang?: string) => {
     })
 }
 
+/** Shop listing: API returns all matching products in one response (no pagination). */
 export const fetchProducts = (params?: Record<string, string | number | boolean>) =>
-  api.get<PaginatedResponse<Product>>('/products/', { params }).then((r) => r.data)
+  api.get<PaginatedResponse<Product> | Product[]>('/products/', { params }).then((r) => {
+    const data = r.data
+    if (Array.isArray(data)) {
+      return { results: data, count: data.length }
+    }
+    return data
+  })
 
 export const fetchProductBrands = (params?: Record<string, string>) =>
   api.get<string[]>('/products/brands/', { params }).then((r) => r.data)
