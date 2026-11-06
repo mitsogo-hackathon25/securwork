@@ -1,5 +1,16 @@
-/** Clothing sizes used in shop filters and product variants. */
-export const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL'] as const
+/** Clothing sizes used in shop filters and product variants (smallest → largest). */
+export const CLOTHING_SIZES = [
+  'XXS',
+  'XS',
+  'S',
+  'M',
+  'L',
+  'XL',
+  'XXL',
+  'XXXL',
+  '4XL',
+  '5XL',
+] as const
 
 const SIZE_ORDER = new Map(CLOTHING_SIZES.map((size, index) => [size, index]))
 
