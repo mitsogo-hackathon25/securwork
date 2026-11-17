@@ -92,7 +92,7 @@ export default function HomePage() {
               alt=""
               className="hero-top-banner__img"
               width={1832}
-              height={858}
+              height={429}
               fetchPriority="high"
             />
           </div>
