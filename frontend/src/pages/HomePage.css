@@ -23,17 +23,14 @@
   max-width: 100%;
   line-height: 0;
   background: #0a1220;
-  /* Half of legacy 1832×858 height — wide strip above hero copy */
-  aspect-ratio: 1832 / 429;
-  overflow: hidden;
 }
 
 .hero-top-banner__img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  height: auto;
+  vertical-align: top;
+  /* Show full upload (e.g. 1832×429); do not crop with object-fit: cover */
 }
 
 .hero-body {
